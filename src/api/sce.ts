@@ -1,0 +1,179 @@
+import { sceApi } from './http'
+import type { AxiosResponse } from 'axios'
+import type { Equipamento, SceResponse } from '@/types'
+
+/**
+ * Cliente da API do SCE (equipamentos). Usa o JWT do portal (emitido pelo
+ * backend de chamados) — o SCE o valida via SSO (SSO_SECRET compartilhado).
+ * Respostas seguem o padrão { success, data, error }.
+ */
+
+export interface EquipamentosGlobalResult {
+  data: Equipamento[]
+  total: number
+  stats: {
+    porStatus: Record<string, number>
+    porUnidade: Record<string, number>
+    porCategoria: Record<string, number>
+  }
+}
+
+export interface EquipamentosQuery {
+  limite?: number
+  offset?: number
+  busca?: string
+  status?: string
+  unidade?: string
+  categoria?: string
+  ordem?: 'modelo' | 'patrimonio' | 'numeroSerie' | 'unidade' | 'status'
+  direcao?: 'asc' | 'desc'
+}
+
+async function unwrap<T>(promise: Promise<AxiosResponse<SceResponse<T>>>): Promise<T> {
+  const { data } = await promise
+  if (!data.success) throw new Error(data.error || 'Erro na API do SCE')
+  return data.data
+}
+
+/** Visão global paginada (somente Matriz no SCE). */
+export async function listarEquipamentosGlobal(q: EquipamentosQuery = {}): Promise<EquipamentosGlobalResult> {
+  return unwrap(sceApi.get<SceResponse<EquipamentosGlobalResult>>('/equipamentos-global', { params: q }))
+}
+
+/** Todos os equipamentos ao alcance do usuário (filial ou lista de unidades do técnico). */
+export async function listarEquipamentosDaFilial(): Promise<Equipamento[]> {
+  return unwrap(sceApi.get<SceResponse<Equipamento[]>>('/equipamentos-da-filial'))
+}
+
+export interface UnidadeResumo {
+  nome: string
+  total: number
+  disponiveis: number
+  manutencao: number
+  quebrados: number
+  extraviados: number
+}
+
+/** Resumo de equipamentos por unidade escolar (somente Matriz no SCE). */
+export async function listarUnidadesResumo(): Promise<UnidadeResumo[]> {
+  return unwrap(sceApi.get<SceResponse<UnidadeResumo[]>>('/unidades-resumo'))
+}
+
+export interface ItemLista {
+  categoria: string
+  marca: string
+  modelo: string
+}
+
+export async function listarCatalogo(): Promise<ItemLista[]> {
+  return unwrap(sceApi.get<SceResponse<ItemLista[]>>('/listas-cadastro'))
+}
+
+export interface HistoricoItem {
+  campo: string
+  valor_antigo: string
+  valor_novo: string
+  autor: string
+  data: string
+}
+
+export async function historicoEquipamento(equipamentoId: string): Promise<HistoricoItem[]> {
+  return unwrap(sceApi.get<SceResponse<HistoricoItem[]>>('/historico-equipamento', { params: { equipamentoId } }))
+}
+
+function baixarArquivo(nome: string, blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = nome
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** Exporta CSV do escopo do usuário e inicia o download. */
+export async function exportarCsv(): Promise<void> {
+  const { csv, fileName } = await unwrap(
+    sceApi.get<SceResponse<{ csv: string; fileName: string }>>('/exportar-csv'),
+  )
+  baixarArquivo(fileName, new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+}
+
+/** Exporta PDF do escopo do usuário e inicia o download. */
+export async function exportarPdf(): Promise<void> {
+  const { data } = await sceApi.post('/exportar-pdf', {}, { responseType: 'blob' })
+  baixarArquivo(`sce-equipamentos-${Date.now()}.pdf`, new Blob([data], { type: 'application/pdf' }))
+}
+
+/* ---------- Escrita (criação/edição/remoção) ---------- */
+
+export interface AnexoBoletim {
+  base64: string
+  mimeType: string
+  fileName: string
+}
+
+export interface EquipamentoPayload {
+  unidade: string
+  categoria: string
+  marca: string
+  modelo: string
+  patrimonio?: string
+  justificativaPatrimonio?: string
+  numeroSerie?: string
+  justificativaNumeroSerie?: string
+  status?: string
+  statusManutencao?: string
+  numeroChamadoManutencao?: string
+  descricaoQuebrado?: string
+  justificativaVerificacao?: string
+  boletimOcorrencia?: string
+  responsavelAtual?: string
+  observacoes?: string
+  _anexoBoletim?: AnexoBoletim
+}
+
+export async function criarEquipamento(payload: EquipamentoPayload): Promise<{ id: string }> {
+  return unwrap(sceApi.post<SceResponse<{ id: string }>>('/create-equipamento', payload))
+}
+
+export async function atualizarEquipamento(id: string, campos: Partial<EquipamentoPayload>): Promise<void> {
+  await unwrap(sceApi.post<SceResponse<null>>('/update-equipamento', { id, ...campos }))
+}
+
+export async function removerEquipamento(id: string): Promise<void> {
+  await unwrap(sceApi.post<SceResponse<unknown>>('/remover-equipamento', { id }))
+}
+
+/** Filiais/unidades ativas cadastradas (para selects de unidade). */
+export async function listarFiliais(): Promise<string[]> {
+  return unwrap(sceApi.get<SceResponse<string[]>>('/filiais-para-emprestimo'))
+}
+
+/* ---------- Helpers de domínio ---------- */
+
+/** Totalizadores de status a partir de um mapa {status: qtd} vindo do SCE. */
+export interface EquipStats {
+  total: number
+  disponiveis: number
+  emManutencao: number
+  quebrados: number
+  extraviados: number
+}
+
+export function resumirStatus(porStatus: Record<string, number>): EquipStats {
+  const stats: EquipStats = { total: 0, disponiveis: 0, emManutencao: 0, quebrados: 0, extraviados: 0 }
+  for (const [status, qtd] of Object.entries(porStatus)) {
+    stats.total += qtd
+    const s = status.toLowerCase()
+    if (s === 'disponível' || s === 'disponivel') stats.disponiveis += qtd
+    else if (s.includes('manuten')) stats.emManutencao += qtd
+    else if (s.includes('quebrad')) stats.quebrados += qtd
+    else if (s.includes('extrav')) stats.extraviados += qtd
+  }
+  return stats
+}
+
+export function pct(parte: number, total: number): string {
+  if (!total) return '0,0%'
+  return ((parte / total) * 100).toFixed(1).replace('.', ',') + '%'
+}

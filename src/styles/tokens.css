@@ -1,0 +1,76 @@
+/* ============================================================
+   DESIGN TOKENS — PORTAL URE LESTE 3
+   Baseado nos mockups aprovados (sidebar azul-marinho + dourado)
+   ============================================================ */
+
+:root {
+  /* Sidebar / marca */
+  --sidebar-bg: #081a33;
+  --sidebar-bg-deep: #061429;
+  --sidebar-text: #b7c4d8;
+  --sidebar-text-active: #0b1f3f;
+  --sidebar-item-active: #f5b921;
+  --sidebar-width: 240px;
+  --brand-gold: #f5b921;
+  --brand-gold-soft: #ffe9b3;
+
+  /* Superfícies */
+  --bg-app: #f1f4f9;
+  --surface: #ffffff;
+  --surface-muted: #f8fafc;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  /* Texto */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  /* Cores de apoio */
+  --blue: #2563eb;
+  --blue-soft: #dbeafe;
+  --green: #16a34a;
+  --green-soft: #dcfce7;
+  --yellow: #d97706;
+  --yellow-soft: #fef3c7;
+  --red: #dc2626;
+  --red-soft: #fee2e2;
+  --purple: #9333ea;
+  --purple-soft: #f3e8ff;
+  --slate: #64748b;
+  --slate-soft: #e2e8f0;
+
+  /* Status de equipamento */
+  --st-disponivel: var(--green);
+  --st-disponivel-bg: var(--green-soft);
+  --st-manutencao: var(--yellow);
+  --st-manutencao-bg: var(--yellow-soft);
+  --st-quebrado: var(--red);
+  --st-quebrado-bg: var(--red-soft);
+  --st-extraviado: var(--slate);
+  --st-extraviado-bg: var(--slate-soft);
+
+  /* Status de chamado */
+  --ch-aberto: var(--red);
+  --ch-aberto-bg: var(--red-soft);
+  --ch-atendimento: var(--blue);
+  --ch-atendimento-bg: var(--blue-soft);
+  --ch-aguardando: var(--purple);
+  --ch-aguardando-bg: var(--purple-soft);
+  --ch-concluido: var(--green);
+  --ch-concluido-bg: var(--green-soft);
+
+  /* Forma */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.06);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-lg: 0 12px 32px rgb(15 23 42 / 0.14);
+
+  /* Tipografia */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Medidas */
+  --topbar-height: 64px;
+}

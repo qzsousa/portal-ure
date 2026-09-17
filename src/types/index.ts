@@ -1,0 +1,106 @@
+/**
+ * Tipos compartilhados do Portal (contratos dos dois backends).
+ *
+ * - Backend CHAMADOS: fonte de verdade de autenticação e usuários.
+ * - Backend SCE: fonte de verdade de equipamentos.
+ */
+
+/* ---------- Autenticação / usuários (backend chamados) ---------- */
+
+export type Nivel = 'ADMIN' | 'TECNICO' | 'GESTOR' | 'VISUALIZADOR'
+
+export interface User {
+  id: string
+  email: string
+  nome: string
+  nivel: Nivel
+  filial: string
+  status?: string
+  primeiroLogin?: boolean
+}
+
+export interface LoginRequest {
+  email: string
+  senha: string
+}
+
+export interface LoginResponse {
+  accessToken: string
+  refreshToken: string
+  user: User
+  primeiroLogin: boolean
+}
+
+export interface ChangePasswordRequest {
+  senhaAtual: string
+  novaSenha: string
+}
+
+/* ---------- Chamados ---------- */
+
+export type StatusChamado = 'ABERTO' | 'ANDAMENTO' | 'COMUNICADO' | 'RESOLVIDO'
+
+export interface Chamado {
+  id: string
+  protocolo: string
+  timestamp: string
+  unidade: string
+  solicitante: string
+  funcao?: string | null
+  tipo: string
+  descricao: string
+  urgencia: string
+  anexoUrl?: string | null
+  status: StatusChamado
+  responsavel?: string | null
+  ultimaAtualizacao: string
+  historico?: string | null
+  tecnicoResolucao?: string | null
+  descricaoResolucao?: string | null
+  tecnicoSetor?: string | null
+  email?: string | null
+}
+
+/* ---------- Equipamentos (backend SCE) ---------- */
+
+export interface Equipamento {
+  id: string
+  unidade: string
+  categoria: string
+  marca: string
+  modelo: string
+  patrimonio?: string | null
+  numeroSerie?: string | null
+  status: string
+  statusManutencao?: string | null
+  numeroChamadoManutencao?: string | null
+  descricaoQuebrado?: string | null
+  responsavelAtual?: string | null
+  observacoes?: string | null
+  dataCadastro?: string
+  dataUltimaAtualizacao?: string
+}
+
+/** Resposta padrão da API do SCE: { success, data, error } */
+export interface SceResponse<T> {
+  success: boolean
+  data: T
+  error: string | null
+}
+
+/* ---------- Helpers de apresentação ---------- */
+
+/** Rótulo exibido no portal para cada nível interno. */
+export function rotuloPerfil(nivel: Nivel | undefined | null): string {
+  switch (nivel) {
+    case 'ADMIN':
+      return 'Administrador'
+    case 'GESTOR':
+    case 'TECNICO':
+      return 'Gestor'
+    case 'VISUALIZADOR':
+      return 'Visualizador'
+    default:
+      return '—'
+  }
+}
