@@ -4,6 +4,9 @@ import { AlertTriangle, Package, School, Search, Wrench } from '@lucide/vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import { listarUnidadesResumo, type UnidadeResumo } from '@/api/sce'
+import { listarEscolasPublico, getDashboardMatriz } from '@/api/publico'
+import { casarNomeEscola, chaveEscola, exibirNomeEscola } from '@/utils/escola'
+import type { Chamado } from '@/types'
 
 const PAGE_SIZE = 10
 
@@ -15,6 +18,20 @@ const estado = reactive({
 })
 
 const busca = ref('')
+const nomesPadronizados = ref<string[]>([])
+const chamadosPorUnidade = ref<Record<string, number>>({})
+
+/** Nome padronizado de exibição da unidade. */
+function nomeExibicao(u: UnidadeResumo): string {
+  return exibirNomeEscola(u.nome, nomesPadronizados.value)
+}
+
+/** Total de chamados casados com a unidade (pela chave normalizada). */
+function totalChamados(u: UnidadeResumo): number {
+  const padrao = casarNomeEscola(u.nome, nomesPadronizados.value)
+  const chave = chaveEscola(padrao || u.nome)
+  return chamadosPorUnidade.value[chave] ?? 0
+}
 
 /** Normaliza para busca sem distinção de maiúsculas/acentos. */
 function norm(s: string): string {
@@ -60,7 +77,23 @@ async function carregar() {
   estado.loading = true
   estado.erro = ''
   try {
-    estado.items = await listarUnidadesResumo()
+    const [unidades, nomes, dash] = await Promise.all([
+      listarUnidadesResumo(),
+      listarEscolasPublico().catch(() => [] as string[]),
+      getDashboardMatriz().catch(() => null),
+    ])
+    estado.items = unidades
+    nomesPadronizados.value = nomes
+
+    if (dash?.chamados) {
+      const contagem: Record<string, number> = {}
+      for (const c of dash.chamados as Chamado[]) {
+        const padrao = casarNomeEscola(c.unidade, nomes) || c.unidade
+        const chave = chaveEscola(padrao)
+        contagem[chave] = (contagem[chave] || 0) + 1
+      }
+      chamadosPorUnidade.value = contagem
+    }
   } catch {
     estado.items = []
     estado.erro =
@@ -117,26 +150,28 @@ onMounted(() => {
               <th class="th-num">Manutenção</th>
               <th class="th-num">Quebrados</th>
               <th class="th-num">Extraviados</th>
+              <th class="th-num">Chamados</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="estado.loading">
-              <td colspan="8" class="td-center">Carregando...</td>
+              <td colspan="9" class="td-center">Carregando...</td>
             </tr>
             <tr v-else-if="paginaAtual.length === 0">
-              <td colspan="8" class="td-center">
+              <td colspan="9" class="td-center">
                 {{ estado.erro ? 'Sem dados para exibir.' : 'Nenhuma unidade encontrada.' }}
               </td>
             </tr>
             <tr v-for="(u, i) in paginaAtual" :key="u.nome">
               <td class="nowrap"><strong>{{ codigo(i) }}</strong></td>
-              <td>{{ u.nome }}</td>
+              <td>{{ nomeExibicao(u) }}</td>
               <td>—</td>
               <td class="td-num"><strong>{{ u.total }}</strong></td>
               <td class="td-num"><span class="num green">{{ u.disponiveis }}</span></td>
               <td class="td-num"><span class="num yellow">{{ u.manutencao }}</span></td>
               <td class="td-num"><span class="num red">{{ u.quebrados }}</span></td>
               <td class="td-num"><span class="num slate">{{ u.extraviados }}</span></td>
+              <td class="td-num"><span class="num blue">{{ totalChamados(u) }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -237,5 +272,9 @@ onMounted(() => {
 
 .num.slate {
   color: var(--slate);
+}
+
+.num.blue {
+  color: var(--blue);
 }
 </style>

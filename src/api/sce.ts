@@ -69,6 +69,11 @@ export async function listarCatalogo(): Promise<ItemLista[]> {
   return unwrap(sceApi.get<SceResponse<ItemLista[]>>('/listas-cadastro'))
 }
 
+/** Catálogo completo de categoria/marca/modelo (gerenciado ∪ o que existe nos equipamentos). */
+export async function listarCatalogoCompleto(): Promise<ItemLista[]> {
+  return unwrap(sceApi.get<SceResponse<ItemLista[]>>('/catalogo-equipamentos'))
+}
+
 export interface HistoricoItem {
   campo: string
   valor_antigo: string

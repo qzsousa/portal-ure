@@ -1,22 +1,20 @@
 <script setup lang="ts">
 /**
  * Modal de criar/editar equipamento (portal → SCE).
- * Segue as regras do backend SCE:
- * - numeroSerie obrigatório OU justificativaNumeroSerie
- * - status 'Extraviado' exige boletimOcorrencia + anexo do B.O.
- * - status 'Quebrado' exige descricaoQuebrado
- * - status 'Manutenção' aceita numeroChamadoManutencao
- * - status 'Em verificação' exige justificativaVerificacao
+ * Regras:
+ * - cascata Categoria → Marca → Modelo (catálogo do próprio parque instalado)
+ * - número de série OBRIGATÓRIO
+ * - status reduzidos: Disponível / Manutenção / Quebrado / Emprestado
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Loader2, Paperclip, X } from '@lucide/vue'
+import { Loader2 } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { apiError } from '@/utils/apiError'
 import {
   atualizarEquipamento,
   criarEquipamento,
-  listarCatalogo,
-  listarFiliais,
+  listarCatalogoCompleto,
+  listarUnidadesResumo,
   type EquipamentoPayload,
   type ItemLista,
 } from '@/api/sce'
@@ -34,15 +32,7 @@ const emit = defineEmits<{ (e: 'fechar'): void; (e: 'salvo'): void }>()
 const auth = useAuthStore()
 const ui = useUiStore()
 
-const STATUS_OPCOES = [
-  'Disponível',
-  'Manutenção',
-  'Quebrado',
-  'Em verificação',
-  'Extraviado',
-  'Emprestado',
-  'Inservível',
-]
+const STATUS_OPCOES = ['Disponível', 'Manutenção', 'Quebrado', 'Emprestado']
 
 const form = reactive({
   unidade: '',
@@ -51,17 +41,13 @@ const form = reactive({
   modelo: '',
   patrimonio: '',
   numeroSerie: '',
-  justificativaNumeroSerie: '',
   status: 'Disponível',
   numeroChamadoManutencao: '',
   descricaoQuebrado: '',
-  justificativaVerificacao: '',
-  boletimOcorrencia: '',
   observacoes: '',
 })
 
-const anexo = ref<{ base64: string; mimeType: string; fileName: string } | null>(null)
-const filiais = ref<string[]>([])
+const unidades = ref<string[]>([])
 const catalogo = ref<ItemLista[]>([])
 const carregandoBase = ref(false)
 const salvando = ref(false)
@@ -71,21 +57,32 @@ const editando = computed(() => props.item !== null)
 
 const categorias = computed(() => [...new Set(catalogo.value.map((i) => i.categoria))].sort())
 const marcasFiltradas = computed(() =>
-  [...new Set(catalogo.value.filter((i) => !form.categoria || i.categoria === form.categoria).map((i) => i.marca))].sort(),
+  form.categoria
+    ? [...new Set(catalogo.value.filter((i) => i.categoria === form.categoria).map((i) => i.marca))].sort()
+    : [],
 )
 const modelosFiltrados = computed(() =>
-  [
-    ...new Set(
-      catalogo.value
-        .filter((i) => (!form.categoria || i.categoria === form.categoria) && (!form.marca || i.marca === form.marca))
-        .map((i) => i.modelo),
-    ),
-  ].sort(),
+  form.categoria && form.marca
+    ? [
+        ...new Set(
+          catalogo.value
+            .filter((i) => i.categoria === form.categoria && i.marca === form.marca)
+            .map((i) => i.modelo),
+        ),
+      ].sort()
+    : [],
 )
+
+function onCategoria() {
+  form.marca = ''
+  form.modelo = ''
+}
+function onMarca() {
+  form.modelo = ''
+}
 
 function preencher(item: Equipamento | null) {
   erroLocal.value = ''
-  anexo.value = null
   if (item) {
     form.unidade = item.unidade
     form.categoria = item.categoria
@@ -93,12 +90,9 @@ function preencher(item: Equipamento | null) {
     form.modelo = item.modelo
     form.patrimonio = item.patrimonio || ''
     form.numeroSerie = item.numeroSerie || ''
-    form.justificativaNumeroSerie = ''
-    form.status = item.status
+    form.status = STATUS_OPCOES.includes(item.status) ? item.status : 'Disponível'
     form.numeroChamadoManutencao = item.numeroChamadoManutencao || ''
     form.descricaoQuebrado = item.descricaoQuebrado || ''
-    form.justificativaVerificacao = ''
-    form.boletimOcorrencia = ''
     form.observacoes = item.observacoes || ''
   } else {
     form.unidade = auth.user?.nivel === 'ADMIN' ? '' : auth.user?.filial || ''
@@ -107,12 +101,9 @@ function preencher(item: Equipamento | null) {
     form.modelo = ''
     form.patrimonio = ''
     form.numeroSerie = ''
-    form.justificativaNumeroSerie = ''
     form.status = 'Disponível'
     form.numeroChamadoManutencao = ''
     form.descricaoQuebrado = ''
-    form.justificativaVerificacao = ''
-    form.boletimOcorrencia = ''
     form.observacoes = ''
   }
 }
@@ -125,36 +116,12 @@ watch(
   { immediate: true },
 )
 
-function selecionarAnexo(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  if (file.size > 8 * 1024 * 1024) {
-    erroLocal.value = 'O anexo deve ter no máximo 8MB.'
-    return
-  }
-  const reader = new FileReader()
-  reader.onload = () => {
-    const base64 = String(reader.result).split(',')[1] || ''
-    anexo.value = { base64, mimeType: file.type, fileName: file.name }
-    erroLocal.value = ''
-  }
-  reader.readAsDataURL(file)
-}
-
 function validar(): string | null {
   if (!form.unidade) return 'Selecione a unidade escolar.'
-  if (!form.categoria.trim() || !form.marca.trim() || !form.modelo.trim())
-    return 'Categoria, marca e modelo são obrigatórios.'
-  if (!form.numeroSerie.trim() && !form.justificativaNumeroSerie.trim())
-    return 'Informe o número de série ou justifique a ausência.'
+  if (!form.categoria || !form.marca || !form.modelo) return 'Selecione categoria, marca e modelo.'
+  if (!form.numeroSerie.trim()) return 'O número de série é obrigatório.'
   if (form.status === 'Quebrado' && !form.descricaoQuebrado.trim())
     return 'Para o status "Quebrado", descreva o problema.'
-  if (form.status === 'Em verificação' && !form.justificativaVerificacao.trim())
-    return 'Para "Em verificação", informe a justificativa.'
-  if (form.status === 'Extraviado') {
-    if (!form.boletimOcorrencia.trim()) return 'Para "Extraviado", informe o número do Boletim de Ocorrência.'
-    if (!editando.value && !anexo.value) return 'Para "Extraviado", anexe o Boletim de Ocorrência.'
-  }
   return null
 }
 
@@ -169,23 +136,18 @@ async function salvar() {
   try {
     const payload: EquipamentoPayload = {
       unidade: form.unidade,
-      categoria: form.categoria.trim(),
-      marca: form.marca.trim(),
-      modelo: form.modelo.trim(),
+      categoria: form.categoria,
+      marca: form.marca,
+      modelo: form.modelo,
       patrimonio: form.patrimonio.trim(),
       numeroSerie: form.numeroSerie.trim(),
-      justificativaNumeroSerie: form.justificativaNumeroSerie.trim(),
       status: form.status,
       numeroChamadoManutencao: form.numeroChamadoManutencao.trim(),
       descricaoQuebrado: form.descricaoQuebrado.trim(),
-      justificativaVerificacao: form.justificativaVerificacao.trim(),
-      boletimOcorrencia: form.boletimOcorrencia.trim(),
       observacoes: form.observacoes.trim(),
     }
-    if (anexo.value) payload._anexoBoletim = anexo.value
 
     if (editando.value && props.item) {
-      // update-equipamento espera apenas os campos alterados
       const it = props.item
       const campos: Record<string, string | undefined> = {}
       const chComp: Array<[keyof EquipamentoPayload, string | undefined | null]> = [
@@ -204,10 +166,6 @@ async function salvar() {
         const novo = payload[campo] as string | undefined
         if (String(novo || '') !== String(original || '')) campos[campo] = novo || ''
       }
-      if (form.boletimOcorrencia.trim()) campos.boletimOcorrencia = form.boletimOcorrencia.trim()
-      if (form.justificativaVerificacao.trim()) campos.justificativaVerificacao = form.justificativaVerificacao.trim()
-      if (anexo.value) campos._anexoBoletim = anexo.value as unknown as string
-
       if (Object.keys(campos).length === 0) {
         ui.info('Nenhuma alteração para salvar.')
         emit('fechar')
@@ -231,11 +189,11 @@ async function salvar() {
 onMounted(async () => {
   carregandoBase.value = true
   try {
-    const [f, c] = await Promise.all([listarFiliais(), listarCatalogo()])
-    filiais.value = f
+    const [u, c] = await Promise.all([listarUnidadesResumo(), listarCatalogoCompleto()])
+    unidades.value = u.map((x) => x.nome).sort((a, b) => a.localeCompare(b, 'pt-BR'))
     catalogo.value = c
   } catch {
-    // catálogo/filiais indisponíveis não bloqueiam (campos livres)
+    // catálogo/unidades indisponíveis: usuário ainda pode digitar livremente
   } finally {
     carregandoBase.value = false
   }
@@ -258,7 +216,7 @@ onMounted(async () => {
           :disabled="carregandoBase"
         >
           <option value="" disabled>Selecione...</option>
-          <option v-for="f in filiais" :key="f" :value="f">{{ f }}</option>
+          <option v-for="u in unidades" :key="u" :value="u">{{ u }}</option>
         </select>
         <input v-else class="input" :value="form.unidade" disabled />
       </div>
@@ -272,26 +230,26 @@ onMounted(async () => {
 
       <div class="field">
         <label>Categoria *</label>
-        <input v-model="form.categoria" class="input" list="dl-categorias" placeholder="Ex.: Notebook" />
-        <datalist id="dl-categorias">
-          <option v-for="c in categorias" :key="c" :value="c" />
-        </datalist>
+        <select v-model="form.categoria" class="select-input" :disabled="carregandoBase" @change="onCategoria">
+          <option value="" disabled>Selecione...</option>
+          <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
+        </select>
       </div>
 
       <div class="field">
         <label>Marca *</label>
-        <input v-model="form.marca" class="input" list="dl-marcas" placeholder="Ex.: Lenovo" />
-        <datalist id="dl-marcas">
-          <option v-for="m in marcasFiltradas" :key="m" :value="m" />
-        </datalist>
+        <select v-model="form.marca" class="select-input" :disabled="!form.categoria" @change="onMarca">
+          <option value="" disabled>{{ form.categoria ? 'Selecione...' : 'Escolha a categoria primeiro' }}</option>
+          <option v-for="m in marcasFiltradas" :key="m" :value="m">{{ m }}</option>
+        </select>
       </div>
 
       <div class="field">
         <label>Modelo *</label>
-        <input v-model="form.modelo" class="input" list="dl-modelos" placeholder="Ex.: ThinkCentre M720" />
-        <datalist id="dl-modelos">
-          <option v-for="m in modelosFiltrados" :key="m" :value="m" />
-        </datalist>
+        <select v-model="form.modelo" class="select-input" :disabled="!form.marca">
+          <option value="" disabled>{{ form.marca ? 'Selecione...' : 'Escolha a marca primeiro' }}</option>
+          <option v-for="m in modelosFiltrados" :key="m" :value="m">{{ m }}</option>
+        </select>
       </div>
 
       <div class="field">
@@ -300,13 +258,8 @@ onMounted(async () => {
       </div>
 
       <div class="field">
-        <label>Nº de série</label>
-        <input v-model="form.numeroSerie" class="input" placeholder="Ou justifique abaixo" />
-      </div>
-
-      <div v-if="!form.numeroSerie" class="field">
-        <label>Justificativa (sem nº de série)</label>
-        <input v-model="form.justificativaNumeroSerie" class="input" placeholder="Ex.: etiqueta apagada" />
+        <label>Nº de série *</label>
+        <input v-model="form.numeroSerie" class="input" placeholder="Obrigatório" />
       </div>
 
       <div v-if="form.status === 'Manutenção'" class="field">
@@ -318,27 +271,6 @@ onMounted(async () => {
         <label>Descrição do problema *</label>
         <textarea v-model="form.descricaoQuebrado" class="input textarea" placeholder="O que aconteceu com o equipamento?" />
       </div>
-
-      <div v-if="form.status === 'Em verificação'" class="field full">
-        <label>Justificativa da verificação *</label>
-        <input v-model="form.justificativaVerificacao" class="input" placeholder="Motivo da verificação" />
-      </div>
-
-      <template v-if="form.status === 'Extraviado'">
-        <div class="field">
-          <label>Nº do Boletim de Ocorrência *</label>
-          <input v-model="form.boletimOcorrencia" class="input" placeholder="Ex.: BO 2026/123456" />
-        </div>
-        <div class="field">
-          <label>Anexo do B.O. {{ editando ? '(se novo)' : '*' }}</label>
-          <label class="anexo-btn" :class="{ 'tem-anexo': anexo }">
-            <Paperclip :size="15" />
-            <span>{{ anexo ? anexo.fileName : 'Escolher arquivo (máx. 8MB)' }}</span>
-            <input type="file" hidden accept=".pdf,image/*" @change="selecionarAnexo" />
-            <button v-if="anexo" type="button" class="anexo-x" @click.stop.prevent="anexo = null"><X :size="14" /></button>
-          </label>
-        </div>
-      </template>
 
       <div class="field full">
         <label>Observações</label>
@@ -372,36 +304,6 @@ onMounted(async () => {
 .textarea {
   min-height: 74px;
   resize: vertical;
-}
-
-.anexo-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--text-secondary);
-  position: relative;
-}
-
-.anexo-btn:hover {
-  border-color: var(--blue);
-  color: var(--blue);
-}
-
-.anexo-btn.tem-anexo {
-  border-style: solid;
-  color: var(--text-primary);
-}
-
-.anexo-x {
-  margin-left: auto;
-  display: grid;
-  place-items: center;
-  color: var(--text-muted);
 }
 
 .erro-form {

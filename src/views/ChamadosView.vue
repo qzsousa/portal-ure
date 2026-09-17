@@ -142,7 +142,12 @@ onMounted(() => {
       <StatCard label="Total de chamados" :value="stats?.total ?? '…'" tone="blue"><ClipboardList :size="22" /></StatCard>
       <StatCard label="Abertos" :value="stats?.abertos ?? '…'" tone="red"><AlertTriangle :size="22" /></StatCard>
       <StatCard label="Em atendimento" :value="stats?.andamento ?? '…'" tone="yellow"><Clock :size="22" /></StatCard>
-      <StatCard label="Aguardando escola" :value="stats?.comunicado ?? '…'" tone="purple"><School :size="22" /></StatCard>
+      <StatCard
+        label="Aguardando escola"
+        :value="stats?.comunicado ?? '…'"
+        detail="respondidos, aguardam retorno da unidade"
+        tone="purple"
+      ><School :size="22" /></StatCard>
       <StatCard label="Concluídos" :value="stats?.resolvidos ?? '…'" tone="green"><CheckCircle2 :size="22" /></StatCard>
     </div>
 
