@@ -40,9 +40,6 @@ const form = reactive({
   unidade: '',
   solicitante: '',
   funcao: '',
-  tipoProblema: '' as '' | 'Sistema' | 'Equipamento' | 'Rede' | 'Outro',
-  sistema: '',
-  rede: '',
   categoria: '',
   marca: '',
   modelo: '',
@@ -52,17 +49,7 @@ const form = reactive({
 })
 const customMarca = ref('')
 const customModelo = ref('')
-const customSistema = ref('')
 const anexo = ref<File | null>(null)
-
-const SISTEMAS_OPCOES = ['PortalNet', 'GDAE', 'PAEF', 'E-mail institucional', 'Outro sistema']
-const REDE_OPCOES = [
-  'Internet lenta',
-  'Sem conexão',
-  'Wi-Fi instável/caindo',
-  'Problema só em algumas salas/locais',
-  'Outro problema de rede',
-]
 
 const erros = reactive<Record<string, string>>({})
 const enviando = ref(false)
@@ -119,32 +106,9 @@ watch(
 /* ---------- tipo final ---------- */
 
 const tipoFinal = computed(() => {
-  if (form.tipoProblema === 'Sistema') {
-    const sistema = form.sistema === 'Outro sistema' ? customSistema.value.trim() : form.sistema
-    return sistema ? `Sistema - ${sistema}` : 'Sistema'
-  }
-  if (form.tipoProblema === 'Equipamento') {
-    return form.categoria ? `Equipamento - ${form.categoria}` : 'Equipamento'
-  }
-  if (form.tipoProblema === 'Rede') return form.rede ? `Rede - ${form.rede}` : 'Rede'
-  if (form.tipoProblema === 'Outro') return 'Outro'
-  return ''
-})
-
-/** Descrição enriquecida com os detalhes da cascata (marca/modelo e observações). */
-const descricaoFinal = computed(() => {
-  const partes: string[] = []
-  if (form.tipoProblema === 'Equipamento') {
-    const marca = form.marca === OUTRO ? customMarca.value.trim() : form.marca
-    const modelo = form.modelo === OUTRO ? customModelo.value.trim() : form.modelo
-    if (marca) partes.push(`Marca: ${marca}`)
-    if (modelo) partes.push(`Modelo: ${modelo}`)
-  }
-  if (form.tipoProblema === 'Sistema' && form.sistema === 'Outro sistema' && customSistema.value.trim()) {
-    partes.push(`Sistema: ${customSistema.value.trim()}`)
-  }
-  const base = form.descricao.trim()
-  return [base, ...(partes.length ? [`[${partes.join(' | ')}]`] : [])].filter(Boolean).join('\n')
+  const marca = form.marca === OUTRO ? customMarca.value.trim() : form.marca
+  const modelo = form.modelo === OUTRO ? customModelo.value.trim() : form.modelo
+  return [form.categoria, marca, modelo].filter(Boolean).join(' - ')
 })
 
 /* ---------- anexo ---------- */
@@ -192,16 +156,9 @@ function validar(): boolean {
   Object.keys(erros).forEach((k) => delete erros[k])
   if (!form.unidade) erros.unidade = 'Selecione a unidade escolar.'
   if (!form.solicitante.trim()) erros.solicitante = 'Informe o nome do solicitante.'
-  if (!form.tipoProblema) erros.tipoProblema = 'Selecione o tipo de problema.'
-  else if (form.tipoProblema === 'Sistema' && !form.sistema) erros.sistema = 'Informe qual sistema tem problema.'
-  else if (form.tipoProblema === 'Sistema' && form.sistema === 'Outro sistema' && !customSistema.value.trim())
-    erros.sistema = 'Digite o nome do sistema.'
-  else if (form.tipoProblema === 'Equipamento' && !form.categoria) erros.categoria = 'Selecione o tipo de equipamento.'
-  else if (form.tipoProblema === 'Equipamento' && form.marca === OUTRO && !customMarca.value.trim())
-    erros.marca = 'Digite a marca do equipamento.'
-  else if (form.tipoProblema === 'Equipamento' && form.modelo === OUTRO && !customModelo.value.trim())
-    erros.modelo = 'Digite o modelo do equipamento.'
-  else if (form.tipoProblema === 'Rede' && !form.rede) erros.rede = 'Selecione o que está acontecendo com a rede.'
+  if (!form.categoria) erros.categoria = 'Selecione o tipo de problema.'
+  else if (form.marca === OUTRO && !customMarca.value.trim()) erros.marca = 'Digite a marca do equipamento.'
+  else if (form.modelo === OUTRO && !customModelo.value.trim()) erros.modelo = 'Digite o modelo do equipamento.'
   if (!form.descricao.trim()) erros.descricao = 'Descreva o problema com o máximo de detalhes.'
   if (!form.urgencia) erros.urgencia = 'Selecione a urgência.'
   if (form.email.trim() && !emailValido(form.email.trim())) erros.email = 'Informe um e-mail válido (ex.: nome@educacao.sp.gov.br).'
@@ -218,7 +175,7 @@ async function enviar() {
       unidade: form.unidade,
       solicitante: form.solicitante.trim(),
       tipo: tipoFinal.value,
-      descricao: descricaoFinal.value,
+      descricao: form.descricao.trim(),
       urgencia: form.urgencia,
     }
     if (form.funcao.trim()) payload.funcao = form.funcao.trim()
@@ -336,89 +293,49 @@ function novoChamado() {
 
         <fieldset class="grupo">
           <legend>Tipo de problema *</legend>
-
-          <div class="field">
-            <label for="tipoProblema">O problema é com... *</label>
-            <select id="tipoProblema" v-model="form.tipoProblema" class="select-input">
-              <option value="" disabled>— Selecione —</option>
-              <option value="Sistema">Sistema (PortalNet, GDAE, PAEF, e-mail...)</option>
-              <option value="Equipamento">Equipamento (notebook, desktop, tablet...)</option>
-              <option value="Rede">Rede / Internet / Wi-Fi</option>
-              <option value="Outro">Outro</option>
-            </select>
-            <p v-if="erros.tipoProblema" class="erro-campo">{{ erros.tipoProblema }}</p>
-          </div>
-
-          <div v-if="form.tipoProblema === 'Sistema'" class="dupla">
+          <div class="tripla">
             <div class="field">
-              <label for="sistema">Qual sistema? *</label>
-              <select id="sistema" v-model="form.sistema" class="select-input">
+              <label for="categoria">Categoria *</label>
+              <select id="categoria" v-model="form.categoria" class="select-input" :disabled="carregandoListas">
                 <option value="" disabled>— Selecione —</option>
-                <option v-for="s in SISTEMAS_OPCOES" :key="s" :value="s">{{ s }}</option>
+                <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
               </select>
-              <p v-if="erros.sistema" class="erro-campo">{{ erros.sistema }}</p>
             </div>
-            <div v-if="form.sistema === 'Outro sistema'" class="field">
-              <label for="custom-sistema">Qual? *</label>
-              <input id="custom-sistema" v-model="customSistema" class="input" type="text" placeholder="Nome do sistema" />
+            <div class="field">
+              <label for="marca">Marca <span class="opcional">(opcional)</span></label>
+              <select id="marca" v-model="form.marca" class="select-input" :disabled="!form.categoria">
+                <option value="">— Selecione —</option>
+                <option v-for="m in marcas" :key="m" :value="m">{{ m }}</option>
+                <option v-if="form.categoria" :value="OUTRO">Outra (digitar manualmente)</option>
+              </select>
             </div>
-          </div>
-
-          <div v-if="form.tipoProblema === 'Equipamento'">
-            <div class="tripla">
-              <div class="field">
-                <label for="categoria">Tipo de equipamento *</label>
-                <select id="categoria" v-model="form.categoria" class="select-input" :disabled="carregandoListas">
-                  <option value="" disabled>— Selecione —</option>
-                  <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
-                </select>
-                <p v-if="erros.categoria" class="erro-campo">{{ erros.categoria }}</p>
-              </div>
-              <div class="field">
-                <label for="marca">Marca</label>
-                <select id="marca" v-model="form.marca" class="select-input" :disabled="!form.categoria">
-                  <option value="">— Selecione —</option>
-                  <option v-for="m in marcas" :key="m" :value="m">{{ m }}</option>
-                  <option v-if="form.categoria" :value="OUTRO">Outra (digitar manualmente)</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="modelo">Modelo</label>
-                <select id="modelo" v-model="form.modelo" class="select-input" :disabled="!form.marca || form.marca === OUTRO">
-                  <option value="">— Selecione —</option>
-                  <option v-for="m in modelos" :key="m" :value="m">{{ m }}</option>
-                  <option v-if="form.marca && form.marca !== OUTRO" :value="OUTRO">Outro (digitar manualmente)</option>
-                </select>
-              </div>
-            </div>
-            <div v-if="form.marca === OUTRO" class="dupla">
-              <div class="field">
-                <label for="custom-marca">Qual é a marca? *</label>
-                <input id="custom-marca" v-model="customMarca" class="input" type="text" placeholder="Digite a marca" />
-                <p v-if="erros.marca" class="erro-campo">{{ erros.marca }}</p>
-              </div>
-              <div class="field">
-                <label for="custom-modelo">Qual é o modelo?</label>
-                <input id="custom-modelo" v-model="customModelo" class="input" type="text" placeholder="Digite o modelo (opcional)" />
-              </div>
-            </div>
-            <div v-else-if="form.modelo === OUTRO" class="field">
-              <label for="custom-modelo2">Qual é o modelo? *</label>
-              <input id="custom-modelo2" v-model="customModelo" class="input" type="text" placeholder="Digite o modelo" />
-              <p v-if="erros.modelo" class="erro-campo">{{ erros.modelo }}</p>
+            <div class="field">
+              <label for="modelo">Modelo <span class="opcional">(opcional)</span></label>
+              <select id="modelo" v-model="form.modelo" class="select-input" :disabled="!form.marca || form.marca === OUTRO">
+                <option value="">— Selecione —</option>
+                <option v-for="m in modelos" :key="m" :value="m">{{ m }}</option>
+                <option v-if="form.marca && form.marca !== OUTRO" :value="OUTRO">Outro (digitar manualmente)</option>
+              </select>
             </div>
           </div>
-
-          <div v-if="form.tipoProblema === 'Rede'" class="field">
-            <label for="rede">O que está acontecendo com a rede? *</label>
-            <select id="rede" v-model="form.rede" class="select-input">
-              <option value="" disabled>— Selecione —</option>
-              <option v-for="r in REDE_OPCOES" :key="r" :value="r">{{ r }}</option>
-            </select>
-            <p v-if="erros.rede" class="erro-campo">{{ erros.rede }}</p>
+          <div v-if="form.marca === OUTRO" class="dupla">
+            <div class="field">
+              <label for="custom-marca">Qual é a marca? *</label>
+              <input id="custom-marca" v-model="customMarca" class="input" type="text" placeholder="Digite a marca" />
+              <p v-if="erros.marca" class="erro-campo">{{ erros.marca }}</p>
+            </div>
+            <div class="field">
+              <label for="custom-modelo">Qual é o modelo?</label>
+              <input id="custom-modelo" v-model="customModelo" class="input" type="text" placeholder="Digite o modelo (opcional)" />
+            </div>
           </div>
-
-          <p v-if="tipoFinal && form.tipoProblema" class="tipo-preview">
+          <div v-else-if="form.modelo === OUTRO" class="field">
+            <label for="custom-modelo2">Qual é o modelo? *</label>
+            <input id="custom-modelo2" v-model="customModelo" class="input" type="text" placeholder="Digite o modelo" />
+            <p v-if="erros.modelo" class="erro-campo">{{ erros.modelo }}</p>
+          </div>
+          <p v-if="erros.categoria" class="erro-campo">{{ erros.categoria }}</p>
+          <p v-if="tipoFinal" class="tipo-preview">
             <FileText :size="14" /> Será registrado como: <strong>{{ tipoFinal }}</strong>
           </p>
         </fieldset>

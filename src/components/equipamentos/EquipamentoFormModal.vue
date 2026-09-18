@@ -34,6 +34,9 @@ const ui = useUiStore()
 
 const STATUS_OPCOES = ['Disponível', 'Manutenção', 'Quebrado', 'Emprestado']
 
+/** Marcador para a opção "Outro (digitar)" da cascata. */
+const OUTRO = '__OUTRO__'
+
 const form = reactive({
   unidade: '',
   categoria: '',
@@ -41,11 +44,15 @@ const form = reactive({
   modelo: '',
   patrimonio: '',
   numeroSerie: '',
+  justificativaNumeroSerie: '',
   status: 'Disponível',
   numeroChamadoManutencao: '',
   descricaoQuebrado: '',
   observacoes: '',
 })
+
+/** Valores livres quando a opção "Outro" é escolhida. */
+const custom = reactive({ categoria: '', marca: '', modelo: '' })
 
 const unidades = ref<string[]>([])
 const catalogo = ref<ItemLista[]>([])
@@ -74,15 +81,23 @@ const modelosFiltrados = computed(() =>
 )
 
 function onCategoria() {
-  form.marca = ''
-  form.modelo = ''
+  form.marca = form.categoria === OUTRO ? OUTRO : ''
+  form.modelo = form.categoria === OUTRO ? OUTRO : ''
 }
 function onMarca() {
-  form.modelo = ''
+  form.modelo = form.marca === OUTRO ? OUTRO : ''
 }
+
+/** Valor final (texto livre quando "Outro"). */
+const valorCategoria = computed(() => (form.categoria === OUTRO ? custom.categoria.trim() : form.categoria))
+const valorMarca = computed(() => (form.marca === OUTRO ? custom.marca.trim() : form.marca))
+const valorModelo = computed(() => (form.modelo === OUTRO ? custom.modelo.trim() : form.modelo))
 
 function preencher(item: Equipamento | null) {
   erroLocal.value = ''
+  custom.categoria = ''
+  custom.marca = ''
+  custom.modelo = ''
   if (item) {
     form.unidade = item.unidade
     form.categoria = item.categoria
@@ -90,6 +105,7 @@ function preencher(item: Equipamento | null) {
     form.modelo = item.modelo
     form.patrimonio = item.patrimonio || ''
     form.numeroSerie = item.numeroSerie || ''
+    form.justificativaNumeroSerie = ''
     form.status = STATUS_OPCOES.includes(item.status) ? item.status : 'Disponível'
     form.numeroChamadoManutencao = item.numeroChamadoManutencao || ''
     form.descricaoQuebrado = item.descricaoQuebrado || ''
@@ -101,6 +117,7 @@ function preencher(item: Equipamento | null) {
     form.modelo = ''
     form.patrimonio = ''
     form.numeroSerie = ''
+    form.justificativaNumeroSerie = ''
     form.status = 'Disponível'
     form.numeroChamadoManutencao = ''
     form.descricaoQuebrado = ''
@@ -118,8 +135,11 @@ watch(
 
 function validar(): string | null {
   if (!form.unidade) return 'Selecione a unidade escolar.'
-  if (!form.categoria || !form.marca || !form.modelo) return 'Selecione categoria, marca e modelo.'
-  if (!form.numeroSerie.trim()) return 'O número de série é obrigatório.'
+  if (!valorCategoria.value) return 'Selecione (ou digite) a categoria.'
+  if (!valorMarca.value) return 'Selecione (ou digite) a marca.'
+  if (!valorModelo.value) return 'Selecione (ou digite) o modelo.'
+  if (!form.numeroSerie.trim() && !form.justificativaNumeroSerie.trim())
+    return 'Informe o número de série — ou justifique a ausência dele.'
   if (form.status === 'Quebrado' && !form.descricaoQuebrado.trim())
     return 'Para o status "Quebrado", descreva o problema.'
   return null
@@ -136,11 +156,12 @@ async function salvar() {
   try {
     const payload: EquipamentoPayload = {
       unidade: form.unidade,
-      categoria: form.categoria,
-      marca: form.marca,
-      modelo: form.modelo,
+      categoria: valorCategoria.value,
+      marca: valorMarca.value,
+      modelo: valorModelo.value,
       patrimonio: form.patrimonio.trim(),
       numeroSerie: form.numeroSerie.trim(),
+      justificativaNumeroSerie: form.justificativaNumeroSerie.trim(),
       status: form.status,
       numeroChamadoManutencao: form.numeroChamadoManutencao.trim(),
       descricaoQuebrado: form.descricaoQuebrado.trim(),
@@ -156,6 +177,7 @@ async function salvar() {
         ['modelo', it.modelo],
         ['patrimonio', it.patrimonio],
         ['numeroSerie', it.numeroSerie],
+        ['justificativaNumeroSerie', (it as unknown as Record<string, string>).justificativaNumeroSerie],
         ['status', it.status],
         ['numeroChamadoManutencao', it.numeroChamadoManutencao],
         ['descricaoQuebrado', it.descricaoQuebrado],
@@ -233,7 +255,14 @@ onMounted(async () => {
         <select v-model="form.categoria" class="select-input" :disabled="carregandoBase" @change="onCategoria">
           <option value="" disabled>Selecione...</option>
           <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
+          <option :value="OUTRO">Outra (digitar manualmente)</option>
         </select>
+        <input
+          v-if="form.categoria === OUTRO"
+          v-model="custom.categoria"
+          class="input mt6"
+          placeholder="Digite a categoria (ex.: Impressora)"
+        />
       </div>
 
       <div class="field">
@@ -241,7 +270,14 @@ onMounted(async () => {
         <select v-model="form.marca" class="select-input" :disabled="!form.categoria" @change="onMarca">
           <option value="" disabled>{{ form.categoria ? 'Selecione...' : 'Escolha a categoria primeiro' }}</option>
           <option v-for="m in marcasFiltradas" :key="m" :value="m">{{ m }}</option>
+          <option :value="OUTRO">Outra (digitar manualmente)</option>
         </select>
+        <input
+          v-if="form.marca === OUTRO"
+          v-model="custom.marca"
+          class="input mt6"
+          placeholder="Digite a marca"
+        />
       </div>
 
       <div class="field">
@@ -249,7 +285,14 @@ onMounted(async () => {
         <select v-model="form.modelo" class="select-input" :disabled="!form.marca">
           <option value="" disabled>{{ form.marca ? 'Selecione...' : 'Escolha a marca primeiro' }}</option>
           <option v-for="m in modelosFiltrados" :key="m" :value="m">{{ m }}</option>
+          <option :value="OUTRO">Outro (digitar manualmente)</option>
         </select>
+        <input
+          v-if="form.modelo === OUTRO"
+          v-model="custom.modelo"
+          class="input mt6"
+          placeholder="Digite o modelo"
+        />
       </div>
 
       <div class="field">
@@ -258,8 +301,14 @@ onMounted(async () => {
       </div>
 
       <div class="field">
-        <label>Nº de série *</label>
-        <input v-model="form.numeroSerie" class="input" placeholder="Obrigatório" />
+        <label>Nº de série</label>
+        <input v-model="form.numeroSerie" class="input" placeholder="Se não houver, justifique abaixo" />
+        <input
+          v-if="!form.numeroSerie.trim()"
+          v-model="form.justificativaNumeroSerie"
+          class="input mt6"
+          placeholder="Justificativa da ausência do nº de série *"
+        />
       </div>
 
       <div v-if="form.status === 'Manutenção'" class="field">
@@ -304,6 +353,10 @@ onMounted(async () => {
 .textarea {
   min-height: 74px;
   resize: vertical;
+}
+
+.mt6 {
+  margin-top: 6px;
 }
 
 .erro-form {
