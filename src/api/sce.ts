@@ -60,6 +60,7 @@ export async function listarUnidadesResumo(): Promise<UnidadeResumo[]> {
 }
 
 export interface ItemLista {
+  id?: number
   categoria: string
   marca: string
   modelo: string
@@ -152,6 +153,28 @@ export async function removerEquipamento(id: string): Promise<void> {
 /** Filiais/unidades ativas cadastradas (para selects de unidade). */
 export async function listarFiliais(): Promise<string[]> {
   return unwrap(sceApi.get<SceResponse<string[]>>('/filiais-para-emprestimo'))
+}
+
+/* ---------- Configurações (somente Matriz) ---------- */
+
+export async function adicionarItemCatalogo(categoria: string, marca: string, modelo: string): Promise<ItemLista> {
+  return unwrap(sceApi.post<SceResponse<ItemLista>>('/listas-adicionar', { categoria, marca, modelo }))
+}
+
+export async function removerItemCatalogo(id: number): Promise<void> {
+  await unwrap(sceApi.post<SceResponse<unknown>>('/listas-remover', { id }))
+}
+
+export interface AuditoriaItem {
+  id: number
+  data: string
+  usuario: string
+  acao: string
+  detalhes?: Record<string, unknown> | null
+}
+
+export async function listarAuditoria(limite = 60): Promise<AuditoriaItem[]> {
+  return unwrap(sceApi.get<SceResponse<AuditoriaItem[]>>('/auditoria', { params: { limite } }))
 }
 
 /* ---------- Helpers de domínio ---------- */

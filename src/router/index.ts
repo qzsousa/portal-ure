@@ -97,11 +97,10 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'configuracoes',
         name: 'configuracoes',
-        component: () => import('@/views/StubView.vue'),
+        component: () => import('@/views/ConfiguracoesView.vue'),
         meta: {
           title: 'Configurações',
           breadcrumb: 'Configurações',
-          modulo: 'Configurações',
           roles: ['ADMIN'] as Nivel[],
         },
       },
