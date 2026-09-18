@@ -16,14 +16,14 @@ const filtroStatus = ref('')
 const page = ref(1)
 const PAGE_SIZE = 10
 
-/** Itens com manutenção registrada (statusManutencao preenchido). */
+/** Itens em manutenção: status "Manutenção" OU com statusManutencao registrado. */
 const itensManutencao = computed(() =>
-  todos.value.filter((e) => e.statusManutencao && e.statusManutencao !== ''),
+  todos.value.filter((e) => e.status === 'Manutenção' || (e.statusManutencao && e.statusManutencao !== '')),
 )
 
 const filtrados = computed(() =>
   filtroStatus.value
-    ? itensManutencao.value.filter((e) => e.statusManutencao === filtroStatus.value)
+    ? itensManutencao.value.filter((e) => (e.statusManutencao || (e.status === 'Manutenção' ? 'Manutenção' : '')) === filtroStatus.value)
     : itensManutencao.value,
 )
 

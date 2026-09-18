@@ -247,6 +247,11 @@ onMounted(async () => {
           <select v-model="form.nivel" class="select-input">
             <option v-for="p in PERFIL_OPCOES" :key="p.valor" :value="p.valor">{{ p.rotulo }}</option>
           </select>
+          <small class="perfil-hint">
+            <strong>Administrador</strong>: acesso total (portal, usuários, configurações) ·
+            <strong>Gestor</strong>: gere chamados e equipamentos da(s) unidade(s) ·
+            <strong>Visualizador</strong>: as mesmas funções do Gestor na unidade, <em>sem</em> apagar usuários/equipamentos
+          </small>
         </div>
         <div class="field">
           <label>Unidade escolar</label>
@@ -420,6 +425,13 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+}
+
+.perfil-hint {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 .senha-temp {

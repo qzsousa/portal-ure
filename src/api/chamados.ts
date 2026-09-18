@@ -49,6 +49,15 @@ export async function responderChamado(id: string, texto: string): Promise<Chama
   return data
 }
 
+/** Atualização em lote (somente ADMIN/TECNICO no backend). */
+export async function atualizarChamadosEmLote(
+  ids: string[],
+  payload: { status?: StatusChamado; tecnicoResolucao?: string; resposta?: string },
+): Promise<{ atualizados: number }> {
+  const { data } = await chamadosApi.patch<{ atualizados: number }>('/chamados/batch', { ids, ...payload })
+  return data
+}
+
 /* ---------- Apresentação ---------- */
 
 export const ROTULO_STATUS_CHAMADO: Record<StatusChamado, string> = {

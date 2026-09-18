@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  Layers,
   MoreVertical,
   School,
   Search,
@@ -15,6 +16,7 @@ import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
+  atualizarChamadosEmLote,
   atualizarStatusChamado,
   listarChamados,
   responderChamado,
@@ -43,7 +45,43 @@ const PAGE_SIZE = 10
 
 const filtros = reactive<FiltrosChamado>({ status: '', unidade: '', urgencia: '' })
 
-const podeEditar = computed(() => ['ADMIN', 'TECNICO', 'GESTOR'].includes(auth.user?.nivel || ''))
+const podeEditar = computed(() => ['ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
+const podeLote = computed(() => ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || ''))
+
+/* ---------- Seleção múltipla (batch) ---------- */
+const selecionados = ref<Set<string>>(new Set())
+const loteStatus = ref<StatusChamado | ''>('')
+
+const todosMarcados = computed(
+  () => estado.items.length > 0 && estado.items.every((c) => selecionados.value.has(c.id)),
+)
+
+function alternarTodos() {
+  const novo = new Set(selecionados.value)
+  if (todosMarcados.value) estado.items.forEach((c) => novo.delete(c.id))
+  else estado.items.forEach((c) => novo.add(c.id))
+  selecionados.value = novo
+}
+
+function alternar(id: string) {
+  const novo = new Set(selecionados.value)
+  if (novo.has(id)) novo.delete(id)
+  else novo.add(id)
+  selecionados.value = novo
+}
+
+async function aplicarEmLote() {
+  if (!loteStatus.value || selecionados.value.size === 0) return
+  try {
+    const r = await atualizarChamadosEmLote([...selecionados.value], { status: loteStatus.value })
+    ui.success(`${r.atualizados} chamado(s) atualizados para "${rotuloStatusChamado(loteStatus.value)}".`)
+    selecionados.value = new Set()
+    loteStatus.value = ''
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha na atualização em lote.'))
+  }
+}
 
 async function carregar() {
   estado.loading = true
@@ -177,6 +215,29 @@ onMounted(() => {
       <button class="btn btn-primary" type="button" @click="aplicarFiltros">Filtrar</button>
     </div>
 
+    <!-- Barra de ação em lote (só ADMIN/TECNICO) -->
+    <div v-if="podeLote" class="lote card" :class="{ ativa: selecionados.size > 0 }">
+      <span>{{ selecionados.size ? `${selecionados.size} chamado(s) selecionado(s)` : 'Marque os chamados para agir em lote' }}</span>
+      <div class="lote-acoes">
+        <select v-model="loteStatus" class="select-input slim" :disabled="selecionados.size === 0">
+          <option value="" disabled>Alterar status para...</option>
+          <option value="ABERTO">Aberto</option>
+          <option value="ANDAMENTO">Em atendimento</option>
+          <option value="COMUNICADO">Aguardando escola</option>
+          <option value="RESOLVIDO">Concluído</option>
+        </select>
+        <button
+          class="btn btn-primary"
+          type="button"
+          :disabled="selecionados.size === 0 || !loteStatus"
+          @click="aplicarEmLote"
+        >
+          <Layers :size="15" />
+          Aplicar em lote
+        </button>
+      </div>
+    </div>
+
     <p v-if="estado.erro" class="erro card">{{ estado.erro }}</p>
 
     <!-- Tabela -->
@@ -185,6 +246,9 @@ onMounted(() => {
         <table class="table">
           <thead>
             <tr>
+              <th v-if="podeLote" class="th-check">
+                <input type="checkbox" :checked="todosMarcados" @change="alternarTodos" />
+              </th>
               <th>Protocolo</th>
               <th>Data</th>
               <th>Unidade Escolar</th>
@@ -196,12 +260,15 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-if="estado.loading">
-              <td colspan="7" class="td-center">Carregando...</td>
+              <td :colspan="podeLote ? 8 : 7" class="td-center">Carregando...</td>
             </tr>
             <tr v-else-if="estado.items.length === 0">
-              <td colspan="7" class="td-center">Nenhum chamado encontrado.</td>
+              <td :colspan="podeLote ? 8 : 7" class="td-center">Nenhum chamado encontrado.</td>
             </tr>
-            <tr v-for="c in estado.items" :key="c.id">
+            <tr v-for="c in estado.items" :key="c.id" :class="{ selecionado: selecionados.has(c.id) }">
+              <td v-if="podeLote" class="td-check">
+                <input type="checkbox" :checked="selecionados.has(c.id)" @change="alternar(c.id)" />
+              </td>
               <td class="nowrap"><strong>#{{ c.protocolo }}</strong></td>
               <td class="nowrap">{{ formatDate(c.timestamp) }}</td>
               <td>{{ c.unidade }}</td>
@@ -352,6 +419,50 @@ onMounted(() => {
 
 .nowrap {
   white-space: nowrap;
+}
+
+.th-check,
+.td-check {
+  width: 36px;
+  text-align: center;
+}
+
+.td-check input,
+.th-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--sidebar-bg);
+  cursor: pointer;
+}
+
+tr.selecionado td {
+  background: var(--blue-soft);
+}
+
+.lote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.lote.ativa {
+  border-color: var(--blue);
+  color: var(--text-primary);
+}
+
+.lote-acoes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lote-acoes .select-input {
+  width: auto;
 }
 
 .desc-cell {
