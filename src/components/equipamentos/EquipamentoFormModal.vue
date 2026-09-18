@@ -136,8 +136,7 @@ watch(
 function validar(): string | null {
   if (!form.unidade) return 'Selecione a unidade escolar.'
   if (!valorCategoria.value) return 'Selecione (ou digite) a categoria.'
-  if (!valorMarca.value) return 'Selecione (ou digite) a marca.'
-  if (!valorModelo.value) return 'Selecione (ou digite) o modelo.'
+  // Marca e modelo são opcionais — há equipamentos sem essa identificação.
   if (!form.numeroSerie.trim() && !form.justificativaNumeroSerie.trim())
     return 'Informe o número de série — ou justifique a ausência dele.'
   if (form.status === 'Quebrado' && !form.descricaoQuebrado.trim())
@@ -266,9 +265,9 @@ onMounted(async () => {
       </div>
 
       <div class="field">
-        <label>Marca *</label>
+        <label>Marca <span class="opcional">(opcional)</span></label>
         <select v-model="form.marca" class="select-input" :disabled="!form.categoria" @change="onMarca">
-          <option value="" disabled>{{ form.categoria ? 'Selecione...' : 'Escolha a categoria primeiro' }}</option>
+          <option value="">{{ form.categoria ? '— Sem marca —' : 'Escolha a categoria primeiro' }}</option>
           <option v-for="m in marcasFiltradas" :key="m" :value="m">{{ m }}</option>
           <option :value="OUTRO">Outra (digitar manualmente)</option>
         </select>
@@ -281,11 +280,11 @@ onMounted(async () => {
       </div>
 
       <div class="field">
-        <label>Modelo *</label>
-        <select v-model="form.modelo" class="select-input" :disabled="!form.marca">
-          <option value="" disabled>{{ form.marca ? 'Selecione...' : 'Escolha a marca primeiro' }}</option>
+        <label>Modelo <span class="opcional">(opcional)</span></label>
+        <select v-model="form.modelo" class="select-input" :disabled="!form.categoria || form.marca === OUTRO">
+          <option value="">{{ form.marca ? '— Sem modelo —' : 'Escolha a marca primeiro' }}</option>
           <option v-for="m in modelosFiltrados" :key="m" :value="m">{{ m }}</option>
-          <option :value="OUTRO">Outro (digitar manualmente)</option>
+          <option v-if="form.marca && form.marca !== OUTRO" :value="OUTRO">Outro (digitar manualmente)</option>
         </select>
         <input
           v-if="form.modelo === OUTRO"
@@ -348,6 +347,12 @@ onMounted(async () => {
 
 .field.full {
   grid-column: 1 / -1;
+}
+
+.opcional {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .textarea {

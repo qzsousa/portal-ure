@@ -91,7 +91,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Usuários',
           breadcrumb: 'Usuários',
-          roles: ['ADMIN'] as Nivel[],
+          roles: ['ADMIN', 'GESTOR'] as Nivel[],
         },
       },
       {

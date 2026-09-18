@@ -19,6 +19,7 @@ interface MenuItem {
   label: string
   icon: unknown
   adminOnly?: boolean
+  gestorTambem?: boolean
 }
 
 const route = useRoute()
@@ -31,11 +32,17 @@ const items: MenuItem[] = [
   { to: '/chamados', label: 'Chamados', icon: Headset },
   { to: '/unidades', label: 'Unidades Escolares', icon: School },
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
-  { to: '/usuarios', label: 'Usuários', icon: Users, adminOnly: true },
+  { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true },
   { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true },
 ]
 
-const visibleItems = computed(() => items.filter((i) => !i.adminOnly || auth.isAdmin))
+const visibleItems = computed(() =>
+  items.filter((i) => {
+    if (i.adminOnly) return auth.user?.nivel === 'ADMIN'
+    if (i.gestorTambem) return ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || '')
+    return true
+  }),
+)
 </script>
 
 <template>

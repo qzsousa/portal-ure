@@ -213,6 +213,9 @@ onMounted(() => {
         <option value="Baixa">Baixa</option>
       </select>
       <button class="btn btn-primary" type="button" @click="aplicarFiltros">Filtrar</button>
+      <a class="btn btn-gold" href="/chamado/novo" target="_blank" rel="noopener">
+        Abrir chamado
+      </a>
     </div>
 
     <!-- Barra de ação em lote (só ADMIN/TECNICO) -->

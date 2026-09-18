@@ -15,8 +15,31 @@ import {
 } from '@/api/usuarios'
 import { rotuloPerfil, type Nivel, type User } from '@/types'
 import { useUiStore } from '@/stores/ui'
+import { useAuthStore } from '@/stores/auth'
+import { computed } from 'vue'
 
 const ui = useUiStore()
+const auth = useAuthStore()
+
+const isAdmin = computed(() => auth.user?.nivel === 'ADMIN')
+const isGestor = computed(() => auth.user?.nivel === 'GESTOR')
+
+/** Perfis disponíveis no cadastro (Gestor só pode criar Visualizador). */
+const perfisDisponiveis = computed(() =>
+  isAdmin.value
+    ? [
+        { valor: 'ADMIN' as const, rotulo: 'Administrador' },
+        { valor: 'GESTOR' as const, rotulo: 'Gestor' },
+        { valor: 'VISUALIZADOR' as const, rotulo: 'Visualizador' },
+      ]
+    : [{ valor: 'VISUALIZADOR' as const, rotulo: 'Visualizador' }],
+)
+
+/** O Gestor pode mexer apenas em Visualizadores; o Admin, em todos. */
+function podeEditarAlvo(u: User): boolean {
+  if (isAdmin.value) return true
+  return u.nivel === 'VISUALIZADOR'
+}
 
 const estado = reactive({ loading: true, erro: '', items: [] as User[], total: 0, page: 1 })
 const PAGE_SIZE = 10
@@ -43,11 +66,6 @@ function aplicarFiltros() {
 }
 
 /* ---------- Criar / Editar ---------- */
-const PERFIL_OPCOES: Array<{ valor: Nivel; rotulo: string }> = [
-  { valor: 'ADMIN', rotulo: 'Administrador' },
-  { valor: 'GESTOR', rotulo: 'Gestor' },
-  { valor: 'VISUALIZADOR', rotulo: 'Visualizador' },
-]
 
 const modalAberto = ref(false)
 const editando = ref<User | null>(null)
@@ -61,8 +79,8 @@ function abrirCriar() {
   editando.value = null
   form.nome = ''
   form.email = ''
-  form.nivel = 'GESTOR'
-  form.filial = ''
+  form.nivel = isGestor.value ? 'VISUALIZADOR' : 'GESTOR'
+  form.filial = isGestor.value ? auth.user?.filial || '' : ''
   form.status = 'ATIVO'
   modalAberto.value = true
 }
@@ -204,13 +222,13 @@ onMounted(async () => {
               <td>{{ u.filial || '—' }}</td>
               <td><StatusPill :status="u.status === 'ATIVO' ? 'Ativo' : 'Inativo'" /></td>
               <td class="td-acoes">
-                <div class="acoes-wrap">
+                <div v-if="podeEditarAlvo(u)" class="acoes-wrap">
                   <button class="acoes-btn" type="button" @click.stop="menuAberto = menuAberto === u.id ? null : u.id">
                     <MoreVertical :size="17" />
                   </button>
                   <div v-if="menuAberto === u.id" class="acoes-menu">
                     <button type="button" @click="abrirEditar(u)"><Pencil :size="14" /> Editar</button>
-                    <button type="button" @click="novaSenhaTemporaria(u)"><KeyRound :size="14" /> Nova senha temporária</button>
+                    <button v-if="isAdmin" type="button" @click="novaSenhaTemporaria(u)"><KeyRound :size="14" /> Nova senha temporária</button>
                     <button type="button" class="danger" @click="desativar(u)"><UserX :size="14" /> Desativar</button>
                   </div>
                 </div>
@@ -244,22 +262,24 @@ onMounted(async () => {
         </div>
         <div class="field">
           <label>Perfil</label>
-          <select v-model="form.nivel" class="select-input">
-            <option v-for="p in PERFIL_OPCOES" :key="p.valor" :value="p.valor">{{ p.rotulo }}</option>
+          <select v-model="form.nivel" class="select-input" :disabled="isGestor">
+            <option v-for="p in perfisDisponiveis" :key="p.valor" :value="p.valor">{{ p.rotulo }}</option>
           </select>
           <small class="perfil-hint">
-            <strong>Administrador</strong>: acesso total (portal, usuários, configurações) ·
-            <strong>Gestor</strong>: gere chamados e equipamentos da(s) unidade(s) ·
-            <strong>Visualizador</strong>: as mesmas funções do Gestor na unidade, <em>sem</em> apagar usuários/equipamentos
+            <template v-if="isAdmin">
+              <strong>Administrador</strong>: acesso total (portal, usuários, configurações) ·
+              <strong>Gestor</strong>: gere chamados e equipamentos da(s) unidade(s) ·
+            </template>
+            <strong>Visualizador</strong>: mesmas funções do Gestor na unidade, <em>sem</em> apagar usuários/equipamentos
           </small>
         </div>
         <div class="field">
           <label>Unidade escolar</label>
-          <select v-if="form.nivel !== 'ADMIN'" v-model="form.filial" class="select-input">
+          <select v-if="!isGestor && form.nivel !== 'ADMIN'" v-model="form.filial" class="select-input">
             <option value="" disabled>Selecione a unidade...</option>
             <option v-for="e in escolas" :key="e" :value="e">{{ e }}</option>
           </select>
-          <input v-else class="input" value="URE Leste 3" disabled />
+          <input v-else class="input" :value="form.nivel === 'ADMIN' ? 'URE Leste 3' : form.filial" disabled />
         </div>
         <div v-if="editando" class="field">
           <label>Status</label>
