@@ -59,6 +59,11 @@ export async function criarChamadoPublico(payload: NovoChamadoPayload): Promise<
 
 /* ---------- Consulta por protocolo ---------- */
 
+export interface AvaliacaoChamado {
+  nota: number
+  comentario: string | null
+}
+
 export interface ChamadoPublico {
   protocolo: string
   unidade: string
@@ -70,6 +75,7 @@ export interface ChamadoPublico {
   anexoUrl: string | null
   timestamp: string
   ultimaAtualizacao: string
+  avaliacao?: AvaliacaoChamado | null
 }
 
 /** Consulta pública por protocolo. Lança AxiosError com status 404 se não existir. */
@@ -102,4 +108,35 @@ export interface DashboardMatriz {
 export async function getDashboardMatriz(): Promise<DashboardMatriz> {
   const { data } = await publicoHttp.get<DashboardMatriz>('/dashboard/matriz')
   return data
+}
+
+/* ---------- Avaliação do atendimento (público) ---------- */
+
+export interface AvaliacaoPayload {
+  nota: number
+  comentario?: string
+}
+
+/**
+ * Avalia um chamado RESOLVIDO (público).
+ * Lança AxiosError: 400 se o chamado não está resolvido, 409 se já foi avaliado.
+ */
+export async function avaliarChamadoPorProtocolo(protocolo: string, payload: AvaliacaoPayload): Promise<void> {
+  await publicoHttp.post(`/chamados/protocolo/${encodeURIComponent(protocolo)}/avaliar`, payload)
+}
+
+/* ---------- Elogios e sugestões (público) ---------- */
+
+export type TipoFeedback = 'ELOGIO' | 'SUGESTAO'
+
+export interface NovoFeedbackPayload {
+  tipo: TipoFeedback
+  nome?: string
+  unidade?: string
+  mensagem: string
+}
+
+/** Envia um elogio ou sugestão (público). */
+export async function enviarFeedbackPublico(payload: NovoFeedbackPayload): Promise<void> {
+  await publicoHttp.post('/feedback', payload)
 }

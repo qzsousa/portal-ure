@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   AlertTriangle,
   Box,
@@ -15,9 +15,34 @@ import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { useEquipamentos } from '@/composables/useEquipamentos'
 import { listarCatalogo, pct } from '@/api/sce'
+import { getFeedbackStats, type FeedbackStats } from '@/api/feedback'
 
 const eq = useEquipamentos(10)
 const totalModelos = ref<number | null>(null)
+const statsAvaliacao = ref<FeedbackStats | null>(null)
+
+const CORES_AVALIACAO: Record<string, string> = {
+  'Nota 1': '#dc2626',
+  'Nota 2': '#f59e0b',
+  'Nota 3': '#eab308',
+  'Nota 4': '#2563eb',
+  'Nota 5': '#16a34a',
+}
+
+const fatiasAvaliacao = computed(() => {
+  const porNota = statsAvaliacao.value?.avaliacoes.porNota || {}
+  return {
+    'Nota 1': porNota['1'] || 0,
+    'Nota 2': porNota['2'] || 0,
+    'Nota 3': porNota['3'] || 0,
+    'Nota 4': porNota['4'] || 0,
+    'Nota 5': porNota['5'] || 0,
+  }
+})
+
+const mediaAvaliacao = computed(() =>
+  statsAvaliacao.value ? `${statsAvaliacao.value.avaliacoes.media.toFixed(1)}/5` : '—',
+)
 
 const CORES_STATUS: Record<string, string> = {
   'Disponível': '#16a34a',
@@ -36,6 +61,11 @@ onMounted(async () => {
     totalModelos.value = catalogo.length
   } catch {
     totalModelos.value = null
+  }
+  try {
+    statsAvaliacao.value = await getFeedbackStats()
+  } catch {
+    statsAvaliacao.value = null
   }
 })
 </script>
@@ -140,12 +170,12 @@ onMounted(async () => {
           <span>Modelos cadastrados</span>
         </div>
       </div>
-      <div class="banner card">
-        <div>
-          <strong>Equipamentos em bom funcionamento impulsionam uma educação mais conectada.</strong>
-          <span>Controle · Organização · Suporte</span>
-        </div>
-      </div>
+      <DonutCard
+        titulo="Avaliação de atendimento"
+        :fatias="fatiasAvaliacao"
+        :cores="CORES_AVALIACAO"
+        :center-label="mediaAvaliacao"
+      />
     </div>
 
     <!-- Tabela -->
@@ -263,26 +293,6 @@ onMounted(async () => {
 
 .mini-icon.blue { background: var(--blue-soft); color: var(--blue); }
 .mini-icon.yellow { background: var(--yellow-soft); color: var(--yellow); }
-
-.banner {
-  background: linear-gradient(135deg, var(--sidebar-bg) 0%, #12315e 100%);
-  color: #fff;
-  padding: 18px 20px;
-  display: flex;
-  align-items: center;
-}
-
-.banner strong {
-  display: block;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.banner span {
-  font-size: 12px;
-  color: var(--brand-gold);
-  letter-spacing: 0.04em;
-}
 
 .table-card {
   overflow: hidden;

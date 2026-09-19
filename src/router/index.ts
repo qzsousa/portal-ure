@@ -30,6 +30,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true, title: 'Consultar chamado' },
   },
   {
+    path: '/elogios',
+    name: 'elogios',
+    component: () => import('@/views/publico/ElogiosSugestoesView.vue'),
+    meta: { public: true, title: 'Elogios e sugestões' },
+  },
+  {
     path: '/matriz',
     name: 'dash-matriz',
     component: () => import('@/views/publico/DashboardPublicoView.vue'),
@@ -71,6 +77,16 @@ const routes: RouteRecordRaw[] = [
         name: 'chamados',
         component: () => import('@/views/ChamadosView.vue'),
         meta: { title: 'Chamados', breadcrumb: 'Chamados' },
+      },
+      {
+        path: 'feedback',
+        name: 'feedback',
+        component: () => import('@/views/FeedbackView.vue'),
+        meta: {
+          title: 'Elogios e avaliações',
+          breadcrumb: 'Elogios e avaliações',
+          roles: ['ADMIN'] as Nivel[],
+        },
       },
       {
         path: 'unidades',

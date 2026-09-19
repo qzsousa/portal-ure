@@ -61,6 +61,18 @@ export interface Chamado {
   email?: string | null
 }
 
+/* ---------- Notificações (backend chamados) ---------- */
+
+export interface Notificacao {
+  id: string
+  tipo: string
+  titulo: string
+  mensagem: string
+  link?: string | null
+  lida: boolean
+  criadoEm: string
+}
+
 /* ---------- Equipamentos (backend SCE) ---------- */
 
 export interface Equipamento {

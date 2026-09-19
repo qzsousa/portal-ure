@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { apiError } from '@/utils/apiError'
 import {
   AlertTriangle,
@@ -111,6 +111,30 @@ function aplicarFiltros() {
   void carregar()
 }
 
+/* ------- Chips de filtro rápido ------- */
+const STATUS_CHIPS: Array<{ rotulo: string; valor: StatusChamado | '' }> = [
+  { rotulo: 'Todos', valor: '' },
+  { rotulo: 'Abertos', valor: 'ABERTO' },
+  { rotulo: 'Em atendimento', valor: 'ANDAMENTO' },
+  { rotulo: 'Aguardando escola', valor: 'COMUNICADO' },
+  { rotulo: 'Concluídos', valor: 'RESOLVIDO' },
+]
+
+function chipStatus(valor: StatusChamado | '') {
+  filtros.status = valor
+  aplicarFiltros()
+}
+
+function alternarUrgentes() {
+  filtros.urgencia = filtros.urgencia === 'Alta' ? '' : 'Alta'
+  aplicarFiltros()
+}
+
+function alternarPortalNet() {
+  filtros.categoria = filtros.categoria === 'PortalNet' ? '' : 'PortalNet'
+  aplicarFiltros()
+}
+
 /* ------- Detalhe ------- */
 const menuAberto = ref<string | null>(null)
 const detalheAberto = ref(false)
@@ -128,6 +152,55 @@ function abrirDetalhe(c: Chamado) {
   textoResposta.value = ''
   detalheAberto.value = true
 }
+
+/* ------- Histórico como linha do tempo ------- */
+type TomTimeline = 'green' | 'blue' | 'purple' | 'slate'
+
+interface EntradaHistorico {
+  horario: string | null
+  texto: string
+  tom: TomTimeline
+}
+
+function tomDaEntrada(texto: string): TomTimeline {
+  const t = texto.toLowerCase()
+  if (t.includes('resolvido') || t.includes('concluído') || t.includes('concluido')) return 'green'
+  if (t.includes('status alterado')) return 'blue'
+  if (t.includes('respond') || t.includes('comunicado')) return 'purple'
+  return 'slate'
+}
+
+const historicoEntradas = computed<EntradaHistorico[]>(() => {
+  const bruto = detalhe.value?.historico || ''
+  return bruto
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((linha) => {
+      if (linha.startsWith('[')) {
+        const fecha = linha.indexOf(']')
+        if (fecha > 1) {
+          return {
+            horario: linha.slice(1, fecha),
+            texto: linha.slice(fecha + 1).trim(),
+            tom: tomDaEntrada(linha),
+          }
+        }
+      }
+      // Parse tolerante: linha fora do padrão vira texto simples
+      return { horario: null, texto: linha, tom: tomDaEntrada(linha) }
+    })
+})
+
+const timelineRef = ref<HTMLElement | null>(null)
+
+/* Auto-scroll para a entrada mais recente ao abrir o modal ou ao histórico mudar */
+watch([detalheAberto, () => detalhe.value?.historico], async ([aberto]) => {
+  if (!aberto) return
+  await nextTick()
+  const el = timelineRef.value
+  if (el) el.scrollTop = el.scrollHeight
+})
 
 async function salvarStatus() {
   if (!detalhe.value) return
@@ -187,6 +260,41 @@ onMounted(() => {
         tone="purple"
       ><School :size="22" /></StatCard>
       <StatCard label="Concluídos" :value="stats?.resolvidos ?? '…'" tone="green"><CheckCircle2 :size="22" /></StatCard>
+    </div>
+
+    <!-- Chips de filtro rápido -->
+    <div class="chips">
+      <div class="chips-grupo">
+        <button
+          v-for="chip in STATUS_CHIPS"
+          :key="chip.rotulo"
+          class="chip"
+          :class="{ ativo: filtros.status === chip.valor }"
+          type="button"
+          @click="chipStatus(chip.valor)"
+        >
+          {{ chip.rotulo }}
+        </button>
+      </div>
+      <span class="chips-divisor" />
+      <div class="chips-grupo">
+        <button
+          class="chip"
+          :class="{ ativo: filtros.urgencia === 'Alta' }"
+          type="button"
+          @click="alternarUrgentes"
+        >
+          Só urgentes
+        </button>
+        <button
+          class="chip"
+          :class="{ ativo: filtros.categoria === 'PortalNet' }"
+          type="button"
+          @click="alternarPortalNet"
+        >
+          PortalNet
+        </button>
+      </div>
     </div>
 
     <!-- Filtros -->
@@ -327,7 +435,13 @@ onMounted(() => {
 
         <div v-if="detalhe.historico" class="descricao-box">
           <h4>Histórico</h4>
-          <pre class="historico">{{ detalhe.historico }}</pre>
+          <div ref="timelineRef" class="timeline">
+            <div v-for="(entrada, i) in historicoEntradas" :key="i" class="timeline-item">
+              <span class="timeline-dot" :class="`dot-${entrada.tom}`" />
+              <span v-if="entrada.horario" class="timeline-hora">{{ entrada.horario }}</span>
+              <p class="timeline-texto">{{ entrada.texto }}</p>
+            </div>
+          </div>
         </div>
 
         <template v-if="podeEditar">
@@ -573,18 +687,108 @@ tr.selecionado td {
   white-space: pre-wrap;
 }
 
-.historico {
-  margin: 0;
+/* ---------- Chips de filtro rápido ---------- */
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chips-grupo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chips-divisor {
+  width: 1px;
+  height: 22px;
+  background: var(--border-strong);
+}
+
+.chip {
+  padding: 7px 14px;
+  border-radius: 999px;
   font-size: 12.5px;
+  font-weight: 600;
+  background: var(--slate-soft);
+  color: var(--text-secondary);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.chip:hover {
+  background: var(--border-strong);
+}
+
+.chip.ativo {
+  background: var(--sidebar-bg);
+  color: #fff;
+}
+
+/* ---------- Histórico como linha do tempo ---------- */
+.timeline {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+.timeline-item {
+  position: relative;
+  margin-left: 6px;
+  padding: 0 0 16px 24px;
+  border-left: 2px solid var(--border);
+}
+
+.timeline-item:last-child {
+  padding-bottom: 4px;
+  border-left-color: transparent;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -6px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-green {
+  background: var(--green);
+  box-shadow: 0 0 0 3px var(--green-soft);
+}
+
+.dot-blue {
+  background: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+.dot-purple {
+  background: var(--purple);
+  box-shadow: 0 0 0 3px var(--purple-soft);
+}
+
+.dot-slate {
+  background: var(--slate);
+  box-shadow: 0 0 0 3px var(--slate-soft);
+}
+
+.timeline-hora {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.timeline-texto {
+  margin: 2px 0 0;
+  font-size: 13px;
   color: var(--text-secondary);
   white-space: pre-wrap;
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  max-height: 220px;
-  overflow-y: auto;
-  font-family: inherit;
 }
 
 .acao-linha {
