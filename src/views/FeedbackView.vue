@@ -19,9 +19,10 @@ const ui = useUiStore()
 
 const stats = ref<FeedbackStats | null>(null)
 
-const mediaFormatada = computed(() =>
-  stats.value ? `${stats.value.avaliacoes.media.toFixed(1)}/5` : '—',
-)
+const mediaFormatada = computed(() => {
+  const media = stats.value?.avaliacoes.media
+  return typeof media === 'number' ? `${media.toFixed(1)}/5` : '—'
+})
 
 const fatiasNotas = computed(() => {
   const porNota = stats.value?.avaliacoes.porNota || {}

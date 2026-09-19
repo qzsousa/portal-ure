@@ -40,9 +40,10 @@ const fatiasAvaliacao = computed(() => {
   }
 })
 
-const mediaAvaliacao = computed(() =>
-  statsAvaliacao.value ? `${statsAvaliacao.value.avaliacoes.media.toFixed(1)}/5` : '—',
-)
+const mediaAvaliacao = computed(() => {
+  const media = statsAvaliacao.value?.avaliacoes.media
+  return typeof media === 'number' ? `${media.toFixed(1)}/5` : '—'
+})
 
 const CORES_STATUS: Record<string, string> = {
   'Disponível': '#16a34a',
