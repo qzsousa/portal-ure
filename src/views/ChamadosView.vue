@@ -19,6 +19,7 @@ import StatusPill from '@/components/ui/StatusPill.vue'
 import {
   atualizarChamadosEmLote,
   atualizarStatusChamado,
+  deletarChamado,
   getChamado,
   listarChamados,
   responderChamado,
@@ -265,6 +266,18 @@ function fecharMenu(e: MouseEvent) {
   if (!(e.target as HTMLElement).closest('.acoes-wrap')) menuAberto.value = null
 }
 
+async function excluirChamado(c: Chamado) {
+  menuAberto.value = null
+  if (!window.confirm(`Excluir o chamado #${c.protocolo}? Essa ação não pode ser desfeita.`)) return
+  try {
+    await deletarChamado(c.id)
+    ui.success(`Chamado ${c.protocolo} excluído.`)
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível excluir o chamado.'))
+  }
+}
+
 onMounted(() => {
   void carregar()
   void carregarStats()
@@ -423,6 +436,7 @@ onMounted(() => {
                   </button>
                   <div v-if="menuAberto === c.id" class="acoes-menu">
                     <button type="button" @click="abrirDetalhe(c)">Ver detalhes</button>
+                    <button v-if="podeEditar" class="danger" type="button" @click="excluirChamado(c)">Excluir</button>
                   </div>
                 </div>
               </td>
@@ -670,6 +684,14 @@ tr.selecionado td {
 
 .acoes-menu button:hover {
   background: var(--surface-muted);
+}
+
+.acoes-menu button.danger {
+  color: var(--red);
+}
+
+.acoes-menu button.danger:hover {
+  background: var(--red-soft);
 }
 
 .detalhe {

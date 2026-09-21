@@ -49,6 +49,11 @@ export async function responderChamado(id: string, texto: string): Promise<Chama
   return data
 }
 
+/** Exclusão lógica do chamado (permissões validadas no backend). */
+export async function deletarChamado(id: string): Promise<void> {
+  await chamadosApi.delete(`/chamados/${id}`)
+}
+
 /** Atualização em lote (somente ADMIN/TECNICO no backend). */
 export async function atualizarChamadosEmLote(
   ids: string[],
