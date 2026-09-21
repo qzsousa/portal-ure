@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { apiError } from '@/utils/apiError'
 import {
   AlertTriangle,
@@ -18,6 +19,7 @@ import StatusPill from '@/components/ui/StatusPill.vue'
 import {
   atualizarChamadosEmLote,
   atualizarStatusChamado,
+  getChamado,
   listarChamados,
   responderChamado,
   rotuloStatusChamado,
@@ -31,6 +33,8 @@ import type { Chamado, StatusChamado } from '@/types'
 
 const auth = useAuthStore()
 const ui = useUiStore()
+const route = useRoute()
+const router = useRouter()
 
 const stats = ref<{ total: number; abertos: number; andamento: number; comunicado: number; resolvidos: number } | null>(null)
 
@@ -152,6 +156,28 @@ function abrirDetalhe(c: Chamado) {
   textoResposta.value = ''
   detalheAberto.value = true
 }
+
+/* ------- Deep-link: abre o chamado direto via ?chamado=<id> (ex.: clique em notificação) ------- */
+watch(
+  () => route.query.chamado,
+  async (id) => {
+    if (typeof id !== 'string' || !id) return
+    try {
+      abrirDetalhe(await getChamado(id))
+    } catch (e) {
+      ui.error(apiError(e, 'Chamado não encontrado.'))
+    }
+  },
+  { immediate: true },
+)
+
+/* Ao fechar o modal, limpa o parâmetro da URL */
+watch(detalheAberto, (aberto) => {
+  if (!aberto && route.query.chamado) {
+    const { chamado: _chamado, ...resto } = route.query
+    void router.replace({ query: resto })
+  }
+})
 
 /* ------- Histórico como linha do tempo ------- */
 type TomTimeline = 'green' | 'blue' | 'purple' | 'slate'

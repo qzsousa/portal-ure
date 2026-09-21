@@ -64,6 +64,15 @@ function alternarUserMenu() {
   if (userMenuOpen.value) notifAberto.value = false
 }
 
+/** Link de chamado vindo do backend (/chamados/<id>) vira a rota da SPA que abre o detalhe direto. */
+type DestinoNotificacao = string | { name: string; query: Record<string, string> }
+
+function destinoNotificacao(link: string): DestinoNotificacao {
+  const m = link.match(/chamados\/([^/?#]+)/)
+  if (m?.[1]) return { name: 'chamados', query: { chamado: m[1] } }
+  return link
+}
+
 async function abrirNotificacao(n: Notificacao) {
   if (!n.lida) {
     n.lida = true
@@ -76,7 +85,7 @@ async function abrirNotificacao(n: Notificacao) {
   }
   if (n.link) {
     notifAberto.value = false
-    router.push(n.link)
+    router.push(destinoNotificacao(n.link))
   }
 }
 
