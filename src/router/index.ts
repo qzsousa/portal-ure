@@ -79,6 +79,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Chamados', breadcrumb: 'Chamados' },
       },
       {
+        path: 'tutoriais',
+        name: 'tutoriais',
+        component: () => import('@/views/TutoriaisView.vue'),
+        meta: { title: 'Tutoriais', breadcrumb: 'Tutoriais' },
+      },
+      {
+        path: 'tutoriais/:id',
+        name: 'tutorial-detalhe',
+        component: () => import('@/views/TutorialDetalheView.vue'),
+        meta: { title: 'Tutorial', breadcrumb: 'Tutorial' },
+      },
+      {
         path: 'feedback',
         name: 'feedback',
         component: () => import('@/views/FeedbackView.vue'),

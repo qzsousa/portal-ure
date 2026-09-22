@@ -30,6 +30,7 @@ const items: MenuItem[] = [
   { to: '/equipamentos', label: 'Equipamentos', icon: Monitor },
   { to: '/manutencao', label: 'Manutenção', icon: Wrench },
   { to: '/chamados', label: 'Chamados', icon: Headset },
+  { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen },
   { to: '/unidades', label: 'Unidades Escolares', icon: School },
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true },
