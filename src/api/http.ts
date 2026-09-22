@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
+import { useErrorLogStore } from '@/stores/errorLog'
 
 /**
  * Clientes HTTP do portal.
@@ -94,6 +95,41 @@ function createRefreshInterceptor(client: AxiosInstance) {
   }
 }
 
+/**
+ * Erros já registrados — evita contagem dupla quando a mesma falha atravessa
+ * o interceptor mais de uma vez (ex.: request refeita após o refresh de token).
+ */
+const errosRegistrados = new WeakSet<AxiosError>()
+
+function extrairMensagemErro(error: AxiosError): string {
+  const data = error.response?.data as { message?: string; error?: string } | undefined
+  return data?.message || data?.error || error.message || 'Erro desconhecido'
+}
+
+/**
+ * Registra erros de BACKEND (HTTP 5xx ou ausência de resposta) na store
+ * `errorLog` — que dispara um toast e exibe o erro na aba Logs das
+ * Configurações. Deve ser registrado DEPOIS do interceptor de refresh,
+ * para enxergar apenas a falha final da requisição.
+ */
+export function createBackendErrorInterceptor(backend: string) {
+  return (error: AxiosError) => {
+    const status = error.response?.status ?? null
+    const ehErroDeBackend = status === null || status >= 500
+    if (ehErroDeBackend && !errosRegistrados.has(error)) {
+      errosRegistrados.add(error)
+      useErrorLogStore().registrar({
+        backend,
+        metodo: (error.config?.method || 'GET').toUpperCase(),
+        rota: error.config?.url || '(rota desconhecida)',
+        status,
+        mensagem: extrairMensagemErro(error),
+      })
+    }
+    return Promise.reject(error)
+  }
+}
+
 export const chamadosApi = axios.create({
   baseURL: CHAMADOS_BASE,
   withCredentials: true,
@@ -109,6 +145,8 @@ export const sceApi = axios.create({
 
 chamadosApi.interceptors.request.use(attachAuthHeader)
 chamadosApi.interceptors.response.use((r) => r, createRefreshInterceptor(chamadosApi))
+chamadosApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('Chamados'))
 
 sceApi.interceptors.request.use(attachAuthHeader)
 sceApi.interceptors.response.use((r) => r, createRefreshInterceptor(sceApi))
+sceApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('SCE'))

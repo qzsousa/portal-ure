@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { CHAMADOS_BASE } from './http'
+import { CHAMADOS_BASE, createBackendErrorInterceptor } from './http'
 import type { Chamado } from '@/types'
 
 /**
@@ -15,6 +15,9 @@ const publicoHttp = axios.create({
   headers: { 'Content-Type': 'application/json' },
   timeout: 30000,
 })
+
+// Mesma captura de erros de backend dos clientes autenticados (toast + log).
+publicoHttp.interceptors.response.use((r) => r, createBackendErrorInterceptor('Chamados'))
 
 /* ---------- Abertura de chamado ---------- */
 

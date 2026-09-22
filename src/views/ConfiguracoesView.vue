@@ -20,6 +20,7 @@ import { chamadosApi } from '@/api/http'
 import { apiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 import { useUiStore } from '@/stores/ui'
+import { useErrorLogStore } from '@/stores/errorLog'
 
 type Aba = 'catalogo' | 'status' | 'logs' | 'integracoes'
 
@@ -116,6 +117,15 @@ const statusOrdenados = computed(() =>
 /* ---------------- Logs ---------------- */
 const logs = reactive({ loading: true, items: [] as AuditoriaItem[] })
 
+/** Erros de backend registrados localmente pelos interceptors de axios. */
+const errorLog = useErrorLogStore()
+
+function limparErrosBackend() {
+  if (!errorLog.total) return
+  if (!window.confirm('Limpar o histórico de erros dos backends?')) return
+  errorLog.limpar()
+}
+
 async function carregarLogs() {
   logs.loading = true
   try {
@@ -179,7 +189,8 @@ onMounted(() => {
           :class="{ ativa: aba === a.id }"
           @click="aba = a.id"
         >
-          {{ a.rotulo }}
+          <span>{{ a.rotulo }}</span>
+          <span v-if="a.id === 'logs' && errorLog.total" class="badge-erro">{{ errorLog.total }}</span>
         </button>
       </nav>
 
@@ -265,7 +276,61 @@ onMounted(() => {
 
         <!-- ============ LOGS ============ -->
         <section v-else-if="aba === 'logs'" class="card conf-card">
-          <h3>Logs do sistema (auditoria do SCE)</h3>
+          <div class="logs-header">
+            <h3>Erros dos backends</h3>
+            <button
+              v-if="errorLog.total"
+              class="btn-limpar"
+              type="button"
+              title="Limpar histórico de erros"
+              @click="limparErrosBackend"
+            >
+              <Trash2 :size="14" />
+              Limpar
+            </button>
+          </div>
+          <p class="conf-desc">
+            Falhas capturadas pelo portal ao chamar os backends (HTTP 5xx ou backend fora do ar).
+            Erros novos também disparam uma notificação de erro na tela.
+          </p>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Backend</th>
+                  <th>Requisição</th>
+                  <th>Status</th>
+                  <th>Mensagem</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="errorLog.erros.length === 0">
+                  <td colspan="5" class="td-center">Nenhum erro de backend registrado.</td>
+                </tr>
+                <tr v-for="e in errorLog.erros" :key="e.id">
+                  <td class="nowrap">{{ formatDateTime(e.data) }}</td>
+                  <td class="nowrap">{{ e.backend }}</td>
+                  <td class="req">
+                    <code class="acao">{{ e.metodo }}</code> {{ e.rota }}
+                  </td>
+                  <td class="nowrap">
+                    <span class="status-erro" :class="{ off: e.status === null }">
+                      {{ e.status ?? 'sem resposta' }}
+                    </span>
+                  </td>
+                  <td class="detalhes" :title="e.mensagem">
+                    {{ e.mensagem }}
+                    <span v-if="e.repeticoes > 1" class="rep" :title="`${e.repeticoes} ocorrências seguidas`">
+                      ×{{ e.repeticoes }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="logs-sub">Logs do sistema (auditoria do SCE)</h3>
           <p class="conf-desc">Últimas ações administrativas registradas.</p>
           <div class="table-wrap">
             <table class="table">
@@ -364,6 +429,22 @@ onMounted(() => {
   font-size: 13.5px;
   font-weight: 500;
   color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.badge-erro {
+  background: var(--red);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 19px;
+  padding: 3px 6px;
+  text-align: center;
 }
 
 .conf-nav-item:hover {
@@ -488,6 +569,75 @@ onMounted(() => {
   font-family: 'Courier New', monospace;
   font-size: 11.5px;
   color: var(--text-muted);
+}
+
+.logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.logs-header h3 {
+  margin-bottom: 0;
+}
+
+.btn-limpar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
+  border: 1px solid var(--border);
+  background: transparent;
+}
+
+.btn-limpar:hover {
+  background: var(--red-soft);
+}
+
+.logs-sub {
+  margin-top: 28px;
+}
+
+.req {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+}
+
+.status-erro {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+}
+
+.status-erro.off {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+
+.rep {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 10.5px;
+  font-weight: 700;
 }
 
 .integracoes {
