@@ -31,18 +31,24 @@ function aoKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') fechar()
 }
 
+function aoScroll(e: Event) {
+  // Rolagem DENTRO do menu não fecha (ele pode ter scroll interno em telas baixas)
+  if (menuRef.value?.contains(e.target as Node)) return
+  fechar()
+}
+
 function registrarOuvintes() {
   document.addEventListener('pointerdown', aoPointerDownFora)
   document.addEventListener('keydown', aoKeydown)
   // capture:true pega scroll de contêineres internos (ex.: .table-wrap)
-  window.addEventListener('scroll', fechar, true)
+  window.addEventListener('scroll', aoScroll, true)
   window.addEventListener('resize', fechar)
 }
 
 function removerOuvintes() {
   document.removeEventListener('pointerdown', aoPointerDownFora)
   document.removeEventListener('keydown', aoKeydown)
-  window.removeEventListener('scroll', fechar, true)
+  window.removeEventListener('scroll', aoScroll, true)
   window.removeEventListener('resize', fechar)
 }
 
@@ -79,6 +85,9 @@ async function alternar() {
   posicionado.value = false
   await nextTick()
   posicionarMenu()
+  // Reconfere no próximo frame: garante medida estável mesmo com fontes/
+  // layout assíncrono (evita o menu abrir sobreposto ao botão).
+  requestAnimationFrame(posicionarMenu)
   registrarOuvintes()
 }
 
@@ -154,6 +163,10 @@ onBeforeUnmount(removerOuvintes)
   position: fixed;
   z-index: 300;
   min-width: 190px;
+  /* Nunca passa da viewport; em telas baixas rola internamente */
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
