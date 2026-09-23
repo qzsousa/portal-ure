@@ -40,6 +40,27 @@ export interface ChangePasswordRequest {
 
 export type StatusChamado = 'ABERTO' | 'ANDAMENTO' | 'COMUNICADO' | 'RESOLVIDO'
 
+/** Anexo temporário de uma mensagem (expira 7 dias após o envio — o backend remove do banco/storage). */
+export interface ChamadoMensagemAnexo {
+  id: string
+  nome: string
+  tipo: string
+  url: string
+  expiresAt: string
+  createdAt: string
+}
+
+/** Mensagem da conversa matriz ↔ escola: PERGUNTA (matriz) ou RESPOSTA (escola). */
+export interface ChamadoMensagem {
+  id: string
+  chamadoId: string
+  tipo: 'PERGUNTA' | 'RESPOSTA'
+  autorNome: string
+  texto: string
+  createdAt: string
+  anexos: ChamadoMensagemAnexo[]
+}
+
 export interface Chamado {
   id: string
   protocolo: string
@@ -59,6 +80,7 @@ export interface Chamado {
   descricaoResolucao?: string | null
   tecnicoSetor?: string | null
   email?: string | null
+  mensagens?: ChamadoMensagem[]
 }
 
 /* ---------- Notificações (backend chamados) ---------- */

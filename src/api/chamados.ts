@@ -33,10 +33,20 @@ export async function getChamado(id: string): Promise<Chamado> {
   return data
 }
 
+/** Anexo temporário (base64) de pergunta/resposta — expira 7 dias após o envio. */
+export interface AnexoMensagemPayload {
+  nome: string
+  tipo?: string
+  base64: string
+}
+
 export interface AtualizarStatusPayload {
   status: StatusChamado
   tecnicoResolucao?: string
   descricaoResolucao?: string
+  /** Matriz: pergunta enviada à escola ao mudar para "Aguardando escola" */
+  pergunta?: string
+  perguntaAnexos?: AnexoMensagemPayload[]
 }
 
 export async function atualizarStatusChamado(id: string, payload: AtualizarStatusPayload): Promise<Chamado> {
@@ -44,8 +54,13 @@ export async function atualizarStatusChamado(id: string, payload: AtualizarStatu
   return data
 }
 
-export async function responderChamado(id: string, texto: string): Promise<Chamado> {
-  const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/resposta`, { texto })
+export interface ResponderChamadoPayload {
+  texto: string
+  anexos?: AnexoMensagemPayload[]
+}
+
+export async function responderChamado(id: string, payload: ResponderChamadoPayload): Promise<Chamado> {
+  const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/resposta`, payload)
   return data
 }
 

@@ -8,8 +8,10 @@ import {
   ClipboardList,
   Clock,
   Layers,
+  Paperclip,
   School,
   Search,
+  X,
 } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import RowActions from '@/components/ui/RowActions.vue'
@@ -24,14 +26,15 @@ import {
   listarChamados,
   responderChamado,
   rotuloStatusChamado,
+  type AnexoMensagemPayload,
   type FiltrosChamado,
 } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatDateTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { Chamado, StatusChamado } from '@/types'
+import type { Chamado, ChamadoMensagem, StatusChamado } from '@/types'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -51,8 +54,10 @@ const PAGE_SIZE = 10
 
 const filtros = reactive<FiltrosChamado>({ status: '', unidade: '', urgencia: '' })
 
-const podeEditar = computed(() => ['ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
-const podeLote = computed(() => ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || ''))
+/* Matriz (ADMIN/TECNICO) tem controle total; escola (GESTOR/VISUALIZADOR) só responde e conclui. */
+const ehMatriz = computed(() => ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || ''))
+const ehEscola = computed(() => ['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
+const podeLote = computed(() => ehMatriz.value)
 
 /* ---------- Seleção múltipla (batch) ---------- */
 const selecionados = ref<Set<string>>(new Set())
@@ -150,13 +155,64 @@ const novoStatus = ref<StatusChamado>('ANDAMENTO')
 const descricaoResolucao = ref('')
 const textoResposta = ref('')
 
-function abrirDetalhe(c: Chamado) {
+/* ------- Pergunta & resposta (matriz ↔ escola) ------- */
+const TAMANHO_MAX_ANEXO = 5 * 1024 * 1024 // 5 MB por arquivo (limite do backend)
+const MAX_ANEXOS = 5
+const perguntaEscola = ref('')
+const anexosPergunta = ref<AnexoMensagemPayload[]>([])
+const respostaEscola = ref('')
+const anexosResposta = ref<AnexoMensagemPayload[]>([])
+const responderAberto = ref(false)
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function onAnexosChange(e: Event, destino: AnexoMensagemPayload[]) {
+  const input = e.target as HTMLInputElement
+  const arquivos = [...(input.files || [])]
+  for (const arquivo of arquivos) {
+    if (destino.length >= MAX_ANEXOS) {
+      ui.error(`Máximo de ${MAX_ANEXOS} anexos por mensagem.`)
+      break
+    }
+    if (arquivo.size > TAMANHO_MAX_ANEXO) {
+      ui.error(`"${arquivo.name}" é muito grande. O tamanho máximo é 5 MB.`)
+      continue
+    }
+    destino.push({ nome: arquivo.name, tipo: arquivo.type, base64: await fileToBase64(arquivo) })
+  }
+  input.value = ''
+}
+
+async function abrirDetalhe(c: Chamado) {
   detalhe.value = c
   novoStatus.value = c.status
   descricaoResolucao.value = c.descricaoResolucao || ''
   textoResposta.value = ''
+  perguntaEscola.value = ''
+  anexosPergunta.value = []
+  respostaEscola.value = ''
+  anexosResposta.value = []
+  responderAberto.value = false
   detalheAberto.value = true
+  // A listagem não traz a conversa — busca o chamado completo (perguntas, respostas e anexos)
+  try {
+    const completo = await getChamado(c.id)
+    if (detalhe.value?.id === completo.id) detalhe.value = completo
+  } catch {
+    /* mantém os dados da listagem */
+  }
 }
+
+/* ------- Conversa (perguntas da matriz e respostas da escola) ------- */
+const conversa = computed<ChamadoMensagem[]>(() => detalhe.value?.mensagens || [])
+const ultimaPergunta = computed(() => [...conversa.value].reverse().find((m) => m.tipo === 'PERGUNTA') || null)
 
 /* ------- Deep-link: abre o chamado direto via ?chamado=<id> (ex.: clique em notificação) ------- */
 watch(
@@ -231,13 +287,24 @@ watch([detalheAberto, () => detalhe.value?.historico], async ([aberto]) => {
 
 async function salvarStatus() {
   if (!detalhe.value) return
+  // Matriz: ao colocar em "Aguardando escola", a pergunta é obrigatória
+  if (ehMatriz.value && novoStatus.value === 'COMUNICADO' && detalhe.value.status !== 'COMUNICADO' && !perguntaEscola.value.trim()) {
+    ui.error('Escreva a pergunta/solicitação para a escola antes de salvar.')
+    return
+  }
   salvando.value = true
   try {
     const atualizado = await atualizarStatusChamado(detalhe.value.id, {
       status: novoStatus.value,
       descricaoResolucao: descricaoResolucao.value || undefined,
+      ...(novoStatus.value === 'COMUNICADO' && perguntaEscola.value.trim()
+        ? { pergunta: perguntaEscola.value.trim(), perguntaAnexos: anexosPergunta.value }
+        : {}),
     })
     detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+    perguntaEscola.value = ''
+    anexosPergunta.value = []
     ui.success(`Chamado ${atualizado.protocolo} atualizado para "${rotuloStatusChamado(atualizado.status)}".`)
     await Promise.all([carregar(), carregarStats()])
   } catch (e) {
@@ -251,12 +318,53 @@ async function enviarResposta() {
   if (!detalhe.value || !textoResposta.value.trim()) return
   salvando.value = true
   try {
-    const atualizado = await responderChamado(detalhe.value.id, textoResposta.value.trim())
+    const atualizado = await responderChamado(detalhe.value.id, { texto: textoResposta.value.trim() })
     detalhe.value = atualizado
     textoResposta.value = ''
     ui.success('Resposta registrada no histórico.')
   } catch (e) {
     ui.error(apiError(e, 'Falha ao registrar resposta.'))
+  } finally {
+    salvando.value = false
+  }
+}
+
+/* Escola responde à pergunta da matriz — status volta para "Em atendimento" automaticamente */
+async function responderAoChamado() {
+  if (!detalhe.value || !respostaEscola.value.trim()) return
+  salvando.value = true
+  try {
+    const atualizado = await responderChamado(detalhe.value.id, {
+      texto: respostaEscola.value.trim(),
+      anexos: anexosResposta.value,
+    })
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+    respostaEscola.value = ''
+    anexosResposta.value = []
+    responderAberto.value = false
+    ui.success('Resposta enviada para a equipe.')
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao enviar a resposta.'))
+  } finally {
+    salvando.value = false
+  }
+}
+
+/* Escola só pode alterar o chamado para "Concluído" */
+async function concluirChamado() {
+  if (!detalhe.value) return
+  if (!window.confirm(`Concluir o chamado #${detalhe.value.protocolo}?`)) return
+  salvando.value = true
+  try {
+    const atualizado = await atualizarStatusChamado(detalhe.value.id, { status: 'RESOLVIDO' })
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+    ui.success(`Chamado ${atualizado.protocolo} concluído.`)
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao concluir o chamado.'))
   } finally {
     salvando.value = false
   }
@@ -440,7 +548,7 @@ useAutoRefresh(async () => {
                 <RowActions
                   :itens="[
                     { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
-                    ...(podeEditar ? [{ rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) }] : []),
+                    ...(ehMatriz ? [{ rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) }] : []),
                   ]"
                 />
               </td>
@@ -488,7 +596,27 @@ useAutoRefresh(async () => {
           </div>
         </div>
 
-        <template v-if="podeEditar">
+        <!-- Conversa matriz ↔ escola (perguntas e respostas com anexos temporários) -->
+        <div v-if="conversa.length" class="descricao-box">
+          <h4>Perguntas e respostas</h4>
+          <div class="msgs">
+            <div v-for="m in conversa" :key="m.id" class="msg" :class="m.tipo === 'PERGUNTA' ? 'msg-pergunta' : 'msg-resposta'">
+              <span class="msg-meta">
+                <strong>{{ m.tipo === 'PERGUNTA' ? 'Pergunta da matriz' : 'Resposta da escola' }}</strong>
+                · {{ m.autorNome }} · {{ formatDateTime(m.createdAt) }}
+              </span>
+              <p class="msg-texto">{{ m.texto }}</p>
+              <div v-if="m.anexos?.length" class="msg-anexos">
+                <a v-for="a in m.anexos" :key="a.id" :href="a.url" target="_blank" rel="noopener" class="msg-anexo">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== Ações da MATRIZ (ADMIN/TECNICO) ===== -->
+        <template v-if="ehMatriz">
           <div class="acao-box">
             <h4>Alterar status</h4>
             <div class="acao-linha">
@@ -502,6 +630,26 @@ useAutoRefresh(async () => {
                 Salvar
               </button>
             </div>
+
+            <!-- Ao pedir retorno da escola, a pergunta (e os anexos) vão junto -->
+            <template v-if="novoStatus === 'COMUNICADO'">
+              <textarea
+                v-model="perguntaEscola"
+                class="input textarea"
+                placeholder="O que você precisa que a escola informe ou faça?"
+              />
+              <label class="anexo-label">
+                <Paperclip :size="14" /> Anexar arquivos (opcional — ficam disponíveis por 7 dias)
+                <input type="file" multiple accept="image/*,.pdf" class="anexo-input" @change="(e) => onAnexosChange(e, anexosPergunta)" />
+              </label>
+              <ul v-if="anexosPergunta.length" class="anexo-lista">
+                <li v-for="(a, i) in anexosPergunta" :key="i">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosPergunta.splice(i, 1)"><X :size="13" /></button>
+                </li>
+              </ul>
+            </template>
+
             <textarea
               v-if="novoStatus === 'RESOLVIDO'"
               v-model="descricaoResolucao"
@@ -517,6 +665,58 @@ useAutoRefresh(async () => {
               <button class="btn btn-outline" type="button" :disabled="salvando || !textoResposta.trim()" @click="enviarResposta">
                 Registrar
               </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- ===== Ações da ESCOLA (GESTOR/VISUALIZADOR): responder e concluir ===== -->
+        <template v-else-if="ehEscola && detalhe.status !== 'RESOLVIDO'">
+          <div v-if="detalhe.status === 'COMUNICADO'" class="acao-box acao-pergunta">
+            <h4>Pergunta da matriz</h4>
+            <p class="pergunta-texto">{{ ultimaPergunta?.texto || 'A equipe aguarda um retorno da sua unidade.' }}</p>
+            <div v-if="ultimaPergunta?.anexos?.length" class="msg-anexos">
+              <a v-for="a in ultimaPergunta.anexos" :key="a.id" :href="a.url" target="_blank" rel="noopener" class="msg-anexo">
+                <Paperclip :size="13" /> {{ a.nome }}
+              </a>
+            </div>
+
+            <button v-if="!responderAberto" class="btn btn-primary" type="button" @click="responderAberto = true">
+              Responder chamado
+            </button>
+            <template v-else>
+              <textarea
+                v-model="respostaEscola"
+                class="input textarea"
+                placeholder="Escreva a resposta da escola..."
+              />
+              <label class="anexo-label">
+                <Paperclip :size="14" /> Anexar arquivos (opcional — ficam disponíveis por 7 dias)
+                <input type="file" multiple accept="image/*,.pdf" class="anexo-input" @change="(e) => onAnexosChange(e, anexosResposta)" />
+              </label>
+              <ul v-if="anexosResposta.length" class="anexo-lista">
+                <li v-for="(a, i) in anexosResposta" :key="i">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosResposta.splice(i, 1)"><X :size="13" /></button>
+                </li>
+              </ul>
+              <div class="acao-linha">
+                <button class="btn btn-primary" type="button" :disabled="salvando || !respostaEscola.trim()" @click="responderAoChamado">
+                  Enviar resposta
+                </button>
+                <button class="btn btn-outline" type="button" :disabled="salvando" @click="responderAberto = false">
+                  Cancelar
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <div class="acao-box">
+            <h4>Concluir chamado</h4>
+            <div class="acao-linha">
+              <button class="btn btn-primary" type="button" :disabled="salvando" @click="concluirChamado">
+                Concluir chamado
+              </button>
+              <span class="acao-dica">A escola só pode responder e concluir o chamado.</span>
             </div>
           </div>
         </template>
@@ -793,6 +993,134 @@ tr.selecionado td {
   font-size: 13px;
   color: var(--text-secondary);
   white-space: pre-wrap;
+}
+
+/* ---------- Conversa (perguntas e respostas) ---------- */
+.msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.msg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.msg-pergunta {
+  background: var(--purple-soft);
+  border-color: var(--purple);
+}
+
+.msg-resposta {
+  background: var(--blue-soft);
+  border-color: var(--blue);
+}
+
+.msg-meta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.msg-meta strong {
+  color: var(--text-primary);
+}
+
+.msg-texto {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.msg-anexos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.msg-anexo {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  text-decoration: none;
+}
+
+.msg-anexo:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Upload de anexos (pergunta/resposta) ---------- */
+.anexo-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.anexo-input {
+  display: none;
+}
+
+.anexo-lista {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.anexo-lista li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.anexo-remover {
+  display: inline-flex;
+  border: none;
+  background: transparent;
+  color: var(--red, #dc2626);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.acao-pergunta {
+  border: 1px solid var(--purple);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: var(--purple-soft);
+}
+
+.pergunta-texto {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.acao-dica {
+  font-size: 12px;
+  color: var(--text-muted);
+  align-self: center;
 }
 
 .acao-linha {
