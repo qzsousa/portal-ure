@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell, CheckCheck, ChevronDown, KeyRound, LogOut } from '@lucide/vue'
+import { Bell, CheckCheck, ChevronDown, KeyRound, LogOut, Menu } from '@lucide/vue'
 import {
   listarNotificacoes,
   marcarNotificacaoLida,
   marcarTodasNotificacoesLidas,
 } from '@/api/notificacoes'
 import { useAuthStore } from '@/stores/auth'
+import { useSidebar } from '@/composables/useSidebar'
 import { rotuloPerfil, type Notificacao } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { menuAberto, alternar } = useSidebar()
 
 const titulo = computed(() => (route.meta.title as string) || 'Painel')
 const breadcrumb = computed(() => (route.meta.breadcrumb as string) || 'Painel')
@@ -136,6 +138,16 @@ onUnmounted(() => {
 
 <template>
   <header class="topbar" @click.self="fecharMenu">
+    <button
+      class="icon-btn menu-toggle"
+      type="button"
+      aria-label="Abrir menu"
+      :aria-expanded="menuAberto"
+      @click="alternar"
+    >
+      <Menu :size="20" />
+    </button>
+
     <div class="title-block">
       <h1>{{ titulo }}</h1>
       <span class="breadcrumb">Início / {{ breadcrumb }}</span>
@@ -262,6 +274,12 @@ onUnmounted(() => {
   background: var(--surface-muted);
 }
 
+/* Hambúrguer do drawer: existe apenas no mobile (oculto no desktop). */
+.menu-toggle {
+  display: none;
+  flex-shrink: 0;
+}
+
 .user-menu-wrap {
   position: relative;
 }
@@ -298,7 +316,7 @@ onUnmounted(() => {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  width: 340px;
+  width: min(340px, calc(100vw - 16px));
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -469,6 +487,10 @@ onUnmounted(() => {
 .user-info strong {
   font-size: 13px;
   color: var(--text-primary);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-info small {
@@ -522,5 +544,28 @@ onUnmounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    padding: 0 16px;
+  }
+
+  .menu-toggle {
+    display: inline-grid;
+  }
+
+  .notif-dropdown {
+    position: fixed;
+    top: calc(var(--topbar-height) + 8px);
+    right: 8px;
+    left: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .user-info {
+    display: none;
+  }
 }
 </style>

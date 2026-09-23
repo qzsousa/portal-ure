@@ -389,4 +389,10 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 640px) {
+  :deep(.modal-footer) {
+    flex-wrap: wrap;
+  }
+}
 </style>

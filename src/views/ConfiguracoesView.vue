@@ -117,6 +117,16 @@ const statusOrdenados = computed(() =>
 /* ---------------- Logs ---------------- */
 const logs = reactive({ loading: true, items: [] as AuditoriaItem[] })
 
+/** Células "Detalhes"/"Mensagem" expandidas ao toque (chave: `${tabela}:${id}`). */
+const detalhesExpandidos = ref<Set<string>>(new Set())
+
+function alternarDetalhe(chave: string) {
+  const novo = new Set(detalhesExpandidos.value)
+  if (novo.has(chave)) novo.delete(chave)
+  else novo.add(chave)
+  detalhesExpandidos.value = novo
+}
+
 /** Erros de backend registrados localmente pelos interceptors de axios. */
 const errorLog = useErrorLogStore()
 
@@ -319,7 +329,12 @@ onMounted(() => {
                       {{ e.status ?? 'sem resposta' }}
                     </span>
                   </td>
-                  <td class="detalhes" :title="e.mensagem">
+                  <td
+                    class="detalhes"
+                    :class="{ expandido: detalhesExpandidos.has(`erro:${e.id}`) }"
+                    :title="e.mensagem"
+                    @click="alternarDetalhe(`erro:${e.id}`)"
+                  >
                     {{ e.mensagem }}
                     <span v-if="e.repeticoes > 1" class="rep" :title="`${e.repeticoes} ocorrências seguidas`">
                       ×{{ e.repeticoes }}
@@ -353,7 +368,11 @@ onMounted(() => {
                   <td class="nowrap">{{ formatDateTime(l.data) }}</td>
                   <td>{{ l.usuario }}</td>
                   <td><code class="acao">{{ l.acao }}</code></td>
-                  <td class="detalhes">{{ JSON.stringify(l.detalhes || {}) }}</td>
+                  <td
+                    class="detalhes"
+                    :class="{ expandido: detalhesExpandidos.has(`log:${l.id}`) }"
+                    @click="alternarDetalhe(`log:${l.id}`)"
+                  >{{ JSON.stringify(l.detalhes || {}) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -569,6 +588,15 @@ onMounted(() => {
   font-family: 'Courier New', monospace;
   font-size: 11.5px;
   color: var(--text-muted);
+  cursor: pointer;
+}
+
+.detalhes.expandido {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .logs-header {
@@ -701,8 +729,19 @@ onMounted(() => {
   .conf-grid {
     grid-template-columns: 1fr;
   }
+  /* Empilhada acima do conteúdo, sticky não faz sentido */
+  .conf-nav {
+    position: static;
+  }
   .novo-item {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .status-linha {
+    grid-template-columns: 110px 1fr 48px;
+    font-size: 12.5px;
   }
 }
 </style>

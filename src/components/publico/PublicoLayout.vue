@@ -67,6 +67,7 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .marca-icone {
@@ -77,6 +78,7 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
   place-items: center;
   background: rgb(245 185 33 / 0.15);
   color: var(--brand-gold);
+  flex-shrink: 0;
 }
 
 .marca-texto {
@@ -84,6 +86,10 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.05em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pub-entrar {
@@ -98,6 +104,7 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
   font-size: 13px;
   font-weight: 600;
   transition: background 0.15s ease;
+  flex-shrink: 0;
 }
 
 .pub-entrar:hover {
@@ -125,5 +132,14 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
 
 .pub-rodape em {
   font-family: Georgia, 'Times New Roman', serif;
+}
+
+@media (max-width: 480px) {
+  .pub-topo {
+    padding: 14px 14px 0;
+  }
+  .pub-conteudo {
+    padding: 26px 14px 48px;
+  }
 }
 </style>

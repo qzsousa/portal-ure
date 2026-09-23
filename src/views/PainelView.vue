@@ -14,6 +14,7 @@ import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { useEquipamentos } from '@/composables/useEquipamentos'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { listarCatalogo, pct } from '@/api/sce'
 import { getFeedbackStats, type FeedbackStats } from '@/api/feedback'
 
@@ -55,20 +56,31 @@ const CORES_STATUS: Record<string, string> = {
   'Em verificação': '#0891b2',
 }
 
-onMounted(async () => {
-  await eq.carregar()
+/** Cargas auxiliares; falhas mantêm o último valor conhecido exibido. */
+async function carregarExtras() {
   try {
     const catalogo = await listarCatalogo()
     totalModelos.value = catalogo.length
   } catch {
-    totalModelos.value = null
+    /* silencioso */
   }
   try {
     statsAvaliacao.value = await getFeedbackStats()
   } catch {
-    statsAvaliacao.value = null
+    /* silencioso */
   }
+}
+
+onMounted(async () => {
+  await eq.carregar()
+  await carregarExtras()
 })
+
+/* Atualização automática do painel (equipamentos, catálogo e avaliações). */
+useAutoRefresh(async () => {
+  await eq.carregar(true)
+  await carregarExtras()
+}, AUTO_REFRESH_MS.normal)
 </script>
 
 <template>
@@ -251,19 +263,19 @@ onMounted(async () => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: 14px;
 }
 
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 16px;
 }
 
 .mini-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 16px;
 }
 
@@ -332,6 +344,15 @@ onMounted(async () => {
 @media (max-width: 1100px) {
   .filtros {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .filtros {
+    grid-template-columns: 1fr;
+  }
+  .filtros .btn {
+    width: 100%;
   }
 }
 </style>

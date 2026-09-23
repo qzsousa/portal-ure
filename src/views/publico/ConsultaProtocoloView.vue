@@ -292,6 +292,7 @@ function formatarData(ts: string | null | undefined): string {
 
 .busca-input {
   flex: 1;
+  min-width: 0;
 }
 
 .busca-erro {
@@ -316,7 +317,8 @@ function formatarData(ts: string | null | undefined): string {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
@@ -339,7 +341,7 @@ function formatarData(ts: string | null | undefined): string {
   margin: 0;
   padding: 16px 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: 14px;
 }
 
@@ -510,6 +512,20 @@ function formatarData(ts: string | null | undefined): string {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .busca-form {
+    flex-direction: column;
+  }
+  .busca-form .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .resultado-topo {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>

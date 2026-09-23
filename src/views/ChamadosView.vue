@@ -8,11 +8,11 @@ import {
   ClipboardList,
   Clock,
   Layers,
-  MoreVertical,
   School,
   Search,
 } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
@@ -27,6 +27,7 @@ import {
   type FiltrosChamado,
 } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDate } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -88,15 +89,16 @@ async function aplicarEmLote() {
   }
 }
 
-async function carregar() {
-  estado.loading = true
-  estado.erro = ''
+/** `silencioso`: atualização automática — não mostra spinner nem erro na tela. */
+async function carregar(silencioso = false) {
+  if (!silencioso) estado.loading = true
   try {
     const res = await listarChamados({ ...filtros, page: estado.page, limit: PAGE_SIZE })
     estado.items = res.data
     estado.total = res.meta.total
+    estado.erro = ''
   } catch {
-    estado.erro = 'Não foi possível carregar os chamados.'
+    if (!silencioso) estado.erro = 'Não foi possível carregar os chamados.'
   } finally {
     estado.loading = false
   }
@@ -141,7 +143,6 @@ function alternarPortalNet() {
 }
 
 /* ------- Detalhe ------- */
-const menuAberto = ref<string | null>(null)
 const detalheAberto = ref(false)
 const detalhe = ref<Chamado | null>(null)
 const salvando = ref(false)
@@ -150,7 +151,6 @@ const descricaoResolucao = ref('')
 const textoResposta = ref('')
 
 function abrirDetalhe(c: Chamado) {
-  menuAberto.value = null
   detalhe.value = c
   novoStatus.value = c.status
   descricaoResolucao.value = c.descricaoResolucao || ''
@@ -262,12 +262,14 @@ async function enviarResposta() {
   }
 }
 
-function fecharMenu(e: MouseEvent) {
-  if (!(e.target as HTMLElement).closest('.acoes-wrap')) menuAberto.value = null
+/* Toque na célula de descrição expande/recolhe o texto completo (mobile não tem tooltip) */
+const descExpandida = ref<string | null>(null)
+
+function alternarDescricao(id: string) {
+  descExpandida.value = descExpandida.value === id ? null : id
 }
 
 async function excluirChamado(c: Chamado) {
-  menuAberto.value = null
   if (!window.confirm(`Excluir o chamado #${c.protocolo}? Essa ação não pode ser desfeita.`)) return
   try {
     await deletarChamado(c.id)
@@ -281,8 +283,12 @@ async function excluirChamado(c: Chamado) {
 onMounted(() => {
   void carregar()
   void carregarStats()
-  document.addEventListener('click', fecharMenu)
 })
+
+/* Atualização automática: chamados novos/mudanças de status chegam sozinhos. */
+useAutoRefresh(async () => {
+  await Promise.all([carregar(true), carregarStats()])
+}, AUTO_REFRESH_MS.rapido)
 </script>
 
 <template>
@@ -423,22 +429,20 @@ onMounted(() => {
               <td class="nowrap">{{ formatDate(c.timestamp) }}</td>
               <td>{{ c.unidade }}</td>
               <td>{{ c.tipo }}</td>
-              <td class="desc-cell" :title="c.descricao">{{ c.descricao }}</td>
+              <td
+                class="desc-cell"
+                :class="{ expandida: descExpandida === c.id }"
+                :title="c.descricao"
+                @click="alternarDescricao(c.id)"
+              >{{ c.descricao }}</td>
               <td><StatusPill :status="rotuloStatusChamado(c.status)" /></td>
               <td class="td-acoes">
-                <div class="acoes-wrap">
-                  <button
-                    class="acoes-btn"
-                    type="button"
-                    @click.stop="menuAberto = menuAberto === c.id ? null : c.id"
-                  >
-                    <MoreVertical :size="17" />
-                  </button>
-                  <div v-if="menuAberto === c.id" class="acoes-menu">
-                    <button type="button" @click="abrirDetalhe(c)">Ver detalhes</button>
-                    <button v-if="podeEditar" class="danger" type="button" @click="excluirChamado(c)">Excluir</button>
-                  </div>
-                </div>
+                <RowActions
+                  :itens="[
+                    { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
+                    ...(podeEditar ? [{ rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) }] : []),
+                  ]"
+                />
               </td>
             </tr>
           </tbody>
@@ -530,7 +534,7 @@ onMounted(() => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
   gap: 14px;
 }
 
@@ -629,6 +633,11 @@ tr.selecionado td {
   white-space: nowrap;
 }
 
+/* Toque na célula mostra o texto completo (útil no mobile, onde não há tooltip) */
+.desc-cell.expandida {
+  white-space: normal;
+}
+
 .td-center {
   text-align: center;
   color: var(--text-muted);
@@ -639,59 +648,6 @@ tr.selecionado td {
 .td-acoes {
   width: 60px;
   text-align: center;
-}
-
-.acoes-wrap {
-  position: relative;
-  display: inline-block;
-}
-
-.acoes-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: var(--text-secondary);
-}
-
-.acoes-btn:hover {
-  background: var(--surface-muted);
-}
-
-.acoes-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
-  z-index: 60;
-  min-width: 180px;
-  padding: 6px;
-}
-
-.acoes-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.acoes-menu button:hover {
-  background: var(--surface-muted);
-}
-
-.acoes-menu button.danger {
-  color: var(--red);
-}
-
-.acoes-menu button.danger:hover {
-  background: var(--red-soft);
 }
 
 .detalhe {
@@ -852,5 +808,17 @@ tr.selecionado td {
   margin-top: 10px;
   min-height: 80px;
   resize: vertical;
+}
+
+@media (max-width: 640px) {
+  /* Busca ocupa a linha inteira; selects/botões quebram para a linha de baixo */
+  .search-box {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .detalhe-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

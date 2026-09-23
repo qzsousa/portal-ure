@@ -11,6 +11,7 @@ import {
   type FeedbackStats,
   type TipoFeedback,
 } from '@/api/feedback'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { useUiStore } from '@/stores/ui'
 
 const ui = useUiStore()
@@ -49,9 +50,9 @@ const estado = reactive({ loading: true, erro: '', items: [] as FeedbackItem[], 
 const PAGE_SIZE = 10
 const filtroTipo = ref<'' | TipoFeedback>('')
 
-async function carregar() {
-  estado.loading = true
-  estado.erro = ''
+/** `silencioso`: atualização automática — não mostra spinner nem erro na tela. */
+async function carregar(silencioso = false) {
+  if (!silencioso) estado.loading = true
   try {
     const res = await listarFeedbacks({
       tipo: filtroTipo.value || undefined,
@@ -60,10 +61,21 @@ async function carregar() {
     })
     estado.items = res.data
     estado.total = res.meta.total
+    estado.erro = ''
   } catch {
-    estado.erro = 'Não foi possível carregar os feedbacks.'
+    if (!silencioso) estado.erro = 'Não foi possível carregar os feedbacks.'
   } finally {
     estado.loading = false
+  }
+}
+
+/** `silencioso`: na atualização automática não emite toast em caso de falha. */
+async function carregarStats(silencioso = false) {
+  try {
+    stats.value = await getFeedbackStats()
+  } catch {
+    stats.value = silencioso ? stats.value : null
+    if (!silencioso) ui.error('Não foi possível carregar os indicadores de avaliação.')
   }
 }
 
@@ -79,15 +91,15 @@ function formatarData(ts: string | null | undefined): string {
   return d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-onMounted(async () => {
+onMounted(() => {
   void carregar()
-  try {
-    stats.value = await getFeedbackStats()
-  } catch {
-    stats.value = null
-    ui.error('Não foi possível carregar os indicadores de avaliação.')
-  }
+  void carregarStats()
 })
+
+/* Atualização automática: avaliações/feedbacks novos chegam sozinhos. */
+useAutoRefresh(async () => {
+  await Promise.all([carregar(true), carregarStats(true)])
+}, AUTO_REFRESH_MS.normal)
 </script>
 
 <template>
@@ -176,13 +188,13 @@ onMounted(async () => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: 14px;
 }
 
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 16px;
 }
 

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { computed } from 'vue'
-import { Download, FileText, MoreVertical, Pencil, Plus, Trash2, Search } from '@lucide/vue'
+import { Download, FileText, Pencil, Plus, Trash2, Search } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import EquipamentoFormModal from '@/components/equipamentos/EquipamentoFormModal.vue'
 import { exportarCsv, exportarPdf, historicoEquipamento, removerEquipamento, type HistoricoItem } from '@/api/sce'
 import { apiError } from '@/utils/apiError'
 import { useEquipamentos } from '@/composables/useEquipamentos'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDateTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -20,7 +22,6 @@ const auth = useAuthStore()
 
 const podeGerenciar = computed(() => ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || ''))
 
-const menuAberto = ref<string | null>(null)
 const detalheAberto = ref(false)
 const detalheItem = ref<Equipamento | null>(null)
 const historico = ref<HistoricoItem[]>([])
@@ -37,13 +38,11 @@ function abrirCriar() {
 }
 
 function abrirEditar(item: Equipamento) {
-  menuAberto.value = null
   formItem.value = item
   formAberto.value = true
 }
 
 async function confirmarRemover(item: Equipamento) {
-  menuAberto.value = null
   if (!window.confirm(`Remover o equipamento ${item.modelo} (${item.patrimonio || 's/ patrimônio'})?`)) return
   try {
     await removerEquipamento(item.id)
@@ -59,7 +58,6 @@ async function aposSalvar() {
 }
 
 async function abrirDetalhe(item: Equipamento) {
-  menuAberto.value = null
   detalheItem.value = item
   detalheAberto.value = true
   carregandoHistorico.value = true
@@ -97,14 +95,12 @@ async function baixarPdf() {
   }
 }
 
-function fecharMenu(e: MouseEvent) {
-  if (!(e.target as HTMLElement).closest('.acoes-wrap')) menuAberto.value = null
-}
-
 onMounted(() => {
   void eq.carregar()
-  document.addEventListener('click', fecharMenu)
 })
+
+/* Atualização automática: equipamentos recém-registrados no SCE aparecem sozinhos. */
+useAutoRefresh(() => eq.carregar(true), AUTO_REFRESH_MS.rapido)
 </script>
 
 <template>
@@ -180,24 +176,15 @@ onMounted(() => {
               <td>{{ item.unidade }}</td>
               <td><StatusPill :status="item.status" /></td>
               <td class="td-acoes">
-                <div class="acoes-wrap">
-                  <button
-                    class="acoes-btn"
-                    type="button"
-                    @click.stop="menuAberto = menuAberto === item.id ? null : item.id"
-                  >
-                    <MoreVertical :size="17" />
-                  </button>
-                  <div v-if="menuAberto === item.id" class="acoes-menu">
-                    <button type="button" @click="abrirDetalhe(item)">Ver detalhes e histórico</button>
-                    <button type="button" @click="abrirEditar(item)">
-                      <Pencil :size="14" /> Editar
-                    </button>
-                    <button v-if="podeGerenciar" type="button" class="danger" @click="confirmarRemover(item)">
-                      <Trash2 :size="14" /> Remover
-                    </button>
-                  </div>
-                </div>
+                <RowActions
+                  :itens="[
+                    { rotulo: 'Ver detalhes e histórico', acao: () => abrirDetalhe(item) },
+                    { rotulo: 'Editar', icone: Pencil, acao: () => abrirEditar(item) },
+                    ...(podeGerenciar
+                      ? [{ rotulo: 'Remover', icone: Trash2, perigo: true, acao: () => confirmarRemover(item) }]
+                      : []),
+                  ]"
+                />
               </td>
             </tr>
           </tbody>
@@ -340,61 +327,6 @@ onMounted(() => {
   text-align: center;
 }
 
-.acoes-wrap {
-  position: relative;
-  display: inline-block;
-}
-
-.acoes-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: var(--text-secondary);
-}
-
-.acoes-btn:hover {
-  background: var(--surface-muted);
-}
-
-.acoes-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
-  z-index: 60;
-  min-width: 210px;
-  padding: 6px;
-}
-
-.acoes-menu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.acoes-menu button:hover {
-  background: var(--surface-muted);
-}
-
-.acoes-menu button.danger {
-  color: var(--red);
-}
-
-.acoes-menu button.danger:hover {
-  background: var(--red-soft);
-}
-
 .detalhe-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -452,5 +384,17 @@ onMounted(() => {
 
 .hist-list small {
   color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  /* Busca ocupa a linha inteira; ações/filtros quebram para a linha de baixo */
+  .search-box {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .detalhe-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

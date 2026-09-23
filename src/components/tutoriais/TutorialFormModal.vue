@@ -477,4 +477,14 @@ onMounted(() => {
     transform: rotate(360deg);
   }
 }
+
+@media (max-width: 640px) {
+  .categoria-linha {
+    flex-direction: column;
+  }
+  .categoria-linha .select-input,
+  .btn-nova-categoria {
+    width: 100%;
+  }
+}
 </style>

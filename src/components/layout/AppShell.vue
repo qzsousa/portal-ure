@@ -1,6 +1,19 @@
 <script setup lang="ts">
+import { onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
+import { useSidebar } from '@/composables/useSidebar'
+
+const route = useRoute()
+const { fechar, liberarScroll } = useSidebar()
+
+watch(
+  () => route.fullPath,
+  () => fechar(),
+)
+
+onUnmounted(liberarScroll)
 </script>
 
 <template>
@@ -31,5 +44,11 @@ import AppTopbar from './AppTopbar.vue'
 .page {
   flex: 1;
   padding: 24px 28px 40px;
+}
+
+@media (max-width: 900px) {
+  .page {
+    padding: 16px 14px 32px;
+  }
 }
 </style>

@@ -16,6 +16,7 @@ import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { getDashboardMatriz, type DashboardMatriz } from '@/api/publico'
 import { rotuloStatusChamado } from '@/api/chamados'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 
 const dados = ref<DashboardMatriz | null>(null)
 const carregando = ref(false)
@@ -59,14 +60,19 @@ const resolvidosPorTecnico = computed(() => {
 
 const ultimos = computed(() => (dados.value?.chamados || []).slice(0, 10))
 
-async function carregar() {
-  carregando.value = true
-  erro.value = ''
+/** `silencioso`: atualização automática — não aciona spinner nem substitui os dados por erro. */
+async function carregar(silencioso = false) {
+  if (!silencioso) {
+    carregando.value = true
+    erro.value = ''
+  }
   try {
     dados.value = await getDashboardMatriz()
     atualizadoEm.value = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   } catch {
-    erro.value = 'Não foi possível carregar os dados do painel. Verifique sua conexão e tente novamente.'
+    if (!silencioso) {
+      erro.value = 'Não foi possível carregar os dados do painel. Verifique sua conexão e tente novamente.'
+    }
   } finally {
     carregando.value = false
   }
@@ -82,7 +88,10 @@ function truncar(t: string, max: number): string {
   return t.length > max ? t.slice(0, max - 1) + '…' : t
 }
 
-onMounted(carregar)
+onMounted(() => void carregar())
+
+/* "Situação em tempo real": o painel público se atualiza sozinho. */
+useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.rapido)
 </script>
 
 <template>
@@ -190,6 +199,7 @@ onMounted(carregar)
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
 .cabecalho h1 {
@@ -229,14 +239,14 @@ onMounted(carregar)
 
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
   gap: 14px;
   margin-bottom: 16px;
 }
 
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }

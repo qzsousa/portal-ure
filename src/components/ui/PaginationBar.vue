@@ -79,6 +79,8 @@ function ir(p: number | '…') {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .page-btn {
@@ -111,5 +113,12 @@ function ir(p: number | '…') {
 
 .page-btn.dots {
   cursor: default;
+}
+
+@media (max-width: 640px) {
+  .page-btn {
+    min-width: 30px;
+    padding: 0 6px;
+  }
 }
 </style>

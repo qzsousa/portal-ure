@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { CheckCircle2, Clock, Loader2, MoreVertical, Wrench } from '@lucide/vue'
+import { CheckCircle2, Clock, Loader2, Wrench } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { listarEquipamentosDaFilial, historicoEquipamento, type HistoricoItem } from '@/api/sce'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDateTime } from '@/utils/format'
 import type { Equipamento } from '@/types'
 
@@ -41,13 +43,11 @@ const kpis = computed(() => ({
 const statusOpcoes = ['Pendente', 'Em andamento', 'Concluído']
 
 /* Detalhe */
-const menuAberto = ref<string | null>(null)
 const detalheAberto = ref(false)
 const detalheItem = ref<Equipamento | null>(null)
 const historico = ref<HistoricoItem[]>([])
 
 async function abrirDetalhe(item: Equipamento) {
-  menuAberto.value = null
   detalheItem.value = item
   detalheAberto.value = true
   historico.value = []
@@ -58,25 +58,28 @@ async function abrirDetalhe(item: Equipamento) {
   }
 }
 
-function fecharMenu(e: MouseEvent) {
-  if (!(e.target as HTMLElement).closest('.acoes-wrap')) menuAberto.value = null
-}
-
 function mudarStatusFiltro(s: string) {
   filtroStatus.value = s
   page.value = 1
 }
 
-onMounted(async () => {
+/** `silencioso`: atualização automática — mantém a lista atual se a recarga falhar. */
+async function carregar(silencioso = false) {
+  if (!silencioso) carregando.value = true
   try {
     todos.value = await listarEquipamentosDaFilial()
+    erro.value = ''
   } catch {
-    erro.value = 'Não foi possível carregar os equipamentos em manutenção.'
+    if (!silencioso) erro.value = 'Não foi possível carregar os equipamentos em manutenção.'
   } finally {
     carregando.value = false
   }
-  document.addEventListener('click', fecharMenu)
-})
+}
+
+onMounted(() => void carregar())
+
+/* Atualização automática: equipamentos que entram/saem de manutenção aparecem sozinhos. */
+useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
 </script>
 
 <template>
@@ -141,18 +144,9 @@ onMounted(async () => {
               <td class="desc-cell">{{ item.descricaoQuebrado || '—' }}</td>
               <td><StatusPill :status="item.statusManutencao || 'Manutenção'" /></td>
               <td class="td-acoes">
-                <div class="acoes-wrap">
-                  <button
-                    class="acoes-btn"
-                    type="button"
-                    @click.stop="menuAberto = menuAberto === item.id ? null : item.id"
-                  >
-                    <MoreVertical :size="17" />
-                  </button>
-                  <div v-if="menuAberto === item.id" class="acoes-menu">
-                    <button type="button" @click="abrirDetalhe(item)">Ver detalhes e histórico</button>
-                  </div>
-                </div>
+                <RowActions
+                  :itens="[{ rotulo: 'Ver detalhes e histórico', acao: () => abrirDetalhe(item) }]"
+                />
               </td>
             </tr>
           </tbody>
@@ -205,7 +199,7 @@ onMounted(async () => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: 14px;
 }
 
@@ -214,6 +208,7 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
+  flex-wrap: wrap;
 }
 
 .filtro-bar label {
@@ -266,51 +261,6 @@ onMounted(async () => {
 .td-acoes {
   width: 60px;
   text-align: center;
-}
-
-.acoes-wrap {
-  position: relative;
-  display: inline-block;
-}
-
-.acoes-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: var(--text-secondary);
-}
-
-.acoes-btn:hover {
-  background: var(--surface-muted);
-}
-
-.acoes-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
-  z-index: 60;
-  min-width: 210px;
-  padding: 6px;
-}
-
-.acoes-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.acoes-menu button:hover {
-  background: var(--surface-muted);
 }
 
 .detalhe-grid {
@@ -370,5 +320,11 @@ onMounted(async () => {
 
 .hist-list small {
   color: var(--text-muted);
+}
+
+@media (max-width: 640px) {
+  .detalhe-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

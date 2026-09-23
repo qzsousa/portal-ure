@@ -13,6 +13,7 @@ import {
   Wrench,
 } from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSidebar } from '@/composables/useSidebar'
 
 interface MenuItem {
   to: string
@@ -24,6 +25,7 @@ interface MenuItem {
 
 const route = useRoute()
 const auth = useAuthStore()
+const { menuAberto, fechar } = useSidebar()
 
 const items: MenuItem[] = [
   { to: '/painel', label: 'Painel', icon: LayoutDashboard },
@@ -47,7 +49,11 @@ const visibleItems = computed(() =>
 </script>
 
 <template>
-  <aside class="sidebar">
+  <Transition name="overlay-fade">
+    <div v-if="menuAberto" class="sidebar-overlay" aria-hidden="true" @click="fechar" />
+  </Transition>
+
+  <aside class="sidebar" :class="{ aberta: menuAberto }">
     <div class="brand">
       <div class="brand-icon">
         <BookOpen :size="26" :stroke-width="1.8" />
@@ -171,5 +177,46 @@ const visibleItems = computed(() =>
   font-size: 13px;
   line-height: 1.5;
   opacity: 0.9;
+}
+
+/* Overlay do drawer: existe apenas no mobile (oculto no desktop). */
+.sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 220;
+    height: 100vh;
+    height: 100dvh;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    box-shadow: none;
+  }
+
+  .sidebar.aberta {
+    transform: translateX(0);
+    box-shadow: 0 8px 40px rgb(0 0 0 / 0.4);
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgb(15 23 42 / 0.55);
+    z-index: 210;
+  }
+}
+
+.overlay-fade-enter-active,
+.overlay-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.overlay-fade-enter-from,
+.overlay-fade-leave-to {
+  opacity: 0;
 }
 </style>

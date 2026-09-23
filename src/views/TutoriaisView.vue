@@ -407,7 +407,7 @@ onUnmounted(() => {
 /* ---------- Grade de tutoriais ---------- */
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 14px;
 }
 
@@ -591,6 +591,13 @@ onUnmounted(() => {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .search-box {
+    min-width: 0;
+    width: 100%;
   }
 }
 </style>

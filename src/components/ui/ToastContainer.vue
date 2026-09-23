@@ -30,7 +30,7 @@ const ui = useUiStore()
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-width: 380px;
+  max-width: min(380px, calc(100vw - 32px));
 }
 
 .toast {
@@ -45,6 +45,11 @@ const ui = useUiStore()
   font-size: 13.5px;
   font-weight: 500;
   color: var(--text-primary);
+}
+
+.toast span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .toast-success { border-left: 4px solid var(--green); }

@@ -39,6 +39,12 @@ const emit = defineEmits<{ (e: 'fechar'): void }>()
   padding: 20px;
 }
 
+@media (max-width: 640px) {
+  .modal-backdrop {
+    padding: 10px;
+  }
+}
+
 .modal {
   background: var(--surface);
   border-radius: var(--radius-lg);
@@ -46,6 +52,7 @@ const emit = defineEmits<{ (e: 'fechar'): void }>()
   width: 100%;
   max-width: 640px;
   max-height: 86vh;
+  max-height: 86dvh;
   display: flex;
   flex-direction: column;
 }

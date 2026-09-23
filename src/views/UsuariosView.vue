@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { apiError } from '@/utils/apiError'
-import { KeyRound, MoreVertical, Pencil, Search, UserPlus, UserX } from '@lucide/vue'
+import { KeyRound, Pencil, Search, UserPlus, UserX } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
@@ -86,7 +87,6 @@ function abrirCriar() {
 }
 
 function abrirEditar(u: User) {
-  menuAberto.value = null
   editando.value = u
   form.nome = u.nome
   form.email = u.email
@@ -127,7 +127,6 @@ async function salvar() {
 }
 
 async function novaSenhaTemporaria(u: User) {
-  menuAberto.value = null
   try {
     const senha = await gerarSenhaTemporaria(u.email)
     senhaTempModal.value = { email: u.email, senha }
@@ -137,7 +136,6 @@ async function novaSenhaTemporaria(u: User) {
 }
 
 async function desativar(u: User) {
-  menuAberto.value = null
   if (!window.confirm(`Desativar ${u.nome} (${u.email})?`)) return
   try {
     await desativarUsuario(u.id)
@@ -153,13 +151,7 @@ function copiarSenha(senha: string) {
   ui.success('Senha copiada.')
 }
 
-const menuAberto = ref<string | null>(null)
-function fecharMenu(e: MouseEvent) {
-  if (!(e.target as HTMLElement).closest('.acoes-wrap')) menuAberto.value = null
-}
-
 onMounted(async () => {
-  document.addEventListener('click', fecharMenu)
   void carregar()
   try {
     escolas.value = await listarEscolas()
@@ -222,16 +214,16 @@ onMounted(async () => {
               <td>{{ u.filial || '—' }}</td>
               <td><StatusPill :status="u.status === 'ATIVO' ? 'Ativo' : 'Inativo'" /></td>
               <td class="td-acoes">
-                <div v-if="podeEditarAlvo(u)" class="acoes-wrap">
-                  <button class="acoes-btn" type="button" @click.stop="menuAberto = menuAberto === u.id ? null : u.id">
-                    <MoreVertical :size="17" />
-                  </button>
-                  <div v-if="menuAberto === u.id" class="acoes-menu">
-                    <button type="button" @click="abrirEditar(u)"><Pencil :size="14" /> Editar</button>
-                    <button v-if="isAdmin" type="button" @click="novaSenhaTemporaria(u)"><KeyRound :size="14" /> Nova senha temporária</button>
-                    <button type="button" class="danger" @click="desativar(u)"><UserX :size="14" /> Desativar</button>
-                  </div>
-                </div>
+                <RowActions
+                  v-if="podeEditarAlvo(u)"
+                  :itens="[
+                    { rotulo: 'Editar', icone: Pencil, acao: () => abrirEditar(u) },
+                    ...(isAdmin
+                      ? [{ rotulo: 'Nova senha temporária', icone: KeyRound, acao: () => novaSenhaTemporaria(u) }]
+                      : []),
+                    { rotulo: 'Desativar', icone: UserX, perigo: true, acao: () => desativar(u) },
+                  ]"
+                />
               </td>
             </tr>
           </tbody>
@@ -386,61 +378,6 @@ onMounted(async () => {
   text-align: center;
 }
 
-.acoes-wrap {
-  position: relative;
-  display: inline-block;
-}
-
-.acoes-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: var(--text-secondary);
-}
-
-.acoes-btn:hover {
-  background: var(--surface-muted);
-}
-
-.acoes-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-lg);
-  z-index: 60;
-  min-width: 210px;
-  padding: 6px;
-}
-
-.acoes-menu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.acoes-menu button:hover {
-  background: var(--surface-muted);
-}
-
-.acoes-menu button.danger {
-  color: var(--red);
-}
-
-.acoes-menu button.danger:hover {
-  background: var(--red-soft);
-}
-
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -477,5 +414,19 @@ onMounted(async () => {
   border-radius: var(--radius-sm);
   padding: 12px 20px;
   user-select: all;
+  /* Senhas temporárias longas não podem estourar o modal */
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  /* Busca ocupa a linha inteira; filtros/botões quebram para a linha de baixo */
+  .search-box {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
