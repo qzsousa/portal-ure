@@ -128,6 +128,38 @@ export async function avaliarChamadoPorProtocolo(protocolo: string, payload: Ava
   await publicoHttp.post(`/chamados/protocolo/${encodeURIComponent(protocolo)}/avaliar`, payload)
 }
 
+/* ---------- Tutoriais (público, link compartilhável) ---------- */
+
+export interface TutorialAnexoPublico {
+  id: string
+  nome: string
+  tipo: string
+  url: string
+}
+
+export interface TutorialPublico {
+  id: string
+  titulo: string
+  subtitulo: string | null
+  conteudo: string
+  categoria: { id: string; nome: string; cor: string | null }
+  criadoPor: string
+  visualizacoes: number
+  createdAt: string
+  anexos: TutorialAnexoPublico[]
+}
+
+/** Lê um tutorial SEM autenticação (link público /tutorial/:id). 404 se não existir. */
+export async function obterTutorialPublico(id: string): Promise<TutorialPublico> {
+  const { data } = await publicoHttp.get<TutorialPublico>(`/tutoriais/publico/${encodeURIComponent(id)}`)
+  return data
+}
+
+/** URL pública compartilhável de um tutorial neste portal. */
+export function linkPublicoTutorial(id: string): string {
+  return `${window.location.origin}/tutorial/${id}`
+}
+
 /* ---------- Elogios e sugestões (público) ---------- */
 
 export type TipoFeedback = 'ELOGIO' | 'SUGESTAO'

@@ -14,6 +14,7 @@ import {
   type Tutorial,
   type TutorialCategoria,
 } from '@/api/tutoriais'
+import { linkPublicoTutorial } from '@/api/publico'
 import { apiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
@@ -51,10 +52,12 @@ async function carregar() {
   }
 }
 
+/** Copia o link PÚBLICO (sem login) — o interno /tutoriais/:id exige autenticação. */
 async function copiarLink() {
+  if (!tutorial.value) return
   try {
-    await navigator.clipboard.writeText(window.location.href)
-    ui.success('Link copiado!')
+    await navigator.clipboard.writeText(linkPublicoTutorial(tutorial.value.id))
+    ui.success('Link público copiado!')
   } catch {
     ui.error('Não foi possível copiar o link.')
   }
@@ -121,9 +124,9 @@ onMounted(() => {
             {{ tutorial.categoria.nome }}
           </span>
           <div class="head-acoes">
-            <button class="btn btn-outline" type="button" @click="copiarLink">
+            <button class="btn btn-outline" type="button" title="Copiar link público (abre sem login)" @click="copiarLink">
               <Link2 :size="15" />
-              Copiar link
+              Copiar link público
             </button>
             <template v-if="auth.isAdmin">
               <button class="btn btn-outline" type="button" @click="formAberto = true">

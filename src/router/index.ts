@@ -36,6 +36,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true, title: 'Elogios e sugestões' },
   },
   {
+    path: '/tutorial/:id',
+    name: 'tutorial-publico',
+    component: () => import('@/views/publico/TutorialPublicoView.vue'),
+    meta: { public: true, title: 'Tutorial' },
+  },
+  {
     path: '/matriz',
     name: 'dash-matriz',
     component: () => import('@/views/publico/DashboardPublicoView.vue'),

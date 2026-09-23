@@ -5,7 +5,7 @@
  */
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Eye, FolderCog, Loader2, Paperclip, Plus, Search, Trash2 } from '@lucide/vue'
+import { Eye, FolderCog, Link2, Loader2, Paperclip, Plus, Search, Trash2 } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import TutorialFormModal from '@/components/tutoriais/TutorialFormModal.vue'
@@ -17,6 +17,7 @@ import {
   type Tutorial,
   type TutorialCategoria,
 } from '@/api/tutoriais'
+import { linkPublicoTutorial } from '@/api/publico'
 import { apiError } from '@/utils/apiError'
 import { formatDate } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
@@ -73,6 +74,16 @@ function selecionarCategoria(id: string) {
 
 function abrirTutorial(t: Tutorial) {
   void router.push(`/tutoriais/${t.id}`)
+}
+
+/** Copia o link PÚBLICO do tutorial (acesso sem login, para compartilhar fora do sistema). */
+async function copiarLinkPublico(t: Tutorial) {
+  try {
+    await navigator.clipboard.writeText(linkPublicoTutorial(t.id))
+    ui.success(`Link público de "${t.titulo}" copiado!`)
+  } catch {
+    ui.error('Não foi possível copiar o link.')
+  }
 }
 
 /* ---------- Categorias ---------- */
@@ -228,6 +239,15 @@ onUnmounted(() => {
           <span>{{ formatDate(t.createdAt) }}</span>
           <span class="meta-icone"><Eye :size="13" /> {{ t.visualizacoes }}</span>
           <span v-if="t.anexos.length > 0" class="meta-icone"><Paperclip :size="13" /> {{ t.anexos.length }}</span>
+          <button
+            class="btn-link-publico"
+            type="button"
+            title="Copiar link público (abre sem login)"
+            @click.stop="copiarLinkPublico(t)"
+          >
+            <Link2 :size="13" />
+            Link público
+          </button>
         </div>
       </article>
     </div>
@@ -471,6 +491,27 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Botão "Link público" no rodapé do card (não abre o detalhe — @click.stop) */
+.btn-link-publico {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--blue);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.btn-link-publico:hover {
+  background: var(--blue-soft);
 }
 
 .paginacao {
