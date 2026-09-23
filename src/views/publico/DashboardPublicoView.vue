@@ -104,7 +104,7 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.rapido)
           <span v-if="atualizadoEm">Atualizado às {{ atualizadoEm }}.</span>
         </p>
       </div>
-      <button type="button" class="btn-atualizar" :disabled="carregando" @click="carregar">
+      <button type="button" class="btn-atualizar" :disabled="carregando" @click="carregar(false)">
         <RefreshCw :size="14" :class="{ spin: carregando }" />
         Atualizar
       </button>
@@ -112,7 +112,7 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.rapido)
 
     <div v-if="erro" class="card aviso-erro">
       <p>{{ erro }}</p>
-      <button type="button" class="btn btn-primary" @click="carregar">Tentar novamente</button>
+      <button type="button" class="btn btn-primary" @click="carregar(false)">Tentar novamente</button>
     </div>
 
     <template v-else>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { CheckCircle2, ClipboardList, Clock, Hourglass, RefreshCw } from '@lucide/vue'
 import PublicoLayout from '@/components/publico/PublicoLayout.vue'
 import BarChartCard from '@/components/publico/BarChartCard.vue'
@@ -8,6 +8,7 @@ import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { getDashboardMatriz, type DashboardMatriz } from '@/api/publico'
 import { rotuloStatusChamado } from '@/api/chamados'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 
 /* Espelha o conteúdo do "Painel do Setor" (DashboardDirigenteView) do sistema antigo,
  * agora como página pública do portal, lendo GET /dashboard/matriz. */
@@ -104,27 +105,28 @@ function formatarData(ts: string): string {
   return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
 }
 
-async function carregar() {
-  carregando.value = true
-  erro.value = ''
+/** `silencioso`: atualização automática — não aciona spinner nem substitui os dados por erro. */
+async function carregar(silencioso = false) {
+  if (!silencioso) {
+    carregando.value = true
+    erro.value = ''
+  }
   try {
     dados.value = await getDashboardMatriz()
     atualizadoEm.value = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   } catch {
-    erro.value = 'Não foi possível carregar os dados do painel. Verifique sua conexão e tente novamente.'
+    if (!silencioso) {
+      erro.value = 'Não foi possível carregar os dados do painel. Verifique sua conexão e tente novamente.'
+    }
   } finally {
     carregando.value = false
   }
 }
 
-let timer: number | undefined
-onMounted(() => {
-  carregar()
-  timer = window.setInterval(carregar, 60_000)
-})
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
+onMounted(() => void carregar())
+
+/* Atualização automática (pausada com a aba oculta, recarrega ao voltar). */
+useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
 </script>
 
 <template>
@@ -138,7 +140,7 @@ onUnmounted(() => {
           <span v-if="atualizadoEm">Atualizado às {{ atualizadoEm }}.</span>
         </p>
       </div>
-      <button type="button" class="btn-atualizar" :disabled="carregando" @click="carregar">
+      <button type="button" class="btn-atualizar" :disabled="carregando" @click="carregar(false)">
         <RefreshCw :size="14" :class="{ spin: carregando }" />
         Atualizar
       </button>
@@ -146,7 +148,7 @@ onUnmounted(() => {
 
     <div v-if="erro" class="card aviso-erro">
       <p>{{ erro }}</p>
-      <button type="button" class="btn btn-primary" @click="carregar">Tentar novamente</button>
+      <button type="button" class="btn btn-primary" @click="carregar(false)">Tentar novamente</button>
     </div>
 
     <template v-else>

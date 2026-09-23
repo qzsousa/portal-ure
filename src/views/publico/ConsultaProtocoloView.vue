@@ -10,6 +10,7 @@ import {
   type ChamadoPublico,
 } from '@/api/publico'
 import { rotuloStatusChamado } from '@/api/chamados'
+import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 
 const protocolo = ref('')
 const buscando = ref(false)
@@ -85,6 +86,22 @@ async function buscar() {
     buscando.value = false
   }
 }
+
+/**
+ * Reconsulta silenciosa: enquanto um resultado está na tela, o status do
+ * chamado é atualizado sozinho — sem limpar o formulário de avaliação.
+ */
+async function reconsultar() {
+  const p = protocolo.value.trim()
+  if (!p || !resultado.value || buscando.value) return
+  try {
+    resultado.value = await consultarChamadoPorProtocolo(p)
+  } catch {
+    /* falhas de polling são silenciosas */
+  }
+}
+
+useAutoRefresh(reconsultar, AUTO_REFRESH_MS.rapido)
 
 function formatarData(ts: string | null | undefined): string {
   if (!ts) return '—'

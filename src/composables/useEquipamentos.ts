@@ -87,8 +87,8 @@ export function useEquipamentos(pageSize = 10) {
     state.porUnidade = s.porUnidade
   }
 
-  async function carregarLocal() {
-    if (!state.cacheCarregado) {
+  async function carregarLocal(atualizarCache = false) {
+    if (!state.cacheCarregado || atualizarCache) {
       state.todosCache = await listarEquipamentosDaFilial()
       state.cacheCarregado = true
     }
@@ -102,13 +102,22 @@ export function useEquipamentos(pageSize = 10) {
     state.items = filtrados.slice(ini, ini + pageSize)
   }
 
-  async function carregar() {
-    state.loading = true
-    state.erro = ''
+  /**
+   * `silencioso`: usado pela atualização automática — não mostra spinner nem
+   * mensagem de erro (a tela mantém os dados anteriores). No modo filial,
+   * também força a atualização do cache local para enxergar equipamentos
+   * recém-cadastrados no SCE.
+   */
+  async function carregar(silencioso = false) {
+    if (!silencioso) {
+      state.loading = true
+      state.erro = ''
+    }
     try {
       if (isGlobal.value) await carregarServidor()
-      else await carregarLocal()
+      else await carregarLocal(silencioso)
     } catch (e) {
+      if (silencioso) return
       state.erro = e instanceof Error ? e.message : 'Falha ao carregar equipamentos.'
       state.items = []
       state.total = 0
