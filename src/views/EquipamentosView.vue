@@ -7,6 +7,7 @@ import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import EquipamentoFormModal from '@/components/equipamentos/EquipamentoFormModal.vue'
+import GraficoCategorias from '@/components/equipamentos/GraficoCategorias.vue'
 import { exportarCsv, exportarPdf, historicoEquipamento, removerEquipamento, type HistoricoItem } from '@/api/sce'
 import { apiError } from '@/utils/apiError'
 import { useEquipamentos } from '@/composables/useEquipamentos'
@@ -140,6 +141,9 @@ useAutoRefresh(() => eq.carregar(true), AUTO_REFRESH_MS.rapido)
     </div>
 
     <p v-if="eq.state.erro" class="erro card">{{ eq.state.erro }}</p>
+
+    <!-- Gráfico compacto: quantidade de equipamentos por categoria -->
+    <GraficoCategorias v-if="!eq.state.loading && eq.statsCarregadas.value" :fatias="eq.state.porCategoria" />
 
     <!-- Tabela -->
     <div class="card table-card">
