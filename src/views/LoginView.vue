@@ -2,7 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
-import { BookOpen, Loader2, Lock, Mail } from '@lucide/vue'
+import { Loader2, Lock, Mail } from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -41,9 +41,7 @@ async function submit() {
   <div class="login-page">
     <div class="login-card">
       <div class="login-brand">
-        <div class="brand-icon">
-          <BookOpen :size="30" :stroke-width="1.8" />
-        </div>
+        <img class="brand-logo" src="/logo-ure.png" alt="Brasão da URE Leste 3" />
         <h1>PORTAL URE LESTE 3</h1>
         <p>Chamados e Equipamentos em um só lugar</p>
       </div>
@@ -121,15 +119,11 @@ async function submit() {
   margin-bottom: 26px;
 }
 
-.brand-icon {
+.brand-logo {
   width: 60px;
   height: 60px;
   margin: 0 auto 14px;
-  border-radius: 16px;
-  display: grid;
-  place-items: center;
-  background: var(--sidebar-bg);
-  color: var(--brand-gold);
+  border-radius: 50%;
 }
 
 .login-brand h1 {

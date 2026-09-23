@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BookOpen, LogIn } from '@lucide/vue'
+import { LogIn } from '@lucide/vue'
 
 /**
  * Moldura das páginas públicas (sem autenticação):
@@ -16,7 +16,7 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
     <header class="pub-topo">
       <div class="pub-topo-inner" :class="{ wide }">
         <RouterLink to="/chamado/novo" class="pub-marca">
-          <span class="marca-icone"><BookOpen :size="17" :stroke-width="2" /></span>
+          <img class="marca-logo" src="/logo-ure.png" alt="Brasão da URE Leste 3" />
           <span class="marca-texto">PORTAL URE LESTE 3</span>
         </RouterLink>
         <RouterLink to="/login" class="pub-entrar">
@@ -70,14 +70,10 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
   min-width: 0;
 }
 
-.marca-icone {
+.marca-logo {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: rgb(245 185 33 / 0.15);
-  color: var(--brand-gold);
+  border-radius: 50%;
   flex-shrink: 0;
 }
 

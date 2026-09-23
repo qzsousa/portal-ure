@@ -55,9 +55,7 @@ const visibleItems = computed(() =>
 
   <aside class="sidebar" :class="{ aberta: menuAberto }">
     <div class="brand">
-      <div class="brand-icon">
-        <BookOpen :size="26" :stroke-width="1.8" />
-      </div>
+      <img class="brand-logo" src="/logo-ure.png" alt="Brasão da URE Leste 3" />
       <div class="brand-text">
         <strong>PORTAL URE LESTE 3</strong>
         <span>Unidade Regional de Ensino</span>
@@ -104,15 +102,10 @@ const visibleItems = computed(() =>
   border-bottom: 1px solid rgb(255 255 255 / 0.08);
 }
 
-.brand-icon {
+.brand-logo {
   width: 42px;
   height: 42px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: rgb(245 185 33 / 0.14);
-  color: var(--brand-gold);
-  border: 1px solid rgb(245 185 33 / 0.35);
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
