@@ -96,12 +96,51 @@ async function baixarPdf() {
   }
 }
 
+/* ---------- Drilldown do gráfico de categorias ---------- */
+const categoriaAberta = ref<string | null>(null)
+const detalheModelos = ref<Array<{ rotulo: string; qtd: number }>>([])
+const carregandoDetalhe = ref(false)
+
+/** `silencioso`: no auto-refresh atualiza sem piscar o "Carregando modelos...". */
+async function carregarDetalheCategoria(silencioso = false) {
+  if (!categoriaAberta.value) return
+  if (!silencioso) carregandoDetalhe.value = true
+  try {
+    const itens = await eq.itensDaCategoria(categoriaAberta.value)
+    const mapa = new Map<string, number>()
+    for (const item of itens) {
+      const rotulo =
+        [item.marca, item.modelo]
+          .map((s) => (s || '').trim())
+          .filter(Boolean)
+          .join(' ') || 'Sem marca/modelo'
+      mapa.set(rotulo, (mapa.get(rotulo) || 0) + 1)
+    }
+    detalheModelos.value = [...mapa.entries()]
+      .map(([rotulo, qtd]) => ({ rotulo, qtd }))
+      .sort((a, b) => b.qtd - a.qtd)
+  } catch {
+    /* silencioso: mantém os modelos exibidos até a próxima rodada */
+  } finally {
+    carregandoDetalhe.value = false
+  }
+}
+
+function alternarCategoria(categoria: string) {
+  categoriaAberta.value = categoriaAberta.value === categoria ? null : categoria
+  if (categoriaAberta.value) void carregarDetalheCategoria()
+}
+
 onMounted(() => {
   void eq.carregar()
 })
 
-/* Atualização automática: equipamentos recém-registrados no SCE aparecem sozinhos. */
-useAutoRefresh(() => eq.carregar(true), AUTO_REFRESH_MS.rapido)
+/* Atualização automática: equipamentos recém-registrados no SCE aparecem sozinhos
+ * (inclusive no drilldown aberto do gráfico). */
+useAutoRefresh(async () => {
+  await eq.carregar(true)
+  await carregarDetalheCategoria(true)
+}, AUTO_REFRESH_MS.rapido)
 </script>
 
 <template>
@@ -142,8 +181,15 @@ useAutoRefresh(() => eq.carregar(true), AUTO_REFRESH_MS.rapido)
 
     <p v-if="eq.state.erro" class="erro card">{{ eq.state.erro }}</p>
 
-    <!-- Gráfico compacto: quantidade de equipamentos por categoria -->
-    <GraficoCategorias v-if="!eq.state.loading && eq.statsCarregadas.value" :fatias="eq.state.porCategoria" />
+    <!-- Gráfico compacto: quantidade por categoria; clique abre os modelos -->
+    <GraficoCategorias
+      v-if="!eq.state.loading && eq.statsCarregadas.value"
+      :fatias="eq.state.porCategoria"
+      :aberta="categoriaAberta"
+      :detalhe="detalheModelos"
+      :carregando-detalhe="carregandoDetalhe"
+      @selecionar="alternarCategoria"
+    />
 
     <!-- Tabela -->
     <div class="card table-card">

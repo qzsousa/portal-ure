@@ -126,6 +126,31 @@ export function useEquipamentos(pageSize = 10) {
     }
   }
 
+  /**
+   * Todos os equipamentos de UMA categoria (respeitando os filtros atuais),
+   * para o drilldown do gráfico de categorias. No modo filial usa o cache
+   * local (sem nova requisição); no modo global consulta a categoria inteira.
+   */
+  async function itensDaCategoria(categoria: string): Promise<Equipamento[]> {
+    if (isGlobal.value) {
+      const { data } = await listarEquipamentosGlobal({
+        limite: 10000,
+        offset: 0,
+        busca: filtros.busca,
+        status: filtros.status,
+        unidade: filtros.unidade,
+        categoria,
+        ordem: 'modelo',
+      })
+      return data
+    }
+    if (!state.cacheCarregado) {
+      state.todosCache = await listarEquipamentosDaFilial()
+      state.cacheCarregado = true
+    }
+    return filtrarLocal(state.todosCache, { ...filtros, categoria })
+  }
+
   function aplicarFiltros() {
     state.page = 1
     void carregar()
@@ -145,6 +170,7 @@ export function useEquipamentos(pageSize = 10) {
     categoriasOpcoes,
     statsCarregadas,
     carregar,
+    itensDaCategoria,
     aplicarFiltros,
     irParaPagina,
   }

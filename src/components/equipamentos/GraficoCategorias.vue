@@ -1,28 +1,49 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ChevronDown } from '@lucide/vue'
+
+/** Linha do drilldown: "Marca Modelo" → quantidade. */
+export interface ModeloQtd {
+  rotulo: string
+  qtd: number
+}
 
 /**
  * Gráfico compacto de barras horizontais (CSS puro): quantidade de
  * equipamentos por categoria, ordenado da maior para a menor.
- * Projetado para ocupar pouco espaço vertical na tela de Equipamentos.
+ * Clicar numa categoria expande logo abaixo os modelos/marcas com
+ * as quantidades correspondentes (drilldown).
  */
 const props = withDefaults(
   defineProps<{
     /** categoria → quantidade */
     fatias: Record<string, number>
     titulo?: string
+    /** categoria atualmente expandida (null = nenhuma) */
+    aberta?: string | null
+    /** modelos da categoria expandida (já ordenados por quantidade) */
+    detalhe?: ModeloQtd[]
+    carregandoDetalhe?: boolean
   }>(),
-  { titulo: 'Equipamentos por categoria' },
+  { titulo: 'Equipamentos por categoria', aberta: null, detalhe: () => [], carregandoDetalhe: false },
 )
+
+const emit = defineEmits<{ selecionar: [categoria: string] }>()
 
 const entradas = computed(() => Object.entries(props.fatias).sort((a, b) => b[1] - a[1]))
 const maior = computed(() => entradas.value[0]?.[1] ?? 0)
 const total = computed(() => entradas.value.reduce((acc, [, v]) => acc + v, 0))
+const maiorDetalhe = computed(() => props.detalhe[0]?.qtd ?? 0)
 
+/* Piso de 2% para valores pequenos continuarem visíveis */
 function largura(valor: number): string {
   if (!maior.value) return '0%'
-  /* Piso de 2% para categorias pequenas continuarem visíveis */
   return `${Math.max(2, Math.round((valor / maior.value) * 100))}%`
+}
+
+function larguraDetalhe(qtd: number): string {
+  if (!maiorDetalhe.value) return '0%'
+  return `${Math.max(2, Math.round((qtd / maiorDetalhe.value) * 100))}%`
 }
 </script>
 
@@ -34,12 +55,37 @@ function largura(valor: number): string {
     </header>
 
     <ul v-if="entradas.length" class="cat-list">
-      <li v-for="[categoria, qtd] in entradas" :key="categoria" :title="`${categoria}: ${qtd}`">
-        <span class="cat-nome">{{ categoria }}</span>
-        <span class="cat-trilha">
-          <span class="cat-barra" :style="{ width: largura(qtd) }" />
-        </span>
-        <span class="cat-qtd">{{ qtd.toLocaleString('pt-BR') }}</span>
+      <li v-for="[categoria, qtd] in entradas" :key="categoria">
+        <button
+          type="button"
+          class="cat-linha"
+          :class="{ ativa: aberta === categoria }"
+          :aria-expanded="aberta === categoria"
+          :title="`${categoria}: ${qtd} — clique para ver os modelos`"
+          @click="emit('selecionar', categoria)"
+        >
+          <span class="cat-nome">{{ categoria }}</span>
+          <span class="cat-trilha">
+            <span class="cat-barra" :style="{ width: largura(qtd) }" />
+          </span>
+          <span class="cat-qtd">{{ qtd.toLocaleString('pt-BR') }}</span>
+          <ChevronDown :size="13" class="cat-seta" />
+        </button>
+
+        <!-- Drilldown: modelos e quantidades da categoria clicada -->
+        <div v-if="aberta === categoria" class="cat-detalhe">
+          <p v-if="carregandoDetalhe && detalhe.length === 0" class="det-vazio">Carregando modelos...</p>
+          <p v-else-if="detalhe.length === 0" class="det-vazio">Nenhum modelo nesta categoria.</p>
+          <ul v-else class="det-lista">
+            <li v-for="m in detalhe" :key="m.rotulo" :title="`${m.rotulo}: ${m.qtd}`">
+              <span class="det-nome">{{ m.rotulo }}</span>
+              <span class="cat-trilha det-trilha">
+                <span class="cat-barra det-barra" :style="{ width: larguraDetalhe(m.qtd) }" />
+              </span>
+              <span class="cat-qtd">{{ m.qtd.toLocaleString('pt-BR') }}</span>
+            </li>
+          </ul>
+        </div>
       </li>
     </ul>
     <p v-else class="cat-vazio">Sem dados para exibir.</p>
@@ -81,12 +127,24 @@ function largura(valor: number): string {
   overflow-y: auto;
 }
 
-.cat-list li {
+/* A linha clicável carrega o grid (categoria | barra | qtd | seta) */
+.cat-linha {
   display: grid;
-  grid-template-columns: minmax(90px, 200px) 1fr 44px;
+  grid-template-columns: minmax(90px, 200px) 1fr 44px 14px;
   align-items: center;
   gap: 10px;
+  width: 100%;
   min-height: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.cat-linha:hover .cat-nome {
+  color: var(--blue);
 }
 
 .cat-nome {
@@ -96,6 +154,12 @@ function largura(valor: number): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.12s ease;
+}
+
+.cat-linha.ativa .cat-nome {
+  color: var(--blue);
+  font-weight: 700;
 }
 
 .cat-trilha {
@@ -121,9 +185,65 @@ function largura(valor: number): string {
   white-space: nowrap;
 }
 
-.cat-vazio {
+.cat-seta {
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.cat-linha.ativa .cat-seta {
+  transform: rotate(180deg);
+  color: var(--blue);
+}
+
+.cat-vazio,
+.det-vazio {
   margin: 0;
   font-size: 12.5px;
   color: var(--text-muted);
+}
+
+/* ---------- Drilldown de modelos ---------- */
+.cat-detalhe {
+  margin: 4px 0 6px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--blue);
+  background: var(--surface-muted);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.det-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  /* Contido: muitas variantes rolam dentro do próprio painel */
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.det-lista li {
+  display: grid;
+  grid-template-columns: minmax(90px, 200px) 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  min-height: 18px;
+}
+
+.det-nome {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.det-trilha {
+  height: 8px;
+}
+
+.det-lista .cat-qtd {
+  font-size: 11.5px;
 }
 </style>
