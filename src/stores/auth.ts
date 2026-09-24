@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import axios from 'axios'
 import { CHAMADOS_BASE, chamadosApi, configureAuthHooks } from '@/api/http'
-import type { ChangePasswordRequest, LoginRequest, LoginResponse, User } from '@/types'
+import type { ChangePasswordRequest, LoginRequest, LoginResponse, Nivel, User } from '@/types'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -13,6 +13,33 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!accessToken.value)
   const isAdmin = computed(() => user.value?.nivel === 'ADMIN')
   const mustChangePassword = computed(() => user.value?.primeiroLogin === true)
+
+  /*
+   * Simulação de perfil (abas Configurações → Testes de acesso).
+   * Troca APENAS o `user.nivel` na memória: menus, guards de rota e botões
+   * reagem como se o usuário fosse do perfil escolhido. O token JWT e a
+   * sessão continuam os mesmos (o backend segue autorizando pelo perfil
+   * real) e a simulação some ao recarregar a página.
+   */
+  const simulacao = ref<Nivel | null>(null)
+  const nivelOriginal = ref<Nivel | null>(null)
+  const simulando = computed(() => simulacao.value !== null)
+  const nivelSimulado = computed(() => simulacao.value)
+
+  function simularComo(nivel: Nivel) {
+    if (!user.value) return
+    if (nivelOriginal.value === null) nivelOriginal.value = user.value.nivel
+    simulacao.value = nivel
+    user.value = { ...user.value, nivel }
+  }
+
+  function pararSimulacao() {
+    if (user.value && nivelOriginal.value !== null) {
+      user.value = { ...user.value, nivel: nivelOriginal.value }
+    }
+    simulacao.value = null
+    nivelOriginal.value = null
+  }
 
   function setTokens(newAccessToken: string, newRefreshToken: string) {
     accessToken.value = newAccessToken
@@ -33,13 +60,17 @@ export const useAuthStore = defineStore('auth', () => {
       { withCredentials: true },
     )
     setTokens(data.accessToken, data.refreshToken)
-    user.value = data.user
+    // Mantém a simulação ativa mesmo após o refresh (nível real se atualiza junto)
+    if (simulacao.value) nivelOriginal.value = data.user.nivel
+    user.value = simulacao.value ? { ...data.user, nivel: simulacao.value } : data.user
     return data.accessToken
   }
 
   function clearSession() {
     accessToken.value = null
     user.value = null
+    simulacao.value = null
+    nivelOriginal.value = null
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
   }
@@ -114,6 +145,10 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     mustChangePassword,
+    simulando,
+    nivelSimulado,
+    simularComo,
+    pararSimulacao,
     initialize,
     login,
     fetchMe,
