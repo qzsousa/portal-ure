@@ -1,36 +1,64 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { AlertTriangle, Package, School, Search, Wrench } from '@lucide/vue'
+import { AlertTriangle, Download, Package, PackageX, School, Search } from '@lucide/vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
+import StatusPill from '@/components/ui/StatusPill.vue'
+import { listarPainelUnidades, ROTULO_INVENTARIO, type UnidadePainel } from '@/api/escolas'
 import { listarUnidadesResumo, type UnidadeResumo } from '@/api/sce'
-import { listarEscolasPublico, getDashboardMatriz } from '@/api/publico'
-import { casarNomeEscola, chaveEscola, exibirNomeEscola } from '@/utils/escola'
-import type { Chamado } from '@/types'
+import { casarNomeEscola } from '@/utils/escola'
 
 const PAGE_SIZE = 10
+
+interface UnidadeLinha extends UnidadePainel {
+  equip: { total: number; disponiveis: number; manutencao: number; quebrados: number; extraviados: number }
+}
 
 const estado = reactive({
   loading: true,
   erro: '',
-  items: [] as UnidadeResumo[],
+  items: [] as UnidadeLinha[],
   page: 1,
 })
 
 const busca = ref('')
-const nomesPadronizados = ref<string[]>([])
-const chamadosPorUnidade = ref<Record<string, number>>({})
+const filtroEquip = ref<'' | 'com' | 'sem'>('')
+const filtroTecnico = ref('')
+const filtroInventario = ref('')
 
-/** Nome padronizado de exibição da unidade. */
-function nomeExibicao(u: UnidadeResumo): string {
-  return exibirNomeEscola(u.nome, nomesPadronizados.value)
-}
+/**
+ * Mescla o resumo do SCE (nomes legados das unidades) com o catálogo oficial:
+ * a contagem de equipamentos é do GRUPO — escolas irmãs dividem o mesmo painel.
+ */
+function mesclarEquipamentos(unidades: UnidadePainel[], resumo: UnidadeResumo[]): UnidadeLinha[] {
+  const porNome = new Map<string, UnidadePainel[]>()
+  for (const u of unidades) {
+    for (const chave of [u.nome, u.grupo]) {
+      const arr = porNome.get(chave) || []
+      arr.push(u)
+      porNome.set(chave, arr)
+    }
+  }
 
-/** Total de chamados casados com a unidade (pela chave normalizada). */
-function totalChamados(u: UnidadeResumo): number {
-  const padrao = casarNomeEscola(u.nome, nomesPadronizados.value)
-  const chave = chaveEscola(padrao || u.nome)
-  return chamadosPorUnidade.value[chave] ?? 0
+  // equipamentos atribuídos a cada unidade individual (nome = chave do catálogo casada)
+  const totais = new Map<string, UnidadeLinha['equip']>()
+  const zero = () => ({ total: 0, disponiveis: 0, manutencao: 0, quebrados: 0, extraviados: 0 })
+  for (const r of resumo) {
+    const casado = casarNomeEscola(r.nome, [...porNome.keys()])
+    const alvos = casado ? porNome.get(casado) : undefined
+    if (!alvos) continue
+    for (const u of alvos) {
+      const t = totais.get(u.nome) || zero()
+      t.total += r.total
+      t.disponiveis += r.disponiveis
+      t.manutencao += r.manutencao
+      t.quebrados += r.quebrados
+      t.extraviados += r.extraviados
+      totais.set(u.nome, t)
+    }
+  }
+
+  return unidades.map((u) => ({ ...u, equip: totais.get(u.nome) || zero() }))
 }
 
 /** Normaliza para busca sem distinção de maiúsculas/acentos. */
@@ -41,10 +69,20 @@ function norm(s: string): string {
     .replace(/[̀-ͯ]/g, '') /* combining diacritics U+0300–U+036F */
 }
 
+const tecnicosOpcoes = computed(() =>
+  [...new Set(estado.items.map((u) => u.tecnico).filter(Boolean))].sort(),
+)
+
 const filtradas = computed(() => {
   const b = norm(busca.value.trim())
-  if (!b) return estado.items
-  return estado.items.filter((u) => norm(u.nome).includes(b))
+  return estado.items.filter((u) => {
+    if (b && !norm(`${u.nome} ${u.grupo} ${u.irma || ''}`).includes(b)) return false
+    if (filtroEquip.value === 'com' && u.equip.total === 0) return false
+    if (filtroEquip.value === 'sem' && u.equip.total > 0) return false
+    if (filtroTecnico.value && u.tecnico !== filtroTecnico.value) return false
+    if (filtroInventario.value && u.inventarioStatus !== filtroInventario.value) return false
+    return true
+  })
 })
 
 const paginaAtual = computed(() => {
@@ -54,12 +92,12 @@ const paginaAtual = computed(() => {
 
 const totais = computed(() => ({
   unidades: estado.items.length,
-  equipamentos: estado.items.reduce((acc, u) => acc + u.total, 0),
-  manutencao: estado.items.reduce((acc, u) => acc + u.manutencao, 0),
-  quebrados: estado.items.reduce((acc, u) => acc + u.quebrados, 0),
+  comEquip: estado.items.filter((u) => u.equip.total > 0).length,
+  equipamentos: estado.items.reduce((acc, u) => acc + u.equip.total, 0),
+  chamadosAbertos: estado.items.reduce((acc, u) => acc + u.chamadosAbertos, 0),
 }))
 
-watch(busca, () => {
+watch([busca, filtroEquip, filtroTecnico, filtroInventario], () => {
   estado.page = 1
 })
 
@@ -73,31 +111,47 @@ function codigo(idxLocal: number): string {
   return String((estado.page - 1) * PAGE_SIZE + idxLocal + 1).padStart(3, '0')
 }
 
+function rotuloInventario(status: string): string {
+  return ROTULO_INVENTARIO[status] || status
+}
+
+/** Exporta o recorte filtrado em CSV (separador ";" — abre direto no Excel pt-BR). */
+function exportarCsv() {
+  const cabecalho = [
+    'Unidade Escolar', 'Grupo oficial', 'Escola irmã', 'Técnico', 'Inventário',
+    'Cadastrou equipamentos', 'Total equip.', 'Disponíveis', 'Manutenção', 'Quebrados', 'Extraviados',
+    'Usuários ativos', 'Chamados (total)', 'Chamados abertos',
+  ]
+  const linhas = filtradas.value.map((u) => [
+    u.nome, u.grupo, u.irma || '', u.tecnico, rotuloInventario(u.inventarioStatus),
+    u.equip.total > 0 ? 'Sim' : 'Não',
+    u.equip.total, u.equip.disponiveis, u.equip.manutencao, u.equip.quebrados, u.equip.extraviados,
+    u.usuariosAtivos, u.chamadosTotal, u.chamadosAbertos,
+  ])
+  const csv = [cabecalho, ...linhas]
+    .map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';'))
+    .join('\r\n')
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `unidades-escolares-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 async function carregar() {
   estado.loading = true
   estado.erro = ''
   try {
-    const [unidades, nomes, dash] = await Promise.all([
-      listarUnidadesResumo(),
-      listarEscolasPublico().catch(() => [] as string[]),
-      getDashboardMatriz().catch(() => null),
+    const [painel, resumo] = await Promise.all([
+      listarPainelUnidades(),
+      listarUnidadesResumo().catch(() => [] as UnidadeResumo[]),
     ])
-    estado.items = unidades
-    nomesPadronizados.value = nomes
-
-    if (dash?.chamados) {
-      const contagem: Record<string, number> = {}
-      for (const c of dash.chamados as Chamado[]) {
-        const padrao = casarNomeEscola(c.unidade, nomes) || c.unidade
-        const chave = chaveEscola(padrao)
-        contagem[chave] = (contagem[chave] || 0) + 1
-      }
-      chamadosPorUnidade.value = contagem
-    }
+    estado.items = mesclarEquipamentos(painel, resumo)
   } catch {
     estado.items = []
     estado.erro =
-      'Não foi possível carregar o resumo das unidades escolares. O serviço pode estar indisponível no momento — tente novamente mais tarde.'
+      'Não foi possível carregar as unidades escolares. O serviço pode estar indisponível no momento — tente novamente mais tarde.'
   } finally {
     estado.loading = false
   }
@@ -115,23 +169,43 @@ onMounted(() => {
       <StatCard label="Total de unidades" :value="estado.loading ? '…' : fmt(totais.unidades)" tone="blue">
         <School :size="22" />
       </StatCard>
-      <StatCard label="Equipamentos" :value="estado.loading ? '…' : fmt(totais.equipamentos)" tone="purple">
+      <StatCard
+        label="Com equipamentos"
+        :value="estado.loading ? '…' : `${fmt(totais.comEquip)} de ${fmt(totais.unidades)}`"
+        tone="green"
+      >
         <Package :size="22" />
       </StatCard>
-      <StatCard label="Em manutenção" :value="estado.loading ? '…' : fmt(totais.manutencao)" tone="yellow">
-        <Wrench :size="22" />
+      <StatCard label="Sem equipamentos" :value="estado.loading ? '…' : fmt(totais.unidades - totais.comEquip)" tone="yellow">
+        <PackageX :size="22" />
       </StatCard>
-      <StatCard label="Quebrados" :value="estado.loading ? '…' : fmt(totais.quebrados)" tone="red">
+      <StatCard label="Chamados abertos" :value="estado.loading ? '…' : fmt(totais.chamadosAbertos)" tone="red">
         <AlertTriangle :size="22" />
       </StatCard>
     </div>
 
-    <!-- Busca -->
+    <!-- Busca + filtros -->
     <div class="toolbar card">
       <div class="search-box">
         <Search :size="16" />
         <input v-model="busca" placeholder="Buscar unidade escolar..." />
       </div>
+      <select v-model="filtroEquip" class="select-input filtro">
+        <option value="">Equipamentos: todos</option>
+        <option value="com">Com equipamentos</option>
+        <option value="sem">Sem equipamentos</option>
+      </select>
+      <select v-model="filtroTecnico" class="select-input filtro">
+        <option value="">Técnico: todos</option>
+        <option v-for="t in tecnicosOpcoes" :key="t" :value="t">{{ t }}</option>
+      </select>
+      <select v-model="filtroInventario" class="select-input filtro">
+        <option value="">Inventário: todos</option>
+        <option v-for="(rotulo, valor) in ROTULO_INVENTARIO" :key="valor" :value="valor">{{ rotulo }}</option>
+      </select>
+      <button class="btn btn-outline" type="button" :disabled="estado.loading || filtradas.length === 0" @click="exportarCsv">
+        <Download :size="15" /> Exportar CSV
+      </button>
     </div>
 
     <p v-if="estado.erro" class="erro card">{{ estado.erro }}</p>
@@ -144,7 +218,9 @@ onMounted(() => {
             <tr>
               <th>Código</th>
               <th>Unidade Escolar</th>
-              <th>Diretoria</th>
+              <th>Técnico</th>
+              <th>Inventário</th>
+              <th>Cadastrou equip.?</th>
               <th class="th-num">Total Equip.</th>
               <th class="th-num">Disponíveis</th>
               <th class="th-num">Manutenção</th>
@@ -155,23 +231,33 @@ onMounted(() => {
           </thead>
           <tbody>
             <tr v-if="estado.loading">
-              <td colspan="9" class="td-center">Carregando...</td>
+              <td colspan="11" class="td-center">Carregando...</td>
             </tr>
             <tr v-else-if="paginaAtual.length === 0">
-              <td colspan="9" class="td-center">
+              <td colspan="11" class="td-center">
                 {{ estado.erro ? 'Sem dados para exibir.' : 'Nenhuma unidade encontrada.' }}
               </td>
             </tr>
             <tr v-for="(u, i) in paginaAtual" :key="u.nome">
               <td class="nowrap"><strong>{{ codigo(i) }}</strong></td>
-              <td>{{ nomeExibicao(u) }}</td>
-              <td>—</td>
-              <td class="td-num"><strong>{{ u.total }}</strong></td>
-              <td class="td-num"><span class="num green">{{ u.disponiveis }}</span></td>
-              <td class="td-num"><span class="num yellow">{{ u.manutencao }}</span></td>
-              <td class="td-num"><span class="num red">{{ u.quebrados }}</span></td>
-              <td class="td-num"><span class="num slate">{{ u.extraviados }}</span></td>
-              <td class="td-num"><span class="num blue">{{ totalChamados(u) }}</span></td>
+              <td>
+                {{ u.nome }}
+                <div v-if="u.irma" class="unidade-irma">divide o prédio com {{ u.irma }}</div>
+              </td>
+              <td>{{ u.tecnico || '—' }}</td>
+              <td><StatusPill :status="rotuloInventario(u.inventarioStatus)" /></td>
+              <td>
+                <StatusPill :status="u.equip.total > 0 ? 'Sim' : 'Não'" />
+              </td>
+              <td class="td-num"><strong>{{ u.equip.total }}</strong></td>
+              <td class="td-num"><span class="num green">{{ u.equip.disponiveis }}</span></td>
+              <td class="td-num"><span class="num yellow">{{ u.equip.manutencao }}</span></td>
+              <td class="td-num"><span class="num red">{{ u.equip.quebrados }}</span></td>
+              <td class="td-num"><span class="num slate">{{ u.equip.extraviados }}</span></td>
+              <td class="td-num">
+                <span class="num blue">{{ u.chamadosAbertos }}</span>
+                <span class="chamados-total"> / {{ u.chamadosTotal }}</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -228,10 +314,8 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.erro {
-  padding: 14px 18px;
-  color: var(--red);
-  font-weight: 500;
+.filtro {
+  max-width: 200px;
 }
 
 .table-card {
@@ -276,5 +360,21 @@ onMounted(() => {
 
 .num.blue {
   color: var(--blue);
+}
+
+.unidade-irma {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.chamados-total {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.erro {
+  padding: 14px 18px;
+  color: var(--red);
+  font-weight: 500;
 }
 </style>

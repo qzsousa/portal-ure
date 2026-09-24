@@ -110,7 +110,7 @@ const routes: RouteRecordRaw[] = [
         path: 'unidades',
         name: 'unidades',
         component: () => import('@/views/UnidadesView.vue'),
-        meta: { title: 'Unidades Escolares', breadcrumb: 'Unidades Escolares' },
+        meta: { title: 'Unidades Escolares', breadcrumb: 'Unidades Escolares', roles: ['ADMIN', 'TECNICO'] as Nivel[] },
       },
       {
         path: 'relatorios',

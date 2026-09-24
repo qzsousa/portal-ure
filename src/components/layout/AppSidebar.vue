@@ -21,6 +21,8 @@ interface MenuItem {
   icon: unknown
   adminOnly?: boolean
   gestorTambem?: boolean
+  /** Visível apenas para a matriz (ADMIN/TECNICO) */
+  matrizOnly?: boolean
 }
 
 const route = useRoute()
@@ -33,7 +35,7 @@ const items: MenuItem[] = [
   { to: '/manutencao', label: 'Manutenção', icon: Wrench },
   { to: '/chamados', label: 'Chamados', icon: Headset },
   { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen },
-  { to: '/unidades', label: 'Unidades Escolares', icon: School },
+  { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true },
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true },
   { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true },
@@ -43,6 +45,7 @@ const visibleItems = computed(() =>
   items.filter((i) => {
     if (i.adminOnly) return auth.user?.nivel === 'ADMIN'
     if (i.gestorTambem) return ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || '')
+    if (i.matrizOnly) return ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || '')
     return true
   }),
 )
