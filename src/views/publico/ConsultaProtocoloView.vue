@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { AxiosError } from 'axios'
-import { Heart, Loader2, Paperclip, Search, SearchX, Send, Star } from '@lucide/vue'
+import { Heart, Loader2, MessageSquareText, Paperclip, Search, SearchX, Send, Star } from '@lucide/vue'
 import PublicoLayout from '@/components/publico/PublicoLayout.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
@@ -19,6 +19,12 @@ const erro = ref('')
 const resultado = ref<ChamadoPublico | null>(null)
 
 const resolvido = computed(() => resultado.value?.status === 'RESOLVIDO')
+
+/** Última mensagem é uma PERGUNTA da matriz e o chamado aguarda resposta. */
+const aguardandoResposta = computed(() => {
+  const msgs = resultado.value?.mensagens
+  return resultado.value?.status === 'COMUNICADO' && !!msgs?.length && msgs[msgs.length - 1]?.tipo === 'PERGUNTA'
+})
 
 /* ---------- Avaliação do atendimento ---------- */
 
@@ -196,6 +202,39 @@ function formatarData(ts: string | null | undefined): string {
         <h3>Resposta da equipe</h3>
         <p>{{ resultado.descricaoResolucao }}</p>
       </div>
+
+      <!-- ===== Conversa com a matriz (perguntas "Aguardando resposta") ===== -->
+      <section v-if="resultado.mensagens?.length" class="conversa">
+        <h3 class="conversa-titulo">
+          <MessageSquareText :size="16" />
+          Conversa com a matriz
+        </h3>
+        <div v-if="aguardandoResposta" class="conversa-alerta">
+          <strong>A matriz fez uma pergunta e aguarda sua resposta.</strong>
+          Para responder, acesse o portal com o usuário da sua unidade ou fale com o SETEC.
+        </div>
+        <ol class="thread">
+          <li
+            v-for="m in resultado.mensagens"
+            :key="m.id"
+            class="msg"
+            :class="m.tipo === 'PERGUNTA' ? 'msg-matriz' : 'msg-unidade'"
+          >
+            <header class="msg-topo">
+              <strong>{{ m.tipo === 'PERGUNTA' ? 'Matriz (SETEC)' : `Você — ${m.autorNome}` }}</strong>
+              <time>{{ formatarData(m.createdAt) }}</time>
+            </header>
+            <p class="msg-texto">{{ m.texto }}</p>
+            <ul v-if="m.anexos?.length" class="msg-anexos">
+              <li v-for="a in m.anexos" :key="a.url">
+                <a :href="a.url" target="_blank" rel="noopener" class="r-link">
+                  <Paperclip :size="12" /> {{ a.nome }}
+                </a>
+              </li>
+            </ul>
+          </li>
+        </ol>
+      </section>
 
       <!-- ===== Avaliação do atendimento (somente chamados resolvidos) ===== -->
       <section v-if="resolvido" class="avaliacao">
@@ -555,5 +594,101 @@ function formatarData(ts: string | null | undefined): string {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* ---------- Conversa com a matriz ---------- */
+.conversa {
+  margin-top: 16px;
+}
+
+.conversa-titulo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+
+.conversa-alerta {
+  background: var(--blue-soft);
+  border: 1px solid #c0dcf0;
+  color: #0b3d6b;
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.conversa-alerta strong {
+  display: block;
+}
+
+.thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.msg {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 13px;
+  font-size: 13.5px;
+}
+
+.msg-matriz {
+  background: #fdf7ea;
+  border-color: #f0d49a;
+  border-left: 3px solid var(--brand-gold);
+}
+
+.msg-unidade {
+  background: var(--surface-muted);
+  border-left: 3px solid var(--blue);
+}
+
+.msg-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.msg-topo strong {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.msg-topo time {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.msg-texto {
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+  line-height: 1.55;
+}
+
+.msg-anexos {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.msg-anexos li {
+  font-size: 12.5px;
 }
 </style>

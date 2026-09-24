@@ -557,38 +557,40 @@ onMounted(() => {
 
         <!-- Cartão de contato -->
         <section class="card contato">
-          <h2><Phone :size="17" /> Fale com o SETEC</h2>
-          <p class="contato-nome">Jessica Moraes — Chefe de Seção SETEC · URE Leste 3</p>
-          <div class="contato-linhas">
-            <a class="contato-linha" href="tel:+551125237010">
-              <Phone :size="15" />
-              <span>(11) 2523-7010</span>
-              <span class="contato-acao">Ligar</span>
+          <div class="contato-info">
+            <h2>Fale com o SETEC</h2>
+            <p class="contato-nome">Jessica Moraes — Chefe de Seção SETEC</p>
+            <p class="contato-sub">(11) 2523-7010 · {{ EMAIL_SETEC }}</p>
+          </div>
+          <div class="contato-acoes">
+            <a class="btn-pill" href="tel:+551125237010">
+              <Phone :size="14" />
+              Ligar
             </a>
-            <div class="contato-linha">
-              <Mail :size="15" />
-              <span class="contato-email">{{ EMAIL_SETEC }}</span>
-              <button type="button" class="btn-copiar-email" @click="copiarEmail">
-                <Copy :size="13" />
-                {{ emailCopiado ? '✓ Copiado!' : 'Copiar e-mail' }}
-              </button>
-            </div>
+            <button type="button" class="btn-pill" @click="copiarEmail">
+              <component :is="emailCopiado ? CheckCircle2 : Copy" :size="14" />
+              {{ emailCopiado ? 'Copiado!' : 'Copiar e-mail' }}
+            </button>
           </div>
         </section>
 
-        <!-- Busca de chamado por protocolo (abaixo do "Fale com o SETEC") -->
+        <!-- Busca de chamado por protocolo -->
         <section class="card busca-chamado">
-          <h2><Search :size="16" /> Acompanhar chamado</h2>
-          <p>Já abriu um chamado? Consulte pelo número de protocolo.</p>
-          <form class="busca-form" @submit.prevent="consultarProtocolo">
+          <div class="busca-info">
+            <Search :size="18" />
+            <div>
+              <h2>Acompanhar chamado</h2>
+              <p>Já abriu um chamado? Consulte pelo número de protocolo.</p>
+            </div>
+          </div>
+          <form class="busca-grupo" @submit.prevent="consultarProtocolo">
             <input
               v-model="buscaProtocolo"
-              class="input"
               type="text"
               placeholder="Ex.: CH-20260923-0007"
               aria-label="Número do protocolo"
             />
-            <button type="submit" class="btn btn-primary" :disabled="!buscaProtocolo.trim()">
+            <button type="submit" :disabled="!buscaProtocolo.trim()">
               <Search :size="15" />
               Consultar
             </button>
@@ -1011,62 +1013,56 @@ onMounted(() => {
 .contato {
   background: var(--sidebar-bg);
   color: #fff;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.contato h2 {
-  color: #fff;
-  font-size: 15px;
+  padding: 16px 18px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.contato-info h2 {
+  color: #9fc3e8;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 3px;
 }
 
 .contato-nome {
   margin: 0;
-  font-size: 13px;
-  color: rgb(255 255 255 / 0.85);
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.contato-linhas {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 4px;
+.contato-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #bfdaee;
 }
 
-.contato-linha {
+.contato-acoes {
   display: flex;
-  align-items: center;
   gap: 8px;
-  font-size: 13px;
   flex-wrap: wrap;
 }
 
-.contato-acao,
-.btn-copiar-email {
-  margin-left: auto;
-  font-size: 12px;
-  font-weight: 700;
-  background: var(--brand-gold);
-  color: #221a02;
-  padding: 6px 10px;
-  border-radius: 999px;
+.btn-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(255 255 255 / 0.07);
+  border: 1px solid rgb(255 255 255 / 0.3);
 }
 
-.btn-copiar-email:hover,
-.contato-linha:hover .contato-acao {
-  background: var(--brand-gold-soft);
-}
-
-.contato-email {
-  word-break: break-all;
+.btn-pill:hover {
+  background: rgb(255 255 255 / 0.16);
 }
 /* ---------- etapas ---------- */
 
@@ -1608,40 +1604,109 @@ onMounted(() => {
 }
 
 /* Busca de chamado por protocolo */
-.busca-chamado h2 {
-  font-size: 14.5px;
+.busca-chamado {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--text-primary);
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px 18px;
 }
 
-.busca-chamado > p {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-.busca-form {
+.busca-info {
   display: flex;
+  align-items: flex-start;
   gap: 10px;
-  margin-top: 12px;
-}
-
-.busca-form .input {
-  flex: 1;
+  color: var(--blue);
   min-width: 0;
 }
 
-.busca-form .btn {
+.busca-info h2 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.busca-info p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.busca-grupo {
+  display: flex;
   flex-shrink: 0;
 }
 
+.busca-grupo input {
+  border: 1.5px solid var(--border-strong);
+  border-right: none;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  min-width: 220px;
+  color: var(--text-primary);
+  background: var(--surface);
+}
+
+.busca-grupo input:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+  position: relative;
+  z-index: 1;
+}
+
+.busca-grupo button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border: 1.5px solid var(--blue);
+  background: var(--blue);
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  font-family: inherit;
+}
+
+.busca-grupo button:disabled {
+  background: #9fb8cc;
+  border-color: #9fb8cc;
+  cursor: not-allowed;
+}
+
+.busca-grupo button:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
 @media (max-width: 640px) {
-  .busca-form {
+  .busca-chamado {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .busca-grupo {
     flex-direction: column;
   }
-  .busca-form .btn {
+  .busca-grupo input {
+    min-width: 0;
+    border-right: 1.5px solid var(--border-strong);
+    border-bottom: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+  .busca-grupo button {
+    justify-content: center;
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  }
+  .contato {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .contato-acoes .btn-pill {
+    flex: 1;
     justify-content: center;
   }
   .leg-logo {

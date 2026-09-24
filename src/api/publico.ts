@@ -67,6 +67,23 @@ export interface AvaliacaoChamado {
   comentario: string | null
 }
 
+/** Mensagem da conversa matriz ↔ unidade (pergunta "Aguardando resposta"). */
+export interface MensagemConversaAnexo {
+  nome: string
+  tipo: string
+  url: string
+  expiresAt?: string
+}
+
+export interface MensagemConversa {
+  id: string
+  tipo: 'PERGUNTA' | 'RESPOSTA'
+  autorNome: string
+  texto: string
+  createdAt: string
+  anexos: MensagemConversaAnexo[]
+}
+
 export interface ChamadoPublico {
   protocolo: string
   unidade: string
@@ -79,6 +96,8 @@ export interface ChamadoPublico {
   timestamp: string
   ultimaAtualizacao: string
   avaliacao?: AvaliacaoChamado | null
+  /** Conversa matriz ↔ unidade (perguntas e respostas do chamado). */
+  mensagens?: MensagemConversa[]
 }
 
 /** Consulta pública por protocolo. Lança AxiosError com status 404 se não existir. */

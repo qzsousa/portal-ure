@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiError } from '@/utils/apiError'
@@ -128,7 +128,7 @@ const STATUS_CHIPS: Array<{ rotulo: string; valor: StatusChamado | '' }> = [
   { rotulo: 'Todos', valor: '' },
   { rotulo: 'Abertos', valor: 'ABERTO' },
   { rotulo: 'Em atendimento', valor: 'ANDAMENTO' },
-  { rotulo: 'Aguardando escola', valor: 'COMUNICADO' },
+  { rotulo: 'Aguardando resposta', valor: 'COMUNICADO' },
   { rotulo: 'Concluídos', valor: 'RESOLVIDO' },
 ]
 
@@ -287,9 +287,9 @@ watch([detalheAberto, () => detalhe.value?.historico], async ([aberto]) => {
 
 async function salvarStatus() {
   if (!detalhe.value) return
-  // Matriz: ao colocar em "Aguardando escola", a pergunta é obrigatória
+  // Matriz: ao colocar em "Aguardando resposta", a pergunta é obrigatória
   if (ehMatriz.value && novoStatus.value === 'COMUNICADO' && detalhe.value.status !== 'COMUNICADO' && !perguntaEscola.value.trim()) {
-    ui.error('Escreva a pergunta/solicitação para a escola antes de salvar.')
+    ui.error('Escreva a pergunta/solicitação para o solicitante antes de salvar.')
     return
   }
   salvando.value = true
@@ -407,7 +407,7 @@ useAutoRefresh(async () => {
       <StatCard label="Abertos" :value="stats?.abertos ?? '…'" tone="red"><AlertTriangle :size="22" /></StatCard>
       <StatCard label="Em atendimento" :value="stats?.andamento ?? '…'" tone="yellow"><Clock :size="22" /></StatCard>
       <StatCard
-        label="Aguardando escola"
+        label="Aguardando resposta"
         :value="stats?.comunicado ?? '…'"
         detail="respondidos, aguardam retorno da unidade"
         tone="purple"
@@ -464,7 +464,7 @@ useAutoRefresh(async () => {
         <option value="">Status: Todos</option>
         <option value="ABERTO">Aberto</option>
         <option value="ANDAMENTO">Em atendimento</option>
-        <option value="COMUNICADO">Aguardando escola</option>
+        <option value="COMUNICADO">Aguardando resposta</option>
         <option value="RESOLVIDO">Concluído</option>
       </select>
       <select v-model="filtros.urgencia" class="select-input slim" @change="aplicarFiltros">
@@ -487,7 +487,7 @@ useAutoRefresh(async () => {
           <option value="" disabled>Alterar status para...</option>
           <option value="ABERTO">Aberto</option>
           <option value="ANDAMENTO">Em atendimento</option>
-          <option value="COMUNICADO">Aguardando escola</option>
+          <option value="COMUNICADO">Aguardando resposta</option>
           <option value="RESOLVIDO">Concluído</option>
         </select>
         <button
@@ -604,7 +604,7 @@ useAutoRefresh(async () => {
           <div class="msgs">
             <div v-for="m in conversa" :key="m.id" class="msg" :class="m.tipo === 'PERGUNTA' ? 'msg-pergunta' : 'msg-resposta'">
               <span class="msg-meta">
-                <strong>{{ m.tipo === 'PERGUNTA' ? 'Pergunta da matriz' : 'Resposta da escola' }}</strong>
+                <strong>{{ m.tipo === 'PERGUNTA' ? 'Pergunta da matriz' : 'Resposta do solicitante' }}</strong>
                 · {{ m.autorNome }} · {{ formatDateTime(m.createdAt) }}
               </span>
               <p class="msg-texto">{{ m.texto }}</p>
@@ -625,7 +625,7 @@ useAutoRefresh(async () => {
               <select v-model="novoStatus" class="select-input">
                 <option value="ABERTO">Aberto</option>
                 <option value="ANDAMENTO">Em atendimento</option>
-                <option value="COMUNICADO">Aguardando escola</option>
+                <option value="COMUNICADO">Aguardando resposta</option>
                 <option value="RESOLVIDO">Concluído</option>
               </select>
               <button class="btn btn-primary" type="button" :disabled="salvando" @click="salvarStatus">
@@ -689,7 +689,7 @@ useAutoRefresh(async () => {
               <textarea
                 v-model="respostaEscola"
                 class="input textarea"
-                placeholder="Escreva a resposta da escola..."
+                placeholder="Escreva a Resposta do solicitante..."
               />
               <label class="anexo-label">
                 <Paperclip :size="14" /> Anexar arquivos (opcional — ficam disponíveis por 7 dias)

@@ -1,4 +1,4 @@
-import { chamadosApi } from './http'
+﻿import { chamadosApi } from './http'
 import type { Chamado, StatusChamado } from '@/types'
 
 /** Cliente da API de chamados (backend que também provê autenticação). */
@@ -44,7 +44,7 @@ export interface AtualizarStatusPayload {
   status: StatusChamado
   tecnicoResolucao?: string
   descricaoResolucao?: string
-  /** Matriz: pergunta enviada à escola ao mudar para "Aguardando escola" */
+  /** Matriz: pergunta enviada ao solicitante ao mudar para "Aguardando resposta" */
   pergunta?: string
   perguntaAnexos?: AnexoMensagemPayload[]
 }
@@ -83,7 +83,7 @@ export async function atualizarChamadosEmLote(
 export const ROTULO_STATUS_CHAMADO: Record<StatusChamado, string> = {
   ABERTO: 'Aberto',
   ANDAMENTO: 'Em atendimento',
-  COMUNICADO: 'Aguardando escola',
+  COMUNICADO: 'Aguardando resposta',
   RESOLVIDO: 'Concluído',
 }
 
