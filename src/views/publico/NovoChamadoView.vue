@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
+import { useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import {
   AlertTriangle,
@@ -21,8 +22,6 @@ import {
   Send,
   Wifi,
 } from '@lucide/vue'
-import PublicoLayout from '@/components/publico/PublicoLayout.vue'
-import CatalogoEquipamentosModal from '@/components/publico/CatalogoEquipamentosModal.vue'
 import { useUiStore } from '@/stores/ui'
 import { apiError } from '@/utils/apiError'
 import {
@@ -40,6 +39,15 @@ import {
 } from '@/api/publico'
 
 const ui = useUiStore()
+const router = useRouter()
+
+/** Busca de chamado por protocolo (vai para /consulta). */
+const buscaProtocolo = ref('')
+function consultarProtocolo() {
+  const p = buscaProtocolo.value.trim()
+  if (!p) return
+  void router.push({ path: '/consulta', query: { protocolo: p } })
+}
 
 /** Opção especial "digitar manualmente" (mesma ideia do formulário antigo). */
 const OUTRO = '__OUTRO__'
@@ -437,12 +445,6 @@ async function copiarProtocolo() {
 }
 /* ==================== catálogo (modal somente-leitura) ==================== */
 
-const catalogoAberto = ref(false)
-
-function abrirCatalogo() {
-  catalogoAberto.value = true
-}
-
 /* ==================== contato / helpers ==================== */
 
 const EMAIL_SETEC = 'lt3.setec@educacao.sp.gov.br'
@@ -489,8 +491,24 @@ onMounted(() => {
 </script>
 
 <template>
-  <PublicoLayout>
-    <div class="wiz-page">
+  <!-- Tela de loading de página inteira: nada aparece até o formulário carregar -->
+  <div v-if="carregandoFormulario" class="boot-loading">
+    <Loader2 :size="34" class="spin" />
+    <p>Carregando...</p>
+  </div>
+
+  <div v-else class="leg-app">
+    <!-- Cabeçalho no padrão do formulário antigo -->
+    <header class="leg-topo">
+      <img src="/logo-ure.png" alt="Brasão da URE Leste 3" class="leg-logo" />
+      <div class="leg-topo-org">
+        <small>Governo do Estado de São Paulo</small>
+        <strong>SETEC — Unidade Regional de Ensino Leste 3</strong>
+      </div>
+    </header>
+
+    <main class="leg-main">
+      <div class="wiz-page">
       <!-- ==================== ETAPA 0 — HOME ==================== -->
       <template v-if="passo === 0">
         <header class="home-head">
@@ -558,13 +576,24 @@ onMounted(() => {
           </div>
         </section>
 
-        <!-- Catálogo de equipamentos (somente leitura) -->
-        <button type="button" class="btn-ghost-full" @click="abrirCatalogo">
-          <PackageSearch :size="15" />
-          Ver catálogo de equipamentos
-        </button>
-
-        <CatalogoEquipamentosModal :aberto="catalogoAberto" @fechar="catalogoAberto = false" />
+        <!-- Busca de chamado por protocolo (abaixo do "Fale com o SETEC") -->
+        <section class="card busca-chamado">
+          <h2><Search :size="16" /> Acompanhar chamado</h2>
+          <p>Já abriu um chamado? Consulte pelo número de protocolo.</p>
+          <form class="busca-form" @submit.prevent="consultarProtocolo">
+            <input
+              v-model="buscaProtocolo"
+              class="input"
+              type="text"
+              placeholder="Ex.: CH-20260923-0007"
+              aria-label="Número do protocolo"
+            />
+            <button type="submit" class="btn btn-primary" :disabled="!buscaProtocolo.trim()">
+              <Search :size="15" />
+              Consultar
+            </button>
+          </form>
+        </section>
       </template>
       <!-- ==================== ETAPA 1 — PERGUNTAS ==================== -->
       <template v-else-if="passo === 1 && categoriaSelecionada">
@@ -885,8 +914,13 @@ onMounted(() => {
           <button type="button" class="btn btn-outline btn-grande" @click="novoChamado">Abrir outro chamado</button>
         </div>
       </div>
-    </div>
-  </PublicoLayout>
+      </div>
+    </main>
+
+    <footer class="leg-rodape">
+      SETEC · Unidade Regional de Ensino Leste 3 · Governo do Estado de São Paulo
+    </footer>
+  </div>
 </template>
 
 <style scoped>
@@ -911,13 +945,13 @@ onMounted(() => {
 
 .home-head h1,
 .etapa-head h1 {
-  color: #fff;
+  color: #16222e;
   font-size: 26px;
 }
 
 .home-sub,
 .etapa-sub {
-  color: rgb(255 255 255 / 0.7);
+  color: #5a6b7a;
   font-size: 14px;
   margin: 6px 0 0;
   max-width: 60ch;
@@ -1034,24 +1068,6 @@ onMounted(() => {
 .contato-email {
   word-break: break-all;
 }
-
-.btn-ghost-full {
-  width: 100%;
-  border: 1.5px dashed rgb(255 255 255 / 0.35);
-  color: #fff;
-  background: transparent;
-  border-radius: var(--radius-md);
-  padding: 12px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.btn-ghost-full:hover {
-  background: rgb(255 255 255 / 0.08);
-}
 /* ---------- etapas ---------- */
 
 .etapa-lista {
@@ -1075,17 +1091,17 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: rgb(255 255 255 / 0.85);
+  color: #134e8c;
   font-size: 13px;
   font-weight: 600;
   padding: 6px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgb(255 255 255 / 0.16);
-  background: rgb(255 255 255 / 0.06);
+  border: 1px solid #dde6ee;
+  background: #ffffff;
 }
 
 .btn-ghost:hover {
-  background: rgb(255 255 255 / 0.12);
+  background: #e7f1fa;
 }
 
 .badge-cat {
@@ -1508,5 +1524,129 @@ onMounted(() => {
 .bloco-info.neutro {
   color: var(--text-secondary);
   background: var(--surface-muted);
+}
+
+/* ---------- Shell no padrão do formulário antigo ---------- */
+
+/* Loading de página inteira: nada renderiza até as perguntas carregarem */
+.boot-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  background: #f5f8fb;
+  color: #0b3d6b;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.leg-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f8fb;
+}
+
+.leg-topo {
+  background: #ffffff;
+  border-bottom: 1px solid #dde6ee;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.leg-logo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.leg-topo-org {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.leg-topo-org small {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #5a6b7a;
+  font-weight: 600;
+}
+
+.leg-topo-org strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0b3d6b;
+}
+
+.leg-main {
+  flex: 1;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+}
+
+.leg-rodape {
+  text-align: center;
+  padding: 16px;
+  font-size: 12px;
+  color: #5a6b7a;
+  border-top: 1px solid #dde6ee;
+  background: #ffffff;
+}
+
+/* Busca de chamado por protocolo */
+.busca-chamado h2 {
+  font-size: 14.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+
+.busca-chamado > p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.busca-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.busca-form .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.busca-form .btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .busca-form {
+    flex-direction: column;
+  }
+  .busca-form .btn {
+    justify-content: center;
+  }
+  .leg-logo {
+    width: 42px;
+    height: 42px;
+  }
 }
 </style>

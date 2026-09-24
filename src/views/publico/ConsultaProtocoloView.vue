@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { AxiosError } from 'axios'
 import { Heart, Loader2, Paperclip, Search, SearchX, Send, Star } from '@lucide/vue'
 import PublicoLayout from '@/components/publico/PublicoLayout.vue'
@@ -102,6 +103,16 @@ async function reconsultar() {
 }
 
 useAutoRefresh(reconsultar, AUTO_REFRESH_MS.rapido)
+
+/** Prefill via ?protocolo=CH-... (link vindo da tela de abertura de chamado). */
+const route = useRoute()
+onMounted(() => {
+  const q = String(route.query.protocolo || '').trim()
+  if (q) {
+    protocolo.value = q
+    void buscar()
+  }
+})
 
 function formatarData(ts: string | null | undefined): string {
   if (!ts) return '—'

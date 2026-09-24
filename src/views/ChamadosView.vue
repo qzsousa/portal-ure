@@ -574,6 +574,8 @@ useAutoRefresh(async () => {
         <dl class="detalhe-grid">
           <div><dt>Unidade</dt><dd>{{ detalhe.unidade }}</dd></div>
           <div><dt>Solicitante</dt><dd>{{ detalhe.solicitante }}</dd></div>
+          <div><dt>Cargo / Função</dt><dd>{{ detalhe.funcao || '—' }}</dd></div>
+          <div><dt>E-mail do solicitante</dt><dd class="quebra-email">{{ detalhe.email || '—' }}</dd></div>
           <div><dt>Tipo</dt><dd>{{ detalhe.tipo }}</dd></div>
           <div><dt>Urgência</dt><dd>{{ detalhe.urgencia }}</dd></div>
           <div><dt>Responsável</dt><dd>{{ detalhe.responsavel || '—' }}</dd></div>
@@ -876,6 +878,10 @@ tr.selecionado td {
   margin: 0;
   font-size: 13.5px;
   color: var(--text-primary);
+}
+
+.quebra-email {
+  word-break: break-all;
 }
 
 .descricao-box h4,
