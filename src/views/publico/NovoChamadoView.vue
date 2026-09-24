@@ -70,8 +70,12 @@ const respostas = reactive<Record<string, string>>({})
 const categoriaSelecionada = ref<FormularioCategoria | null>(null)
 const corCategoria = computed(() => categoriaSelecionada.value?.cor?.trim() || 'var(--blue)')
 
+/** Guarda contra buscas concorrentes ( separado do estado visual de loading ). */
+let buscaFormularioEmAndamento = false
+
 async function carregarFormulario() {
-  if (carregandoFormulario.value) return // guarda contra dupla chamada
+  if (buscaFormularioEmAndamento) return // evita chamada dupla simultânea
+  buscaFormularioEmAndamento = true
   carregandoFormulario.value = true
   erroFormulario.value = ''
   try {
@@ -80,6 +84,7 @@ async function carregarFormulario() {
     erroFormulario.value = apiError(e, 'Não foi possível carregar o formulário. Tente novamente.')
   } finally {
     carregandoFormulario.value = false
+    buscaFormularioEmAndamento = false
   }
 }
 
