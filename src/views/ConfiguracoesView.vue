@@ -1,11 +1,14 @@
 <script setup lang="ts">
 /**
  * Configurações do portal (somente Administrador).
- * Abas: Catálogo (categoria/marca/modelo), Status do parque, Formulário de chamados, Logs do sistema, Integrações.
+ * Abas: Catálogo (categoria/marca/modelo), Status do parque, Formulário de
+ * chamados, Logs do sistema, Integrações.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
-import { CheckCircle2, Loader2, Plus, ShieldCheck, Trash2, XCircle } from '@lucide/vue'
+import { useRouter } from 'vue-router'
+import { CheckCircle2, Eye, Loader2, Plus, ShieldCheck, Trash2, Users, Wrench, XCircle } from '@lucide/vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
+import FormularioAdmin from '@/components/config/FormularioAdmin.vue'
 import {
   adicionarItemCatalogo,
   listarAuditoria,
@@ -19,13 +22,16 @@ import {
 import { chamadosApi } from '@/api/http'
 import { apiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
+import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { useErrorLogStore } from '@/stores/errorLog'
-import FormularioAdmin from '@/components/config/FormularioAdmin.vue'
+import type { Nivel } from '@/types'
 
-type Aba = 'catalogo' | 'status' | 'formulario' | 'logs' | 'integracoes'
+type Aba = 'catalogo' | 'status' | 'formulario' | 'logs' | 'integracoes' | 'acesso'
 
 const ui = useUiStore()
+const auth = useAuthStore()
+const router = useRouter()
 const aba = ref<Aba>('catalogo')
 
 const ABAS: Array<{ id: Aba; rotulo: string }> = [
@@ -34,6 +40,7 @@ const ABAS: Array<{ id: Aba; rotulo: string }> = [
   { id: 'formulario', rotulo: 'Formulário de chamados' },
   { id: 'logs', rotulo: 'Logs do sistema' },
   { id: 'integracoes', rotulo: 'Integrações' },
+  { id: 'acesso', rotulo: 'Testes de acesso' },
 ]
 
 /* ---------------- Catálogo ---------------- */
@@ -179,6 +186,42 @@ async function testarIntegracoes() {
       ? { testado: true, ok: true, msg: 'Login único ativo (JWT aceito nos dois backends)' }
       : { testado: true, ok: false, msg: 'SSO indisponível para algum dos backends' }
   integracoes.carregando = false
+}
+
+/* ---------------- Testes de acesso (simular perfil) ---------------- */
+interface PerfilTeste {
+  nivel: Nivel
+  rotulo: string
+  resumo: string
+  icone: unknown
+}
+
+const PERFIS_TESTE: PerfilTeste[] = [
+  {
+    nivel: 'GESTOR',
+    rotulo: 'Gestor',
+    resumo: 'Painel da unidade, chamados, equipamentos e usuários da escola.',
+    icone: Users,
+  },
+  {
+    nivel: 'TECNICO',
+    rotulo: 'Técnico',
+    resumo: 'Chamados com ações técnicas, equipamentos e manutenção.',
+    icone: Wrench,
+  },
+  {
+    nivel: 'VISUALIZADOR',
+    rotulo: 'Visualizador',
+    resumo: 'Somente leitura — acompanha dados sem menus administrativos.',
+    icone: Eye,
+  },
+]
+
+/** Abre o portal simulando o perfil (menus/guards passam a usar o nível simulado). */
+function simular(nivel: Nivel, rotulo: string) {
+  auth.simularComo(nivel)
+  ui.success(`Simulando perfil "${rotulo}". Use o banner do topo para encerrar.`)
+  void router.push({ name: 'painel' })
 }
 
 onMounted(() => {
@@ -387,7 +430,7 @@ onMounted(() => {
         </section>
 
         <!-- ============ INTEGRAÇÕES ============ -->
-        <section v-else class="card conf-card">
+        <section v-else-if="aba === 'integracoes'" class="card conf-card">
           <h3>Integrações do portal</h3>
           <p class="conf-desc">
             Verifica se o portal está conversando com os dois backends e se o login único (SSO) está ativo.
@@ -426,12 +469,76 @@ onMounted(() => {
             {{ integracoes.carregando ? 'Testando...' : 'Testar agora' }}
           </button>
         </section>
+
+        <!-- ============ TESTES DE ACESSO (simular perfil) ============ -->
+        <section v-else-if="aba === 'acesso'" class="card conf-card">
+          <h3>Simular perfil de acesso</h3>
+          <p class="conf-desc">
+            Abra o portal como outro perfil — menus, botões e páginas passam a seguir as
+            permissões daquele perfil. A simulação muda apenas a interface (suas credenciais
+            continuam as mesmas), some ao recarregar a página e pode ser encerrada no banner
+            do topo a qualquer momento.
+          </p>
+          <div class="perfil-grid">
+            <button
+              v-for="p in PERFIS_TESTE"
+              :key="p.nivel"
+              type="button"
+              class="perfil-btn"
+              @click="simular(p.nivel, p.rotulo)"
+            >
+              <component :is="p.icone" :size="22" />
+              <strong>{{ p.rotulo }}</strong>
+              <span>{{ p.resumo }}</span>
+            </button>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* ---------- Testes de acesso ---------- */
+.perfil-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.perfil-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+
+.perfil-btn:hover {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.perfil-btn strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.perfil-btn span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .conf-grid {
   display: grid;
   grid-template-columns: 230px 1fr;
