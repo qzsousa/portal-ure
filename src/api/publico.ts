@@ -175,3 +175,58 @@ export interface NovoFeedbackPayload {
 export async function enviarFeedbackPublico(payload: NovoFeedbackPayload): Promise<void> {
   await publicoHttp.post('/feedback', payload)
 }
+
+/* ---------- Formulário dinâmico de abertura de chamado (público) ---------- */
+
+export interface FormularioOpcaoAlerta {
+  texto: string
+  tipo: 'info' | 'aviso'
+  /** true: exibe o alerta e BLOQUEIA a continuação do wizard. */
+  encerra?: boolean
+  /** true: anexo vira obrigatório na etapa final. */
+  exigeAnexo?: boolean
+  /** Botão de ação dentro do alerta (abre em nova aba). */
+  linkRotulo?: string
+  linkUrl?: string
+}
+
+export interface FormularioOpcao {
+  rotulo: string
+  alerta?: FormularioOpcaoAlerta
+}
+
+export type FormularioPerguntaTipo = 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+
+export interface FormularioPergunta {
+  id: string
+  categoriaId: string
+  rotulo: string
+  ajuda: string | null
+  tipo: FormularioPerguntaTipo
+  obrigatoria: boolean
+  ordem: number
+  ativa: boolean
+  /** Condicional: só exibe quando a pergunta referenciada... */
+  dependeDePerguntaId: string | null
+  /** ...tiver EXATAMENTE este rótulo de opção selecionado. */
+  dependeDeOpcao: string | null
+  /** [] salvo em OPCOES. */
+  opcoes: FormularioOpcao[]
+}
+
+export interface FormularioCategoria {
+  id: string
+  chave: string
+  nome: string
+  descricao: string | null
+  cor: string | null
+  ordem: number
+  ativa: boolean
+  perguntas?: FormularioPergunta[]
+}
+
+/** Formulário público de abertura de chamado (categorias + perguntas). */
+export async function getFormularioPublico(): Promise<FormularioCategoria[]> {
+  const { data } = await publicoHttp.get<{ data: FormularioCategoria[] }>('/formulario/publico')
+  return data.data
+}

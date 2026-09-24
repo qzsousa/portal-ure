@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Configurações do portal (somente Administrador).
- * Abas: Catálogo (categoria/marca/modelo), Status do parque, Logs do sistema, Integrações.
+ * Abas: Catálogo (categoria/marca/modelo), Status do parque, Formulário de chamados, Logs do sistema, Integrações.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { CheckCircle2, Loader2, Plus, ShieldCheck, Trash2, XCircle } from '@lucide/vue'
@@ -21,8 +21,9 @@ import { apiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 import { useUiStore } from '@/stores/ui'
 import { useErrorLogStore } from '@/stores/errorLog'
+import FormularioAdmin from '@/components/config/FormularioAdmin.vue'
 
-type Aba = 'catalogo' | 'status' | 'logs' | 'integracoes'
+type Aba = 'catalogo' | 'status' | 'formulario' | 'logs' | 'integracoes'
 
 const ui = useUiStore()
 const aba = ref<Aba>('catalogo')
@@ -30,6 +31,7 @@ const aba = ref<Aba>('catalogo')
 const ABAS: Array<{ id: Aba; rotulo: string }> = [
   { id: 'catalogo', rotulo: 'Catálogo de equipamentos' },
   { id: 'status', rotulo: 'Status do parque' },
+  { id: 'formulario', rotulo: 'Formulário de chamados' },
   { id: 'logs', rotulo: 'Logs do sistema' },
   { id: 'integracoes', rotulo: 'Integrações' },
 ]
@@ -282,6 +284,11 @@ onMounted(() => {
               <span class="status-qtd">{{ qtd }}</span>
             </div>
           </div>
+        </section>
+
+        <!-- ============ FORMULÁRIO DE CHAMADOS ============ -->
+        <section v-else-if="aba === 'formulario'" class="card conf-card">
+          <FormularioAdmin />
         </section>
 
         <!-- ============ LOGS ============ -->

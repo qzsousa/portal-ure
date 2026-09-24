@@ -1,24 +1,41 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { AxiosError } from 'axios'
+import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
+import type { AxiosError } from 'axios'
 import {
-  Check,
+  AlertTriangle,
+  AppWindow,
+  ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   Copy,
   FileText,
+  HelpCircle,
+  Info,
   Loader2,
+  Mail,
+  Monitor,
+  PackageSearch,
   Paperclip,
+  Phone,
   Search,
   Send,
+  Wifi,
 } from '@lucide/vue'
 import PublicoLayout from '@/components/publico/PublicoLayout.vue'
+import CatalogoEquipamentosModal from '@/components/publico/CatalogoEquipamentosModal.vue'
 import { useUiStore } from '@/stores/ui'
+import { apiError } from '@/utils/apiError'
 import {
   criarChamadoPublico,
+  getFormularioPublico,
   listarCategoriasEquipamento,
   listarEscolasPublico,
   listarMarcasEquipamento,
   listarModelosEquipamento,
+  type FormularioCategoria,
+  type FormularioOpcao,
+  type FormularioOpcaoAlerta,
+  type FormularioPergunta,
   type NovoChamadoPayload,
 } from '@/api/publico'
 
@@ -27,91 +44,250 @@ const ui = useUiStore()
 /** Opção especial "digitar manualmente" (mesma ideia do formulário antigo). */
 const OUTRO = '__OUTRO__'
 const TAMANHO_MAX_ANEXO = 10 * 1024 * 1024 // 10 MB
-/** Urgências — textos EXATOS do formulário público antigo. */
-const URGENCIAS = ['Baixa', 'Média', 'Alta']
+const URGENCIAS = ['Baixa', 'Média', 'Alta'] as const
+const CARGOS = [
+  'Diretor',
+  'Vice-diretor',
+  'Coordenador',
+  'Gerente de Organização Escolar',
+  'Agente de Organização Escolar',
+  'Professor',
+  'Estagiário (Proati)',
+] as const
+
+/* ==================== wizard / formulário ==================== */
+
+type Etapa = 0 | 1 | 2 | 3 // 0 = home, 1 = perguntas, 2 = identificação, 3 = sucesso
+const passo = ref<Etapa>(0)
+
+const formulario = ref<FormularioCategoria[]>([])
+const carregandoFormulario = ref(true)
+const erroFormulario = ref('')
+
+/** Respostas das perguntas dinâmicas, indexadas por pergunta.id. */
+const respostas = reactive<Record<string, string>>({})
+
+const categoriaSelecionada = ref<FormularioCategoria | null>(null)
+const corCategoria = computed(() => categoriaSelecionada.value?.cor?.trim() || 'var(--blue)')
+
+async function carregarFormulario() {
+  if (carregandoFormulario.value) return // guarda contra dupla chamada
+  carregandoFormulario.value = true
+  erroFormulario.value = ''
+  try {
+    formulario.value = await getFormularioPublico()
+  } catch (e) {
+    erroFormulario.value = apiError(e, 'Não foi possível carregar o formulário. Tente novamente.')
+  } finally {
+    carregandoFormulario.value = false
+  }
+}
+
+function selecionarCategoria(cat: FormularioCategoria) {
+  categoriaSelecionada.value = cat
+  Object.keys(respostas).forEach((k) => delete respostas[k])
+  Object.keys(erros).forEach((k) => delete erros[k])
+  eqCategoria.value = ''
+  eqMarca.value = ''
+  eqModelo.value = ''
+  eqMarcaCustom.value = ''
+  eqModeloCustom.value = ''
+  eqCategorias.value = []
+  eqMarcas.value = []
+  eqModelos.value = []
+  passo.value = 1
+  if (cat.chave === 'equipamento') void garantirCategoriasEquipamento()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function voltarHome() {
+  passo.value = 0
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+/** Visibilidade condicional: só exibe se a pergunta-pai tiver EXATAMENTE o rótulo esperado. */
+function perguntaVisivel(p: FormularioPergunta): boolean {
+  if (!p.dependeDePerguntaId) return true
+  return respostas[p.dependeDePerguntaId] === p.dependeDeOpcao
+}
+
+const perguntasVisiveis = computed<FormularioPergunta[]>(() => {
+  const cat = categoriaSelecionada.value
+  if (!cat) return []
+  return (cat.perguntas ?? [])
+    .filter((p) => p.ativa && perguntaVisivel(p))
+    .sort((a, b) => a.ordem - b.ordem)
+})
+
+function selecionada(p: FormularioPergunta): FormularioOpcao | null {
+  const atual = respostas[p.id]
+  if (p.tipo !== 'OPCOES' || !atual) return null
+  return p.opcoes.find((o) => o.rotulo === atual) ?? null
+}
+
+/** Alerta ativo da opção atualmente selecionada (some ao trocar de opção). */
+function alertaDaPergunta(p: FormularioPergunta): FormularioOpcaoAlerta | null {
+  return selecionada(p)?.alerta ?? null
+}
+
+/** Opções escolhidas (na ordem das perguntas) — usado no resumo e na composição do tipo. */
+const opcoesEscolhidas = computed<FormularioOpcao[]>(() => {
+  const cat = categoriaSelecionada.value
+  if (!cat) return []
+  return (cat.perguntas ?? [])
+    .filter((p) => perguntaVisivel(p))
+    .sort((a, b) => a.ordem - b.ordem)
+    .map((p) => selecionada(p))
+    .filter((o): o is FormularioOpcao => !!o)
+})
+
+const temEncerra = computed(() => opcoesEscolhidas.value.some((o) => o.alerta?.encerra))
+const exigeAnexo = computed(() => opcoesEscolhidas.value.some((o) => o.alerta?.exigeAnexo))
+
+/* ==================== cascata de equipamento (etapa perguntas) ==================== */
+
+const eqCategorias = ref<string[]>([])
+const eqMarcas = ref<string[]>([])
+const eqModelos = ref<string[]>([])
+const eqCategoria = ref('')
+const eqMarca = ref('')
+const eqModelo = ref('')
+const eqMarcaCustom = ref('')
+const eqModeloCustom = ref('')
+const carregandoEquip = ref(false)
+
+const ehEquipamento = computed(() => categoriaSelecionada.value?.chave === 'equipamento')
+
+async function garantirCategoriasEquipamento() {
+  if (eqCategorias.value.length || carregandoEquip.value) return
+  carregandoEquip.value = true
+  try {
+    eqCategorias.value = await listarCategoriasEquipamento()
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível carregar o catálogo de equipamentos.'))
+  } finally {
+    carregandoEquip.value = false
+  }
+}
+/** Cascata genérica: categoria → marcas. */
+async function carregarMarcas(
+  categoria: string,
+  marcasRef: typeof eqMarcas,
+  marcaRef: typeof eqMarca,
+  modelosRef: typeof eqModelos,
+) {
+  marcasRef.value = []
+  marcaRef.value = ''
+  modelosRef.value = []
+  if (!categoria) return
+  try {
+    marcasRef.value = await listarMarcasEquipamento(categoria)
+  } catch {
+    marcasRef.value = []
+  }
+}
+
+/** Cascata genérica: categoria + marca → modelos (modeloRef opcional). */
+async function carregarModelos(
+  categoria: string,
+  marca: string,
+  modelosRef: typeof eqModelos,
+  modeloRef?: typeof eqModelo,
+) {
+  modelosRef.value = []
+  if (modeloRef) modeloRef.value = ''
+  if (!categoria || !marca || marca === OUTRO) return
+  try {
+    modelosRef.value = await listarModelosEquipamento(categoria, marca)
+  } catch {
+    modelosRef.value = []
+  }
+}
+
+watch(eqCategoria, (c) => {
+  eqMarcaCustom.value = ''
+  eqModeloCustom.value = ''
+  void carregarMarcas(c, eqMarcas, eqMarca, eqModelos)
+})
+watch(eqMarca, (m) => {
+  eqModeloCustom.value = ''
+  void carregarModelos(eqCategoria.value, m, eqModelos, eqModelo)
+})
+
+/* ---------- equipamento selecionado ---------- */
+
+const equipamentoCompleto = computed(() => {
+  if (!eqCategoria.value) return false
+  if (!eqMarca.value) return false
+  if (eqMarca.value === OUTRO) return !!eqMarcaCustom.value.trim()
+  if (!eqModelo.value) return false
+  if (eqModelo.value === OUTRO) return !!eqModeloCustom.value.trim()
+  return true
+})
+
+const equipamentoDescricao = computed(() => {
+  if (!eqCategoria.value) return ''
+  const marca = eqMarca.value === OUTRO ? eqMarcaCustom.value.trim() : eqMarca.value
+  const modelo = eqModelo.value === OUTRO ? eqModeloCustom.value.trim() : eqModelo.value
+  return [eqCategoria.value, marca, modelo].filter(Boolean).join(' / ')
+})
+
+const resumoPills = computed<string[]>(() => {
+  const cat = categoriaSelecionada.value
+  if (!cat) return []
+  const pills = [cat.nome, ...opcoesEscolhidas.value.map((o) => o.rotulo)]
+  if (ehEquipamento.value && equipamentoDescricao.value) pills.push(equipamentoDescricao.value)
+  return pills
+})
+
+const podeAvancarPerguntas = computed(() => {
+  if (!categoriaSelecionada.value) return false
+  if (temEncerra.value) return false
+  for (const p of perguntasVisiveis.value) {
+    if (!p.obrigatoria) continue
+    const resp = (respostas[p.id] ?? '').trim()
+    // OPCOES: basta ter escolhido; TEXTO/TEXTO_LONGO: mínimo de 2 caracteres
+    if (p.tipo === 'OPCOES' ? !resp : resp.length < 2) return false
+  }
+  if (ehEquipamento.value && !equipamentoCompleto.value) return false
+  return true
+})
+
+function avancarParaIdentificacao() {
+  if (!podeAvancarPerguntas.value) return
+  passo.value = 2
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function voltarPerguntas() {
+  erroEnvio.value = ''
+  passo.value = 1
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+/* ==================== identificação ==================== */
 
 const escolas = ref<string[]>([])
-const categorias = ref<string[]>([])
-const marcas = ref<string[]>([])
-const modelos = ref<string[]>([])
-const carregandoListas = ref(true)
+const carregandoEscolas = ref(false)
 
-const form = reactive({
-  unidade: '',
-  solicitante: '',
-  funcao: '',
-  categoria: '',
-  marca: '',
-  modelo: '',
-  descricao: '',
-  urgencia: '',
+const ident = reactive({
+  nome: '',
+  cargo: '',
   email: '',
+  escola: '',
+  descricaoAdicional: '',
+  urgencia: '' as '' | 'Baixa' | 'Média' | 'Alta',
 })
-const customMarca = ref('')
-const customModelo = ref('')
 const anexo = ref<File | null>(null)
-
 const erros = reactive<Record<string, string>>({})
 const enviando = ref(false)
-const protocoloSucesso = ref('')
-const copiado = ref(false)
+const erroEnvio = ref('')
+const protocolo = ref('')
+const protocoloCopiado = ref(false)
 
-/* ---------- listas remotas ---------- */
-
-onMounted(async () => {
-  try {
-    const [esc, cat] = await Promise.all([listarEscolasPublico(), listarCategoriasEquipamento()])
-    escolas.value = esc
-    categorias.value = cat
-  } catch {
-    ui.error('Não foi possível carregar as listas. Recarregue a página.')
-  } finally {
-    carregandoListas.value = false
-  }
-})
-
-watch(
-  () => form.categoria,
-  async (categoria) => {
-    form.marca = ''
-    form.modelo = ''
-    customMarca.value = ''
-    customModelo.value = ''
-    marcas.value = []
-    modelos.value = []
-    if (!categoria) return
-    try {
-      marcas.value = await listarMarcasEquipamento(categoria)
-    } catch {
-      marcas.value = []
-    }
-  },
-)
-
-watch(
-  () => form.marca,
-  async (marca) => {
-    form.modelo = ''
-    customModelo.value = ''
-    modelos.value = []
-    if (!form.categoria || !marca || marca === OUTRO) return
-    try {
-      modelos.value = await listarModelosEquipamento(form.categoria, marca)
-    } catch {
-      modelos.value = []
-    }
-  },
-)
-
-/* ---------- tipo final ---------- */
-
-const tipoFinal = computed(() => {
-  const marca = form.marca === OUTRO ? customMarca.value.trim() : form.marca
-  const modelo = form.modelo === OUTRO ? customModelo.value.trim() : form.modelo
-  return [form.categoria, marca, modelo].filter(Boolean).join(' - ')
-})
-
-/* ---------- anexo ---------- */
+function emailValido(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+}
 
 function onAnexoChange(e: Event) {
   erros.anexo = ''
@@ -120,7 +296,7 @@ function onAnexoChange(e: Event) {
   if (file && file.size > TAMANHO_MAX_ANEXO) {
     anexo.value = null
     input.value = ''
-    erros.anexo = 'O arquivo é muito grande. O tamanho máximo é 10 MB.'
+    erros.anexo = 'Arquivo muito grande. O tamanho máximo é 10 MB.'
     return
   }
   anexo.value = file
@@ -132,338 +308,930 @@ function removerAnexo() {
   if (input) input.value = ''
 }
 
+/** Base64 SEM o prefixo data:...;base64, — como o backend espera. */
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onload = () => resolve(String(reader.result).split(',')[1])
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
 }
 
 function formatarTamanho(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
-/* ---------- validação / envio ---------- */
-
-function emailValido(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+function validarIdentificacao(): boolean {
+  Object.keys(erros).forEach((k) => delete erros[k])
+  if (!ident.nome.trim()) erros.nome = 'Informe o nome completo.'
+  if (!ident.cargo) erros.cargo = 'Selecione o cargo/função.'
+  if (!ident.email.trim()) erros.email = 'Informe o e-mail institucional.'
+  else if (!emailValido(ident.email.trim())) erros.email = 'Informe um e-mail válido (ex.: nome@educacao.sp.gov.br).'
+  if (!ident.escola) erros.escola = 'Selecione a escola/unidade.'
+  if (!ident.urgencia) erros.urgencia = 'Selecione a urgência.'
+  if (exigeAnexo.value && !anexo.value) erros.anexo = 'Anexe ao menos uma foto (obrigatório para esta opção).'
+  if (!descricaoFinal().trim()) erros.descricaoAdicional = 'Descreva brevemente o problema.'
+  return Object.keys(erros).length === 0
 }
 
-function validar(): boolean {
-  Object.keys(erros).forEach((k) => delete erros[k])
-  if (!form.unidade) erros.unidade = 'Selecione a unidade escolar.'
-  if (!form.solicitante.trim()) erros.solicitante = 'Informe o nome do solicitante.'
-  if (!form.categoria) erros.categoria = 'Selecione o tipo de problema.'
-  else if (form.marca === OUTRO && !customMarca.value.trim()) erros.marca = 'Digite a marca do equipamento.'
-  else if (form.modelo === OUTRO && !customModelo.value.trim()) erros.modelo = 'Digite o modelo do equipamento.'
-  if (!form.descricao.trim()) erros.descricao = 'Descreva o problema com o máximo de detalhes.'
-  if (!form.urgencia) erros.urgencia = 'Selecione a urgência.'
-  if (form.email.trim() && !emailValido(form.email.trim())) erros.email = 'Informe um e-mail válido (ex.: nome@educacao.sp.gov.br).'
-  return Object.keys(erros).length === 0
+/* ---------- composição do submit ---------- */
+
+function tipoFinal(): string {
+  const cat = categoriaSelecionada.value
+  if (!cat) return ''
+  const primeira = opcoesEscolhidas.value[0]?.rotulo
+  const base = primeira ? `${cat.nome} - ${primeira}` : cat.nome
+  return base.length > 100 ? base.slice(0, 100) : base
+}
+
+function descricaoFinal(): string {
+  const linhas: string[] = []
+  for (const p of perguntasVisiveis.value) {
+    const r = (respostas[p.id] ?? '').trim()
+    if (r) linhas.push(`[${p.rotulo}] ${r}`)
+  }
+  if (ehEquipamento.value && equipamentoDescricao.value) {
+    linhas.push(`[Equipamento] ${equipamentoDescricao.value}`)
+  }
+  const extra = ident.descricaoAdicional.trim()
+  if (extra) linhas.push(extra)
+  return linhas.join('\n')
 }
 
 async function enviar() {
   if (enviando.value) return
-  if (!validar()) return
-
+  erroEnvio.value = ''
+  if (!validarIdentificacao()) {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
   enviando.value = true
   try {
     const payload: NovoChamadoPayload = {
-      unidade: form.unidade,
-      solicitante: form.solicitante.trim(),
-      tipo: tipoFinal.value,
-      descricao: form.descricao.trim(),
-      urgencia: form.urgencia,
+      unidade: ident.escola,
+      solicitante: ident.nome.trim(),
+      funcao: ident.cargo,
+      tipo: tipoFinal(),
+      descricao: descricaoFinal(),
+      urgencia: ident.urgencia,
+      email: ident.email.trim(),
     }
-    if (form.funcao.trim()) payload.funcao = form.funcao.trim()
-    if (form.email.trim()) payload.email = form.email.trim()
     if (anexo.value) {
       payload.anexoBase64 = await fileToBase64(anexo.value)
       payload.anexoNome = anexo.value.name
       payload.anexoTipo = anexo.value.type
     }
-
     const chamado = await criarChamadoPublico(payload)
-    protocoloSucesso.value = chamado.protocolo
+    protocolo.value = chamado.protocolo
+    passo.value = 3
     window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch (e) {
-    const err = e as AxiosError<{ message?: string }>
-    if (err.response?.status === 413) {
-      ui.error('O anexo é muito grande para ser enviado. Tente um arquivo menor.')
-    } else {
-      ui.error(err.response?.data?.message || 'Não foi possível enviar o chamado. Tente novamente.')
-    }
+    const status = (e as AxiosError)?.response?.status
+    erroEnvio.value =
+      status === 413
+        ? 'O anexo é muito grande para ser enviado. Tente um arquivo menor.'
+        : apiError(e, 'Não foi possível enviar o chamado. Tente novamente.')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   } finally {
     enviando.value = false
   }
 }
 
+/** "Abrir outro chamado": volta à home com TODAS as respostas/dados limpos. */
+function novoChamado() {
+  protocolo.value = ''
+  protocoloCopiado.value = false
+  categoriaSelecionada.value = null
+  Object.keys(respostas).forEach((k) => delete respostas[k])
+  Object.keys(erros).forEach((k) => delete erros[k])
+  eqCategoria.value = ''
+  eqMarca.value = ''
+  eqModelo.value = ''
+  eqMarcaCustom.value = ''
+  eqModeloCustom.value = ''
+  eqCategorias.value = []
+  eqMarcas.value = []
+  eqModelos.value = []
+  ident.nome = ''
+  ident.cargo = ''
+  ident.email = ''
+  ident.escola = ''
+  ident.descricaoAdicional = ''
+  ident.urgencia = ''
+  removerAnexo()
+  erroEnvio.value = ''
+  voltarHome()
+}
+
 async function copiarProtocolo() {
+  await copiarTexto(protocolo.value)
+  protocoloCopiado.value = true
+  window.setTimeout(() => (protocoloCopiado.value = false), 2000)
+}
+/* ==================== catálogo (modal somente-leitura) ==================== */
+
+const catalogoAberto = ref(false)
+
+function abrirCatalogo() {
+  catalogoAberto.value = true
+}
+
+/* ==================== contato / helpers ==================== */
+
+const EMAIL_SETEC = 'lt3.setec@educacao.sp.gov.br'
+const emailCopiado = ref(false)
+
+/** Copia texto para a área de transferência (com fallback para navegadores antigos). */
+async function copiarTexto(texto: string) {
   try {
-    await navigator.clipboard.writeText(protocoloSucesso.value)
+    await navigator.clipboard.writeText(texto)
   } catch {
     const ta = document.createElement('textarea')
-    ta.value = protocoloSucesso.value
+    ta.value = texto
     document.body.appendChild(ta)
     ta.select()
     document.execCommand('copy')
     document.body.removeChild(ta)
   }
-  copiado.value = true
-  ui.success('Protocolo copiado!')
-  window.setTimeout(() => (copiado.value = false), 2500)
 }
 
-function novoChamado() {
-  protocoloSucesso.value = ''
-  form.unidade = ''
-  form.solicitante = ''
-  form.funcao = ''
-  form.categoria = ''
-  form.marca = ''
-  form.modelo = ''
-  form.descricao = ''
-  form.urgencia = ''
-  form.email = ''
-  customMarca.value = ''
-  customModelo.value = ''
-  anexo.value = null
-  Object.keys(erros).forEach((k) => delete erros[k])
+async function copiarEmail() {
+  await copiarTexto(EMAIL_SETEC)
+  emailCopiado.value = true
+  window.setTimeout(() => (emailCopiado.value = false), 2000)
 }
+
+function iconeCategoria(chave: string): Component {
+  const mapa: Record<string, Component> = {
+    rede: Wifi,
+    equipamento: Monitor,
+    sistemas: AppWindow,
+    email: Mail,
+  }
+  return mapa[chave] ?? HelpCircle
+}
+
+onMounted(() => {
+  void carregarFormulario()
+  carregandoEscolas.value = true
+  listarEscolasPublico()
+    .then((l) => (escolas.value = l))
+    .catch(() => {})
+    .finally(() => (carregandoEscolas.value = false))
+})
 </script>
 
 <template>
   <PublicoLayout>
-    <!-- ===== Sucesso ===== -->
-    <div v-if="protocoloSucesso" class="card sucesso">
-      <div class="selo"><CheckCircle2 :size="30" :stroke-width="2" /></div>
-      <h2>Chamado registrado!</h2>
-      <p class="sucesso-sub">Anote o número do protocolo — ele é o comprovante da sua solicitação:</p>
-      <div class="protocolo-box">
-        <strong class="protocolo-num">{{ protocoloSucesso }}</strong>
-        <button type="button" class="btn btn-outline btn-copiar" @click="copiarProtocolo">
-          <component :is="copiado ? Check : Copy" :size="15" />
-          {{ copiado ? 'Copiado!' : 'Copiar' }}
+    <div class="wiz-page">
+      <!-- ==================== ETAPA 0 — HOME ==================== -->
+      <template v-if="passo === 0">
+        <header class="home-head">
+          <p class="eyebrow">Abertura de Chamados — SETEC</p>
+          <h1>Como podemos ajudar?</h1>
+          <p class="home-sub">
+            Selecione o tipo de problema abaixo. O chamado será encaminhado automaticamente à equipe do SETEC.
+          </p>
+        </header>
+
+        <div v-if="carregandoFormulario" class="estado card">
+          <Loader2 :size="22" class="spin" />
+          <p>Carregando tipos de chamado...</p>
+        </div>
+
+        <div v-else-if="erroFormulario" class="aviso card">
+          <p>{{ erroFormulario }}</p>
+          <button type="button" class="btn btn-primary" @click="carregarFormulario">Tentar novamente</button>
+        </div>
+
+        <div v-else-if="!formulario.length" class="estado card">
+          <PackageSearch :size="22" />
+          <p>Nenhuma categoria disponível no momento.</p>
+        </div>
+
+        <!-- Grid de categorias -->
+        <div v-else class="home-grid">
+          <button
+            v-for="cat in formulario"
+            :key="cat.id"
+            type="button"
+            class="cat-card"
+            :style="{ borderLeftColor: cat.cor || 'var(--blue)' }"
+            @click="selecionarCategoria(cat)"
+          >
+            <span class="cat-icone" :style="{ color: cat.cor || 'var(--blue)' }">
+              <component :is="iconeCategoria(cat.chave)" :size="20" />
+            </span>
+            <strong class="cat-nome">{{ cat.nome }}</strong>
+            <span v-if="cat.descricao" class="cat-desc">{{ cat.descricao }}</span>
+            <span class="cat-link" :style="{ color: cat.cor || 'var(--blue)' }">
+              Abrir chamado <ArrowRight :size="13" />
+            </span>
+          </button>
+        </div>
+
+        <!-- Cartão de contato -->
+        <section class="card contato">
+          <h2><Phone :size="17" /> Fale com o SETEC</h2>
+          <p class="contato-nome">Jessica Moraes — Chefe de Seção SETEC · URE Leste 3</p>
+          <div class="contato-linhas">
+            <a class="contato-linha" href="tel:+551125237010">
+              <Phone :size="15" />
+              <span>(11) 2523-7010</span>
+              <span class="contato-acao">Ligar</span>
+            </a>
+            <div class="contato-linha">
+              <Mail :size="15" />
+              <span class="contato-email">{{ EMAIL_SETEC }}</span>
+              <button type="button" class="btn-copiar-email" @click="copiarEmail">
+                <Copy :size="13" />
+                {{ emailCopiado ? '✓ Copiado!' : 'Copiar e-mail' }}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Catálogo de equipamentos (somente leitura) -->
+        <button type="button" class="btn-ghost-full" @click="abrirCatalogo">
+          <PackageSearch :size="15" />
+          Ver catálogo de equipamentos
         </button>
-      </div>
-      <p class="sucesso-dica">A equipe de tecnologia (SETEC) foi notificada e vai atender o seu chamado.</p>
-      <div class="sucesso-acoes">
-        <RouterLink to="/consulta" class="btn btn-primary">
-          <Search :size="15" />
-          Acompanhar chamado
-        </RouterLink>
-        <button type="button" class="btn btn-outline" @click="novoChamado">Abrir outro chamado</button>
+
+        <CatalogoEquipamentosModal :aberto="catalogoAberto" @fechar="catalogoAberto = false" />
+      </template>
+      <!-- ==================== ETAPA 1 — PERGUNTAS ==================== -->
+      <template v-else-if="passo === 1 && categoriaSelecionada">
+        <header class="etapa-head">
+          <div class="etapa-topo">
+            <button type="button" class="btn-ghost" @click="voltarHome">
+              <ArrowLeft :size="14" />
+              Voltar
+            </button>
+            <span class="badge-cat" :style="{ background: corCategoria }">{{ categoriaSelecionada.nome }}</span>
+          </div>
+          <h1>{{ categoriaSelecionada.nome }}</h1>
+          <p class="etapa-sub">Responda as perguntas para detalhar o chamado.</p>
+        </header>
+
+        <div class="etapa-lista">
+          <section v-for="p in perguntasVisiveis" :key="p.id" class="card bloco">
+            <h3 class="bloco-titulo">
+              {{ p.rotulo }}
+              <span v-if="p.obrigatoria" class="req" aria-hidden="true">*</span>
+            </h3>
+            <p v-if="p.ajuda" class="bloco-ajuda">{{ p.ajuda }}</p>
+
+            <!-- OPCOES: rádio-cards -->
+            <div v-if="p.tipo === 'OPCOES'" class="opcoes" role="radiogroup" :aria-label="p.rotulo">
+              <button
+                v-for="op in p.opcoes"
+                :key="op.rotulo"
+                type="button"
+                class="opcao"
+                :class="{ sel: respostas[p.id] === op.rotulo }"
+                :style="{ '--cat-cor': corCategoria }"
+                role="radio"
+                :aria-checked="respostas[p.id] === op.rotulo"
+                @click="respostas[p.id] = op.rotulo"
+              >
+                <span class="opcao-radio" aria-hidden="true"></span>
+                <span class="opcao-texto">{{ op.rotulo }}</span>
+              </button>
+            </div>
+            <div v-if="p.tipo === 'OPCOES' && alertaDaPergunta(p)" class="alerta" :class="alertaDaPergunta(p)!.tipo">
+              <component :is="alertaDaPergunta(p)!.tipo === 'aviso' ? AlertTriangle : Info" :size="15" />
+              <div class="alerta-corpo">
+                <p>{{ alertaDaPergunta(p)!.texto }}</p>
+                <div v-if="alertaDaPergunta(p)!.linkUrl || alertaDaPergunta(p)!.encerra" class="alerta-acoes">
+                  <a
+                    v-if="alertaDaPergunta(p)!.linkUrl"
+                    class="alerta-link"
+                    :href="alertaDaPergunta(p)!.linkUrl"
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    {{ alertaDaPergunta(p)!.linkRotulo || 'Saiba mais' }}
+                  </a>
+                  <button
+                    v-if="alertaDaPergunta(p)!.encerra"
+                    type="button"
+                    class="btn btn-outline alerta-voltar"
+                    @click="voltarHome"
+                  >
+                    <ArrowLeft :size="13" />
+                    Voltar ao início
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- TEXTO -->
+            <input
+              v-else-if="p.tipo === 'TEXTO'"
+              :id="`p-${p.id}`"
+              v-model="respostas[p.id]"
+              class="input"
+              type="text"
+              placeholder="Digite sua resposta"
+              :aria-label="p.rotulo"
+            />
+
+            <!-- TEXTO_LONGO -->
+            <textarea
+              v-else
+              :id="`p-${p.id}`"
+              v-model="respostas[p.id]"
+              class="input textarea"
+              rows="4"
+              placeholder="Digite sua resposta"
+              :aria-label="p.rotulo"
+            ></textarea>
+          </section>
+
+          <!-- Cascata de equipamento (somente categoria 'equipamento') -->
+          <section v-if="ehEquipamento" class="card bloco">
+            <h3 class="bloco-titulo">Selecione o equipamento <span class="req" aria-hidden="true">*</span></h3>
+            <p class="bloco-ajuda">Escolha no catálogo ou use "Outro" para digitar manualmente.</p>
+            <div class="tripla">
+              <div class="field">
+                <label for="eq-categoria">Categoria</label>
+                <select id="eq-categoria" v-model="eqCategoria" class="select-input" :disabled="carregandoEquip">
+                  <option value="" disabled>— Selecione —</option>
+                  <option v-for="c in eqCategorias" :key="c" :value="c">{{ c }}</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="eq-marca">Marca</label>
+                <select id="eq-marca" v-model="eqMarca" class="select-input" :disabled="!eqCategoria">
+                  <option value="">— Selecione —</option>
+                  <option v-for="m in eqMarcas" :key="m" :value="m">{{ m }}</option>
+                  <option v-if="eqCategoria" :value="OUTRO">Outro (digitar manualmente)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="eq-modelo">Modelo</label>
+                <select
+                  id="eq-modelo"
+                  v-model="eqModelo"
+                  class="select-input"
+                  :disabled="!eqMarca || eqMarca === OUTRO"
+                >
+                  <option value="">— Selecione —</option>
+                  <option v-for="m in eqModelos" :key="m" :value="m">{{ m }}</option>
+                  <option v-if="eqMarca && eqMarca !== OUTRO" :value="OUTRO">Outro (digitar manualmente)</option>
+                </select>
+              </div>
+            </div>
+            <div v-if="eqMarca === OUTRO" class="dupla">
+              <div class="field">
+                <label for="eq-marca-custom">Qual é a marca? *</label>
+                <input id="eq-marca-custom" v-model="eqMarcaCustom" class="input" type="text" placeholder="Digite a marca" />
+              </div>
+              <div class="field">
+                <label for="eq-modelo-custom">Qual é o modelo? <span class="opcional">(opcional)</span></label>
+                <input id="eq-modelo-custom" v-model="eqModeloCustom" class="input" type="text" placeholder="Digite o modelo" />
+              </div>
+            </div>
+            <div v-else-if="eqModelo === OUTRO" class="field">
+              <label for="eq-modelo-custom2">Qual é o modelo? *</label>
+              <input id="eq-modelo-custom2" v-model="eqModeloCustom" class="input" type="text" placeholder="Digite o modelo" />
+            </div>
+            <p v-if="carregandoEquip" class="bloco-info">Carregando equipamentos...</p>
+            <p v-else-if="equipamentoDescricao" class="bloco-info">
+              <FileText :size="14" />
+              Equipamento selecionado: <strong>{{ equipamentoDescricao }}</strong>
+            </p>
+            <p v-else class="bloco-info neutro">
+              {{ eqCategorias.length }} equipamento(s) no catálogo. Complete a seleção acima.
+            </p>
+          </section>
+        </div>
+
+        <footer class="acoes-rodape">
+          <button type="button" class="btn btn-outline" @click="voltarHome">
+            <ArrowLeft :size="15" />
+            Voltar
+          </button>
+          <button
+            v-if="podeAvancarPerguntas"
+            type="button"
+            class="btn btn-continuar btn-grande"
+            :style="{ background: corCategoria }"
+            @click="avancarParaIdentificacao"
+          >
+            Continuar
+            <ArrowRight :size="15" />
+          </button>
+        </footer>
+      </template>
+      <!-- ==================== ETAPA 2 — IDENTIFICAÇÃO ==================== -->
+      <template v-else-if="passo === 2 && categoriaSelecionada">
+        <header class="etapa-head">
+          <div class="etapa-topo">
+            <button type="button" class="btn-ghost" @click="voltarPerguntas">
+              <ArrowLeft :size="14" />
+              Voltar
+            </button>
+            <span class="badge-cat" :style="{ background: corCategoria }">{{ categoriaSelecionada.nome }}</span>
+          </div>
+          <h1>Identificação</h1>
+          <p class="etapa-sub">Informe seus dados para concluir o chamado.</p>
+        </header>
+
+        <div class="resumo-pills" aria-label="Resumo do chamado">
+          <span v-for="pill in resumoPills" :key="pill" class="pill">{{ pill }}</span>
+        </div>
+
+        <form novalidate @submit.prevent="enviar">
+          <div v-if="erroEnvio" class="erro-envio" role="alert">
+            <AlertTriangle :size="16" />
+            <p>{{ erroEnvio }}</p>
+          </div>
+
+          <section class="card bloco">
+            <div class="field">
+              <label for="f-nome">Nome completo *</label>
+              <input
+                id="f-nome"
+                v-model="ident.nome"
+                class="input"
+                :class="{ inv: erros.nome }"
+                type="text"
+                placeholder="Ex.: Maria Silva"
+                :aria-invalid="!!erros.nome"
+              />
+              <p v-if="erros.nome" class="erro-campo">{{ erros.nome }}</p>
+            </div>
+            <div class="field">
+              <label for="f-cargo">Cargo/Função *</label>
+              <select id="f-cargo" v-model="ident.cargo" class="select-input" :class="{ inv: erros.cargo }" :aria-invalid="!!erros.cargo">
+                <option value="" disabled>— Selecione —</option>
+                <option v-for="c in CARGOS" :key="c" :value="c">{{ c }}</option>
+              </select>
+              <p v-if="erros.cargo" class="erro-campo">{{ erros.cargo }}</p>
+            </div>
+            <div class="field">
+              <label for="f-email">E-mail institucional *</label>
+              <input
+                id="f-email"
+                v-model="ident.email"
+                class="input"
+                :class="{ inv: erros.email }"
+                type="email"
+                placeholder="nome@educacao.sp.gov.br"
+                :aria-invalid="!!erros.email"
+              />
+              <p v-if="erros.email" class="erro-campo">{{ erros.email }}</p>
+            </div>
+            <div class="field">
+              <label for="f-escola">Escola/Unidade *</label>
+              <select id="f-escola" v-model="ident.escola" class="select-input" :class="{ inv: erros.escola }" :disabled="carregandoEscolas" :aria-invalid="!!erros.escola">
+                <option value="" disabled>— Selecione a escola —</option>
+                <option v-for="e in escolas" :key="e" :value="e">{{ e }}</option>
+              </select>
+              <p v-if="erros.escola" class="erro-campo">{{ erros.escola }}</p>
+            </div>
+          </section>
+
+          <section class="card bloco">
+            <div class="field">
+              <label for="f-desc">Descrição adicional <span class="opcional">(opcional)</span></label>
+              <textarea
+                id="f-desc"
+                v-model="ident.descricaoAdicional"
+                class="input textarea"
+                rows="4"
+                placeholder="Algo mais que a equipe deva saber?"
+              ></textarea>
+            </div>
+
+            <div class="field">
+              <span id="lbl-urgencia" class="label-urgencia">Urgência *</span>
+              <div class="urgencias" role="radiogroup" aria-labelledby="lbl-urgencia">
+                <button
+                  v-for="u in URGENCIAS"
+                  :key="u"
+                  type="button"
+                  class="urgencia"
+                  :class="[u.toLowerCase().replace('é', 'e'), { sel: ident.urgencia === u }]"
+                  role="radio"
+                  :aria-checked="ident.urgencia === u"
+                  @click="ident.urgencia = u"
+                >
+                  {{ u }}
+                  <small v-if="u === 'Alta'">(impacta o funcionamento)</small>
+                </button>
+              </div>
+              <p v-if="erros.urgencia" class="erro-campo">{{ erros.urgencia }}</p>
+            </div>
+
+            <div class="field">
+              <label for="anexo">
+                Anexo
+                <span v-if="exigeAnexo" class="anexo-req">(obrigatório — fotos dos locais)</span>
+                <span v-else class="opcional">(opcional — print ou foto do problema, máx. 10 MB)</span>
+              </label>
+              <input id="anexo" type="file" class="input arquivo" accept="image/*,.pdf" @change="onAnexoChange" />
+              <p v-if="erros.anexo" class="erro-campo">{{ erros.anexo }}</p>
+              <div v-if="anexo" class="anexo-info">
+                <Paperclip :size="14" />
+                <span>{{ anexo.name }} ({{ formatarTamanho(anexo.size) }})</span>
+                <button type="button" class="anexo-remover" @click="removerAnexo">remover</button>
+              </div>
+            </div>
+          </section>
+
+          <footer class="acoes-rodape">
+            <button type="button" class="btn btn-outline" @click="voltarPerguntas">
+              <ArrowLeft :size="15" />
+              Voltar
+            </button>
+            <button type="submit" class="btn btn-primary btn-grande" :disabled="enviando">
+              <Loader2 v-if="enviando" class="spin" :size="16" />
+              <Send v-else :size="16" />
+              {{ enviando ? 'Enviando...' : 'Enviar chamado' }}
+            </button>
+          </footer>
+        </form>
+      </template>
+
+      <!-- ==================== ETAPA 3 — SUCESSO ==================== -->
+      <div v-else-if="passo === 3" class="card sucesso">
+        <div class="selo"><CheckCircle2 :size="34" :stroke-width="2.2" /></div>
+        <h2>Chamado registrado!</h2>
+        <p class="sucesso-sub">Seu protocolo é:</p>
+        <div class="protocolo-linha">
+          <div class="protocolo-chip">{{ protocolo }}</div>
+          <button type="button" class="btn btn-outline btn-copiar" @click="copiarProtocolo">
+            <component :is="protocoloCopiado ? CheckCircle2 : Copy" :size="15" />
+            {{ protocoloCopiado ? 'Copiado!' : 'Copiar' }}
+          </button>
+        </div>
+        <p class="sucesso-dica">
+          Guarde este número. A equipe do SETEC foi notificada e entrará em contato com a sua unidade.
+        </p>
+        <div class="sucesso-acoes">
+          <RouterLink to="/consulta" class="btn btn-primary btn-grande">
+            <Search :size="15" />
+            Acompanhar chamado
+          </RouterLink>
+          <button type="button" class="btn btn-outline btn-grande" @click="novoChamado">Abrir outro chamado</button>
+        </div>
       </div>
     </div>
-
-    <!-- ===== Formulário ===== -->
-    <template v-else>
-      <header class="cabecalho">
-        <h1>Abrir um chamado</h1>
-        <p>
-          Relate o problema de tecnologia da sua escola. A equipe do SETEC (URE Leste 3) recebe o
-          chamado na hora e entra em contato.
-        </p>
-      </header>
-
-      <form class="card form" novalidate @submit.prevent="enviar">
-        <div class="field">
-          <label for="unidade">Unidade escolar *</label>
-          <select id="unidade" v-model="form.unidade" class="select-input" :disabled="carregandoListas">
-            <option value="" disabled>— Selecione a escola —</option>
-            <option v-for="e in escolas" :key="e" :value="e">{{ e }}</option>
-          </select>
-          <p v-if="erros.unidade" class="erro-campo">{{ erros.unidade }}</p>
-        </div>
-
-        <div class="dupla">
-          <div class="field">
-            <label for="solicitante">Seu nome completo *</label>
-            <input id="solicitante" v-model="form.solicitante" class="input" type="text" placeholder="Ex.: Maria Silva" />
-            <p v-if="erros.solicitante" class="erro-campo">{{ erros.solicitante }}</p>
-          </div>
-          <div class="field">
-            <label for="funcao">Função <span class="opcional">(opcional)</span></label>
-            <input id="funcao" v-model="form.funcao" class="input" type="text" placeholder="Ex.: Diretor, Secretário..." />
-          </div>
-        </div>
-
-        <fieldset class="grupo">
-          <legend>Tipo de problema *</legend>
-          <div class="tripla">
-            <div class="field">
-              <label for="categoria">Categoria *</label>
-              <select id="categoria" v-model="form.categoria" class="select-input" :disabled="carregandoListas">
-                <option value="" disabled>— Selecione —</option>
-                <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="marca">Marca <span class="opcional">(opcional)</span></label>
-              <select id="marca" v-model="form.marca" class="select-input" :disabled="!form.categoria">
-                <option value="">— Selecione —</option>
-                <option v-for="m in marcas" :key="m" :value="m">{{ m }}</option>
-                <option v-if="form.categoria" :value="OUTRO">Outra (digitar manualmente)</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="modelo">Modelo <span class="opcional">(opcional)</span></label>
-              <select id="modelo" v-model="form.modelo" class="select-input" :disabled="!form.marca || form.marca === OUTRO">
-                <option value="">— Selecione —</option>
-                <option v-for="m in modelos" :key="m" :value="m">{{ m }}</option>
-                <option v-if="form.marca && form.marca !== OUTRO" :value="OUTRO">Outro (digitar manualmente)</option>
-              </select>
-            </div>
-          </div>
-          <div v-if="form.marca === OUTRO" class="dupla">
-            <div class="field">
-              <label for="custom-marca">Qual é a marca? *</label>
-              <input id="custom-marca" v-model="customMarca" class="input" type="text" placeholder="Digite a marca" />
-              <p v-if="erros.marca" class="erro-campo">{{ erros.marca }}</p>
-            </div>
-            <div class="field">
-              <label for="custom-modelo">Qual é o modelo?</label>
-              <input id="custom-modelo" v-model="customModelo" class="input" type="text" placeholder="Digite o modelo (opcional)" />
-            </div>
-          </div>
-          <div v-else-if="form.modelo === OUTRO" class="field">
-            <label for="custom-modelo2">Qual é o modelo? *</label>
-            <input id="custom-modelo2" v-model="customModelo" class="input" type="text" placeholder="Digite o modelo" />
-            <p v-if="erros.modelo" class="erro-campo">{{ erros.modelo }}</p>
-          </div>
-          <p v-if="erros.categoria" class="erro-campo">{{ erros.categoria }}</p>
-          <p v-if="tipoFinal" class="tipo-preview">
-            <FileText :size="14" /> Será registrado como: <strong>{{ tipoFinal }}</strong>
-          </p>
-        </fieldset>
-
-        <div class="field">
-          <label for="descricao">Descrição do problema *</label>
-          <textarea
-            id="descricao"
-            v-model="form.descricao"
-            class="input textarea"
-            rows="5"
-            placeholder="Conte o que está acontecendo: onde é, desde quando, quantos equipamentos são afetados..."
-          ></textarea>
-          <p v-if="erros.descricao" class="erro-campo">{{ erros.descricao }}</p>
-        </div>
-
-        <div class="dupla">
-          <div class="field">
-            <label for="urgencia">Urgência *</label>
-            <select id="urgencia" v-model="form.urgencia" class="select-input">
-              <option value="" disabled>— Selecione a urgência —</option>
-              <option v-for="u in URGENCIAS" :key="u" :value="u">{{ u }}</option>
-            </select>
-            <p v-if="erros.urgencia" class="erro-campo">{{ erros.urgencia }}</p>
-          </div>
-          <div class="field">
-            <label for="email">E-mail <span class="opcional">(opcional)</span></label>
-            <input id="email" v-model="form.email" class="input" type="email" placeholder="nome@educacao.sp.gov.br" />
-            <p v-if="erros.email" class="erro-campo">{{ erros.email }}</p>
-            <p v-else class="dica">Se informado, você recebe o protocolo e atualizações por e-mail.</p>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="anexo">Anexo <span class="opcional">(opcional — foto ou print do problema, máx. 10 MB)</span></label>
-          <input id="anexo" type="file" class="input arquivo" accept="image/*,.pdf" @change="onAnexoChange" />
-          <p v-if="erros.anexo" class="erro-campo">{{ erros.anexo }}</p>
-          <div v-if="anexo" class="anexo-info">
-            <Paperclip :size="14" />
-            <span>{{ anexo.name }} ({{ formatarTamanho(anexo.size) }})</span>
-            <button type="button" class="anexo-remover" @click="removerAnexo">remover</button>
-          </div>
-        </div>
-
-        <button type="submit" class="btn btn-gold btn-enviar" :disabled="enviando || carregandoListas">
-          <Loader2 v-if="enviando" class="spin" :size="16" />
-          <Send v-else :size="16" />
-          {{ enviando ? 'Enviando...' : 'Enviar chamado' }}
-        </button>
-      </form>
-    </template>
   </PublicoLayout>
 </template>
 
 <style scoped>
-.cabecalho {
-  margin-bottom: 20px;
-}
-
-.cabecalho h1 {
-  color: #fff;
-  font-size: 26px;
-}
-
-.cabecalho p {
-  margin: 6px 0 0;
-  color: rgb(255 255 255 / 0.7);
-  font-size: 14px;
-  max-width: 60ch;
-}
-
-.form {
-  padding: 26px 26px 28px;
+.wiz-page {
+  max-width: 720px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.dupla {
+/* ---------- home ---------- */
+
+.eyebrow {
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blue);
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.home-head h1,
+.etapa-head h1 {
+  color: #fff;
+  font-size: 26px;
+}
+
+.home-sub,
+.etapa-sub {
+  color: rgb(255 255 255 / 0.7);
+  font-size: 14px;
+  margin: 6px 0 0;
+  max-width: 60ch;
+}
+
+.home-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 12px;
 }
 
-.tripla {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 14px;
-}
-
-@media (max-width: 640px) {
-  .dupla,
-  .tripla {
-    grid-template-columns: 1fr;
-  }
-}
-
-.grupo {
-  border: 1px solid var(--border);
+.cat-card {
+  text-align: left;
+  border-left: 4px solid var(--blue);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 14px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.cat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.cat-icone {
+  display: inline-flex;
+}
+
+.cat-nome {
+  font-size: 14.5px;
+}
+
+.cat-desc {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.cat-link {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--blue);
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.contato {
+  background: var(--sidebar-bg);
+  color: #fff;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.contato h2 {
+  color: #fff;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contato-nome {
   margin: 0;
+  font-size: 13px;
+  color: rgb(255 255 255 / 0.85);
+}
+
+.contato-linhas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.contato-linha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.contato-acao,
+.btn-copiar-email {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--brand-gold);
+  color: #221a02;
+  padding: 6px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-copiar-email:hover,
+.contato-linha:hover .contato-acao {
+  background: var(--brand-gold-soft);
+}
+
+.contato-email {
+  word-break: break-all;
+}
+
+.btn-ghost-full {
+  width: 100%;
+  border: 1.5px dashed rgb(255 255 255 / 0.35);
+  color: #fff;
+  background: transparent;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-ghost-full:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+/* ---------- etapas ---------- */
+
+.etapa-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.etapa-head {
+  margin-bottom: 2px;
+}
+
+.etapa-topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgb(255 255 255 / 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: rgb(255 255 255 / 0.06);
+}
+
+.btn-ghost:hover {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.badge-cat {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.bloco {
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.grupo legend {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: 0 6px;
+.bloco-titulo {
+  font-size: 14.5px;
 }
 
-.opcional {
-  font-weight: 400;
+.req {
+  color: var(--red);
+}
+
+.bloco-ajuda {
+  margin: 0;
   color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.opcao {
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--surface);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.opcao:hover {
+  border-color: var(--blue);
+  box-shadow: var(--shadow-sm);
+  background: var(--surface-muted);
+}
+
+.opcao-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  flex-shrink: 0;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.opcao.sel {
+  border-color: var(--cat-cor, var(--blue));
+  background: var(--surface-muted);
+  background: color-mix(in srgb, var(--cat-cor, var(--blue)) 8%, var(--surface));
+}
+
+.opcao.sel .opcao-radio {
+  border-color: var(--cat-cor, var(--blue));
+  background: var(--cat-cor, var(--blue));
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+
+.alerta {
+  margin-top: 10px;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 13px;
+}
+
+.alerta .alerta-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alerta p {
+  margin: 0;
+}
+
+.alerta.info {
+  background: var(--blue-soft);
+  color: #1e3a8a;
+}
+
+.alerta.aviso {
+  background: var(--yellow-soft);
+  color: #92400e;
+}
+
+.alerta-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.7);
+  font-weight: 700;
+}
+
+.alerta-acoes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.alerta-voltar {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.erro-envio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+
+.erro-envio p {
+  margin: 0;
 }
 
 .textarea {
   resize: vertical;
   min-height: 110px;
-}
-
-.dica {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-muted);
 }
 
 .erro-campo {
@@ -473,20 +1241,13 @@ function novoChamado() {
   color: var(--red);
 }
 
-.tipo-preview {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  color: var(--blue);
-  background: var(--blue-soft);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
+.inv {
+  border-color: var(--red) !important;
 }
 
-.arquivo {
-  padding: 8px 12px;
+.anexo-req {
+  color: var(--red);
+  font-weight: 700;
 }
 
 .anexo-info {
@@ -508,10 +1269,139 @@ function novoChamado() {
   text-decoration: underline;
 }
 
-.btn-enviar {
+.resumo-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.acoes-rodape {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-grande {
+  padding: 12px 20px;
+  min-width: 220px;
   justify-content: center;
-  padding: 13px;
   font-size: 15px;
+}
+
+.btn-continuar {
+  color: #fff;
+}
+
+.urgencias {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.urgencia {
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: transform 0.08s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.urgencia:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.urgencia.baixa.sel {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.urgencia.media.sel {
+  background: var(--yellow-soft);
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+
+.urgencia.alta.sel {
+  background: var(--red-soft);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.urgencia small {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.dupla {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.tripla {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 640px) {
+  .dupla,
+  .tripla,
+  .urgencias {
+    grid-template-columns: 1fr;
+  }
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- estados ---------- */
+
+.estado,
+.aviso {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+
+.aviso {
+  color: var(--red);
+  font-weight: 500;
+}
+
+.estado p,
+.aviso p {
+  margin: 0;
+}
+
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ---------- sucesso ---------- */
@@ -522,17 +1412,18 @@ function novoChamado() {
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 8px;
 }
 
 .selo {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   display: grid;
   place-items: center;
   background: var(--green-soft);
   color: var(--green);
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .sucesso h2 {
@@ -540,27 +1431,28 @@ function novoChamado() {
 }
 
 .sucesso-sub {
-  margin: 8px 0 0;
+  margin: 0;
   color: var(--text-secondary);
   font-size: 14px;
 }
 
-.protocolo-box {
+.protocolo-linha {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
   justify-content: center;
-  margin: 20px 0 12px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.protocolo-num {
-  background: var(--sidebar-bg);
-  color: var(--brand-gold);
+.protocolo-chip {
+  background: var(--blue-soft);
+  color: #1d4ed8;
+  font-weight: 800;
   font-size: 20px;
-  letter-spacing: 0.04em;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
+  letter-spacing: 0.03em;
+  padding: 10px 18px;
+  border-radius: 999px;
+  margin: 6px 0 2px;
 }
 
 .btn-copiar {
@@ -568,9 +1460,10 @@ function novoChamado() {
 }
 
 .sucesso-dica {
-  margin: 0;
+  margin: 0 0 14px;
   color: var(--text-muted);
   font-size: 13px;
+  max-width: 46ch;
 }
 
 .sucesso-acoes {
@@ -578,16 +1471,37 @@ function novoChamado() {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: center;
-  margin-top: 24px;
 }
 
-.spin {
-  animation: spin 0.9s linear infinite;
+.opcional {
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.label-urgencia {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.arquivo {
+  padding: 8px 12px;
+}
+
+.bloco-info {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+}
+
+.bloco-info.neutro {
+  color: var(--text-secondary);
+  background: var(--surface-muted);
 }
 </style>
