@@ -26,7 +26,7 @@ const auth = useAuthStore()
 const ehGestor = computed(() => auth.user?.nivel === 'GESTOR')
 /* Cards auxiliares (unidades, modelos, avaliação) são da matriz — a escola
  * (Gestor/Visualizador) não os vê; o Gestor tem a visão dividida abaixo. */
-const/cardsDaMatriz = computed(() => !['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
+const cardsDaMatriz = computed(() => !['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
 
 const eq = useEquipamentos(10)
 
