@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import {
   AlertTriangle,
+  Box,
   CheckCircle2,
   Monitor,
   Radar,
+  School,
   Wrench,
 } from '@lucide/vue'
 import DonutCard from '@/components/ui/DonutCard.vue'
@@ -13,7 +15,8 @@ import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { useEquipamentos } from '@/composables/useEquipamentos'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
-import { pct } from '@/api/sce'
+import { listarCatalogo, pct } from '@/api/sce'
+import { getFeedbackStats, type FeedbackStats } from '@/api/feedback'
 import { listarChamados, rotuloStatusChamado } from '@/api/chamados'
 import { formatDate } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
@@ -21,8 +24,53 @@ import type { Chamado } from '@/types'
 
 const auth = useAuthStore()
 const ehGestor = computed(() => auth.user?.nivel === 'GESTOR')
+/* Cards auxiliares (unidades, modelos, avaliação) são da matriz — a escola
+ * (Gestor/Visualizador) não os vê; o Gestor tem a visão dividida abaixo. */
+const/cardsDaMatriz = computed(() => !['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
 
 const eq = useEquipamentos(10)
+
+const totalModelos = ref<number | null>(null)
+const statsAvaliacao = ref<FeedbackStats | null>(null)
+
+const CORES_AVALIACAO: Record<string, string> = {
+  'Nota 1': '#dc2626',
+  'Nota 2': '#f59e0b',
+  'Nota 3': '#eab308',
+  'Nota 4': '#2563eb',
+  'Nota 5': '#16a34a',
+}
+
+const fatiasAvaliacao = computed(() => {
+  const porNota = statsAvaliacao.value?.avaliacoes.porNota || {}
+  return {
+    'Nota 1': porNota['1'] || 0,
+    'Nota 2': porNota['2'] || 0,
+    'Nota 3': porNota['3'] || 0,
+    'Nota 4': porNota['4'] || 0,
+    'Nota 5': porNota['5'] || 0,
+  }
+})
+
+const mediaAvaliacao = computed(() => {
+  const media = statsAvaliacao.value?.avaliacoes.media
+  return typeof media === 'number' ? `${media.toFixed(1)}/5` : '—'
+})
+
+/** Cargas auxiliares; falhas mantêm o último valor conhecido exibido. */
+async function carregarExtras() {
+  try {
+    const catalogo = await listarCatalogo()
+    totalModelos.value = catalogo.length
+  } catch {
+    /* silencioso */
+  }
+  try {
+    statsAvaliacao.value = await getFeedbackStats()
+  } catch {
+    /* silencioso */
+  }
+}
 
 /* ---------- Chamados (visão dividida do gestor) ---------- */
 const chamados = reactive({
@@ -55,12 +103,14 @@ const CORES_STATUS: Record<string, string> = {
 
 onMounted(async () => {
   await eq.carregar()
+  if (cardsDaMatriz.value) await carregarExtras()
   if (ehGestor.value) await carregarChamados()
 })
 
-/* Atualização automática do painel (equipamentos e, para gestor, chamados). */
+/* Atualização automática do painel (equipamentos, catálogo/avaliações e, para gestor, chamados). */
 useAutoRefresh(async () => {
   await eq.carregar(true)
+  if (cardsDaMatriz.value) await carregarExtras()
   if (ehGestor.value) await carregarChamados(true)
 }, AUTO_REFRESH_MS.normal)
 </script>
@@ -184,6 +234,30 @@ useAutoRefresh(async () => {
       <div v-if="eq.statsCarregadas.value" class="charts-grid">
         <DonutCard titulo="Equipamentos por Categoria" :fatias="eq.state.porCategoria" />
         <DonutCard titulo="Status dos Equipamentos" :fatias="eq.state.porStatus" :cores="CORES_STATUS" />
+      </div>
+
+      <!-- Cards auxiliares (somente matriz: ADMIN/TÉCNICO) -->
+      <div v-if="cardsDaMatriz" class="mini-grid">
+        <div class="mini card">
+          <div class="mini-icon blue"><School :size="22" /></div>
+          <div>
+            <strong>{{ eq.unidadesOpcoes.value.length }}</strong>
+            <span>Unidades com equipamentos</span>
+          </div>
+        </div>
+        <div class="mini card">
+          <div class="mini-icon yellow"><Box :size="22" /></div>
+          <div>
+            <strong>{{ totalModelos && totalModelos > 0 ? totalModelos : '—' }}</strong>
+            <span>Modelos cadastrados</span>
+          </div>
+        </div>
+        <DonutCard
+          titulo="Avaliação de atendimento"
+          :fatias="fatiasAvaliacao"
+          :cores="CORES_AVALIACAO"
+          :center-label="mediaAvaliacao"
+        />
       </div>
 
       <!-- Filtros -->
@@ -310,6 +384,40 @@ useAutoRefresh(async () => {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 16px;
 }
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+
+.mini {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+}
+
+.mini strong {
+  display: block;
+  font-size: 22px;
+}
+
+.mini span {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.mini-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+}
+
+.mini-icon.blue { background: var(--blue-soft); color: var(--blue); }
+.mini-icon.yellow { background: var(--yellow-soft); color: var(--yellow); }
 
 .table-card {
   overflow: hidden;
