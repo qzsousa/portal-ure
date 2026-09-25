@@ -86,10 +86,10 @@ const unidadesPreenchidas = computed(() =>
   unidades.value.map((u) => u.trim()).filter((u) => u.length > 0),
 )
 
-/** Opções de um select: esconde as unidades já escolhidas nas outras linhas. */
+/** Opções de um select: mostra a já escolhida na própria linha e esconde as de outras. */
 function opcoesUnidade(indice: number): string[] {
   const outras = unidades.value.filter((_, i) => i !== indice).map((u) => u.trim())
-  return escolas.value.filter((e) => outras.includes(e) || unidades.value[indice] === e)
+  return escolas.value.filter((e) => e === unidades.value[indice] || !outras.includes(e))
 }
 
 /** Ainda há escola livre para uma nova linha? */
