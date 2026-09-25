@@ -51,6 +51,8 @@ function consultarProtocolo() {
 
 /** Opção especial "digitar manualmente" (mesma ideia do formulário antigo). */
 const OUTRO = '__OUTRO__'
+/** Sentinela da pseudo-opção "Outro (descrever)" adicionada a toda pergunta OPCOES. */
+const OUTRO_PERGUNTA = '__OUTRO_PERGUNTA__'
 const TAMANHO_MAX_ANEXO = 10 * 1024 * 1024 // 10 MB
 const URGENCIAS = ['Baixa', 'Média', 'Alta'] as const
 const CARGOS = [
@@ -74,6 +76,16 @@ const erroFormulario = ref('')
 
 /** Respostas das perguntas dinâmicas, indexadas por pergunta.id. */
 const respostas = reactive<Record<string, string>>({})
+/** Texto livre quando a resposta é a pseudo-opção "Outro (descrever)". */
+const outrosTextos = reactive<Record<string, string>>({})
+
+/** Texto da resposta como aparece para o usuário (traduz a sentinela Outro). */
+function rotuloResposta(p: FormularioPergunta): string | null {
+  const atual = respostas[p.id]
+  if (p.tipo !== 'OPCOES' || !atual) return null
+  if (atual === OUTRO_PERGUNTA) return 'Outro'
+  return atual
+}
 
 const categoriaSelecionada = ref<FormularioCategoria | null>(null)
 const corCategoria = computed(() => categoriaSelecionada.value?.cor?.trim() || 'var(--blue)')
@@ -99,6 +111,7 @@ async function carregarFormulario() {
 function selecionarCategoria(cat: FormularioCategoria) {
   categoriaSelecionada.value = cat
   Object.keys(respostas).forEach((k) => delete respostas[k])
+  Object.keys(outrosTextos).forEach((k) => delete outrosTextos[k])
   Object.keys(erros).forEach((k) => delete erros[k])
   eqCategoria.value = ''
   eqMarca.value = ''
@@ -248,7 +261,12 @@ const equipamentoDescricao = computed(() => {
 const resumoPills = computed<string[]>(() => {
   const cat = categoriaSelecionada.value
   if (!cat) return []
-  const pills = [cat.nome, ...opcoesEscolhidas.value.map((o) => o.rotulo)]
+  const pills = [
+    cat.nome,
+    ...perguntasVisiveis.value
+      .map((p) => rotuloResposta(p))
+      .filter((r): r is string => !!r),
+  ]
   if (ehEquipamento.value && equipamentoDescricao.value) pills.push(equipamentoDescricao.value)
   return pills
 })
@@ -259,8 +277,13 @@ const podeAvancarPerguntas = computed(() => {
   for (const p of perguntasVisiveis.value) {
     if (!p.obrigatoria) continue
     const resp = (respostas[p.id] ?? '').trim()
-    // OPCOES: basta ter escolhido; TEXTO/TEXTO_LONGO: mínimo de 2 caracteres
-    if (p.tipo === 'OPCOES' ? !resp : resp.length < 2) return false
+    if (p.tipo === 'OPCOES') {
+      // "Outro (descrever)" exige o texto livre preenchido
+      if (!resp) return false
+      if (resp === OUTRO_PERGUNTA && (outrosTextos[p.id] ?? '').trim().length < 2) return false
+    } else if (resp.length < 2) {
+      return false
+    }
   }
   if (ehEquipamento.value && !equipamentoCompleto.value) return false
   return true
@@ -354,7 +377,7 @@ function validarIdentificacao(): boolean {
 function tipoFinal(): string {
   const cat = categoriaSelecionada.value
   if (!cat) return ''
-  const primeira = opcoesEscolhidas.value[0]?.rotulo
+  const primeira = perguntasVisiveis.value.map((p) => rotuloResposta(p)).find((r) => !!r)
   const base = primeira ? `${cat.nome} - ${primeira}` : cat.nome
   return base.length > 100 ? base.slice(0, 100) : base
 }
@@ -362,7 +385,8 @@ function tipoFinal(): string {
 function descricaoFinal(): string {
   const linhas: string[] = []
   for (const p of perguntasVisiveis.value) {
-    const r = (respostas[p.id] ?? '').trim()
+    const bruta = respostas[p.id] ?? ''
+    const r = bruta === OUTRO_PERGUNTA ? `Outro: ${(outrosTextos[p.id] ?? '').trim()}` : bruta.trim()
     if (r) linhas.push(`[${p.rotulo}] ${r}`)
   }
   if (ehEquipamento.value && equipamentoDescricao.value) {
@@ -418,6 +442,7 @@ function novoChamado() {
   protocoloCopiado.value = false
   categoriaSelecionada.value = null
   Object.keys(respostas).forEach((k) => delete respostas[k])
+  Object.keys(outrosTextos).forEach((k) => delete outrosTextos[k])
   Object.keys(erros).forEach((k) => delete erros[k])
   eqCategoria.value = ''
   eqMarca.value = ''
@@ -635,6 +660,31 @@ onMounted(() => {
                 <span class="opcao-radio" aria-hidden="true"></span>
                 <span class="opcao-texto">{{ op.rotulo }}</span>
               </button>
+
+              <!-- Toda pergunta de opções ganha "Outro (descrever)" -->
+              <button
+                type="button"
+                class="opcao"
+                :class="{ sel: respostas[p.id] === OUTRO_PERGUNTA }"
+                :style="{ '--cat-cor': corCategoria }"
+                role="radio"
+                :aria-checked="respostas[p.id] === OUTRO_PERGUNTA"
+                @click="respostas[p.id] = OUTRO_PERGUNTA"
+              >
+                <span class="opcao-radio" aria-hidden="true"></span>
+                <span class="opcao-texto">Outro (descrever)</span>
+              </button>
+
+              <div v-if="respostas[p.id] === OUTRO_PERGUNTA" class="outro-box">
+                <label :for="`outro-${p.id}`">Descreva o problema {{ p.obrigatoria ? '*' : '(opcional)' }}</label>
+                <textarea
+                  :id="`outro-${p.id}`"
+                  v-model="outrosTextos[p.id]"
+                  class="input textarea"
+                  rows="3"
+                  placeholder="Conte com suas palavras o que está acontecendo..."
+                ></textarea>
+              </div>
             </div>
             <div v-if="p.tipo === 'OPCOES' && alertaDaPergunta(p)" class="alerta" :class="alertaDaPergunta(p)!.tipo">
               <component :is="alertaDaPergunta(p)!.tipo === 'aviso' ? AlertTriangle : Info" :size="15" />
@@ -1175,6 +1225,21 @@ onMounted(() => {
   border-color: var(--cat-cor, var(--blue));
   background: var(--cat-cor, var(--blue));
   box-shadow: inset 0 0 0 3px var(--surface);
+}
+
+/* Caixa de texto livre da pseudo-opção "Outro (descrever)" */
+.outro-box {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.outro-box label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
 }
 
 .alerta {
