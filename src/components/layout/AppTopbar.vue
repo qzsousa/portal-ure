@@ -124,14 +124,68 @@ function fecharMenu(e: MouseEvent) {
   if (!alvo.closest('.notif-wrap')) notifAberto.value = false
 }
 
+/* ---------- Data e hora (atualiza sozinha) ---------- */
+const DIAS_SEMANA = [
+  'Domingo',
+  'Segunda-Feira',
+  'Terça-Feira',
+  'Quarta-Feira',
+  'Quinta-Feira',
+  'Sexta-Feira',
+  'Sábado',
+]
+const MESES = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+]
+
+const agora = ref(new Date())
+
+/** "25 de Setembro de 2026" */
+const dataExtenso = computed(() => {
+  const d = agora.value
+  return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`
+})
+
+/** "Sexta-Feira - 15:48" */
+const horaExtenso = computed(() => {
+  const d = agora.value
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${DIAS_SEMANA[d.getDay()]} - ${hh}:${mm}`
+})
+
+/* Só o minuto é exibido: reagenda a cada virada, em vez de redesenhar a cada segundo. */
+let relogio: ReturnType<typeof setTimeout> | null = null
+
+function iniciarRelogio() {
+  const tick = () => {
+    agora.value = new Date()
+    relogio = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50)
+  }
+  tick()
+}
+
 onMounted(() => {
   void buscarNotificacoes()
   poller = setInterval(() => void buscarNotificacoes(), NOTIF_POLL_MS)
   document.addEventListener('click', fecharMenu)
+  iniciarRelogio()
 })
 
 onUnmounted(() => {
   if (poller) clearInterval(poller)
+  if (relogio) clearTimeout(relogio)
   document.removeEventListener('click', fecharMenu)
 })
 </script>
@@ -154,6 +208,11 @@ onUnmounted(() => {
     </div>
 
     <div class="actions">
+      <div class="relogio">
+        <strong>{{ dataExtenso }}</strong>
+        <small>{{ horaExtenso }}</small>
+      </div>
+
       <div class="notif-wrap">
         <button class="icon-btn notif-btn" title="Notificações" type="button" @click="alternarNotificacoes">
           <Bell :size="19" />
@@ -278,6 +337,29 @@ onUnmounted(() => {
 .menu-toggle {
   display: none;
   flex-shrink: 0;
+}
+
+/* ---------- Data e hora ---------- */
+
+.relogio {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.relogio strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.relogio small {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .user-menu-wrap {
@@ -553,6 +635,11 @@ onUnmounted(() => {
 
   .menu-toggle {
     display: inline-grid;
+  }
+
+  /* Espaço apertado no mobile: o relógio sai para o sino e o nome não compete. */
+  .relogio {
+    display: none;
   }
 
   .notif-dropdown {
