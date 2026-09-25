@@ -119,6 +119,51 @@ useAutoRefresh(async () => {
   <div class="painel">
     <p v-if="eq.state.erro" class="erro card">{{ eq.state.erro }}</p>
 
+    <!-- KPIs de equipamentos (todos os perfis) -->
+    <div class="stats-grid">
+      <StatCard label="Equipamentos cadastrados" :value="eq.stats.value.total || '—'" tone="blue">
+        <Monitor :size="22" />
+      </StatCard>
+      <StatCard
+        label="Disponíveis"
+        :value="eq.stats.value.disponiveis"
+        :detail="pct(eq.stats.value.disponiveis, eq.stats.value.total)"
+        tone="green"
+      >
+        <CheckCircle2 :size="22" />
+      </StatCard>
+      <StatCard
+        label="Em manutenção"
+        :value="eq.stats.value.emManutencao"
+        :detail="pct(eq.stats.value.emManutencao, eq.stats.value.total)"
+        tone="yellow"
+      >
+        <Wrench :size="22" />
+      </StatCard>
+      <StatCard
+        label="Quebrados"
+        :value="eq.stats.value.quebrados"
+        :detail="pct(eq.stats.value.quebrados, eq.stats.value.total)"
+        tone="red"
+      >
+        <AlertTriangle :size="22" />
+      </StatCard>
+      <StatCard
+        label="Extraviados"
+        :value="eq.stats.value.extraviados"
+        :detail="pct(eq.stats.value.extraviados, eq.stats.value.total)"
+        tone="slate"
+      >
+        <Radar :size="22" />
+      </StatCard>
+    </div>
+
+    <!-- Gráficos de equipamentos (todos os perfis) -->
+    <div v-if="eq.statsCarregadas.value" class="charts-grid">
+      <DonutCard titulo="Equipamentos por Categoria" :fatias="eq.state.porCategoria" />
+      <DonutCard titulo="Status dos Equipamentos" :fatias="eq.state.porStatus" :cores="CORES_STATUS" />
+    </div>
+
     <!-- Visão dividida do GESTOR: equipamentos | chamados -->
     <div v-if="ehGestor" class="split-grid">
       <div class="card table-card">
@@ -191,51 +236,6 @@ useAutoRefresh(async () => {
 
     <!-- Painel completo (demais perfis) -->
     <template v-else>
-      <!-- KPIs -->
-      <div class="stats-grid">
-        <StatCard label="Equipamentos cadastrados" :value="eq.stats.value.total || '—'" tone="blue">
-          <Monitor :size="22" />
-        </StatCard>
-        <StatCard
-          label="Disponíveis"
-          :value="eq.stats.value.disponiveis"
-          :detail="pct(eq.stats.value.disponiveis, eq.stats.value.total)"
-          tone="green"
-        >
-          <CheckCircle2 :size="22" />
-        </StatCard>
-        <StatCard
-          label="Em manutenção"
-          :value="eq.stats.value.emManutencao"
-          :detail="pct(eq.stats.value.emManutencao, eq.stats.value.total)"
-          tone="yellow"
-        >
-          <Wrench :size="22" />
-        </StatCard>
-        <StatCard
-          label="Quebrados"
-          :value="eq.stats.value.quebrados"
-          :detail="pct(eq.stats.value.quebrados, eq.stats.value.total)"
-          tone="red"
-        >
-          <AlertTriangle :size="22" />
-        </StatCard>
-        <StatCard
-          label="Extraviados"
-          :value="eq.stats.value.extraviados"
-          :detail="pct(eq.stats.value.extraviados, eq.stats.value.total)"
-          tone="slate"
-        >
-          <Radar :size="22" />
-        </StatCard>
-      </div>
-
-      <!-- Gráficos -->
-      <div v-if="eq.statsCarregadas.value" class="charts-grid">
-        <DonutCard titulo="Equipamentos por Categoria" :fatias="eq.state.porCategoria" />
-        <DonutCard titulo="Status dos Equipamentos" :fatias="eq.state.porStatus" :cores="CORES_STATUS" />
-      </div>
-
       <!-- Cards auxiliares (somente matriz: ADMIN/TÉCNICO) -->
       <div v-if="cardsDaMatriz" class="mini-grid">
         <div class="mini card">
