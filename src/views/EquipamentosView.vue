@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { computed } from 'vue'
-import { Download, FileText, Pencil, Plus, Trash2, Search } from '@lucide/vue'
+import { Download, Eye, FileText, Pencil, Plus, Trash2, Search } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
@@ -21,8 +21,24 @@ const eq = useEquipamentos(10)
 const ui = useUiStore()
 const auth = useAuthStore()
 
-const podeGerenciar = computed(() => ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || ''))
+/**
+ * Escola FILHA: o painel é compartilhado com a MÃE, mas é somente leitura.
+ * O SCE bloqueia a mesma coisa na API — aqui os botões nem aparecem.
+ */
+const somenteLeitura = computed(() => auth.somenteLeituraEquipamentos)
+const podeGerenciar = computed(
+  () => !somenteLeitura.value && ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || ''),
+)
+const podeCadastrar = computed(() => !somenteLeitura.value)
 
+/** Nome da escola irmã com quem o painel é compartilhado (só para o aviso). */
+const irmaDoGrupo = computed(() => {
+  const u = auth.user
+  if (!u?.grupo || !u.grupo.includes('/')) return ''
+  const partes = u.grupo.split('/').map((s) => s.trim()).filter(Boolean)
+  if (partes.length < 2) return ''
+  return u.papelUnidade === 'FILHA' ? partes[0] : partes.slice(1).join(' / ')
+})
 const detalheAberto = ref(false)
 const detalheItem = ref<Equipamento | null>(null)
 const historico = ref<HistoricoItem[]>([])
@@ -156,7 +172,7 @@ useAutoRefresh(async () => {
         />
       </div>
       <div class="toolbar-actions">
-        <button class="btn btn-primary" type="button" @click="abrirCriar">
+        <button v-if="podeCadastrar" class="btn btn-primary" type="button" @click="abrirCriar">
           <Plus :size="16" />
           Adicionar equipamento
         </button>
@@ -180,6 +196,16 @@ useAutoRefresh(async () => {
     </div>
 
     <p v-if="eq.state.erro" class="erro card">{{ eq.state.erro }}</p>
+
+    <!-- Escola FILHA: o parque é da MÃE, compartilhado no mesmo prédio -->
+    <p v-if="somenteLeitura" class="aviso-leitura card">
+      <Eye :size="16" />
+      <span>
+        Equipamentos compartilhados com {{ irmaDoGrupo || 'a escola principal do grupo' }} — sua unidade
+        tem acesso <strong>somente de visualização</strong>. Para cadastrar, alterar ou remover, fale com a
+        escola principal.
+      </span>
+    </p>
 
     <!-- Gráfico compacto: quantidade por categoria; clique abre os modelos -->
     <GraficoCategorias
@@ -229,7 +255,9 @@ useAutoRefresh(async () => {
                 <RowActions
                   :itens="[
                     { rotulo: 'Ver detalhes e histórico', acao: () => abrirDetalhe(item) },
-                    { rotulo: 'Editar', icone: Pencil, acao: () => abrirEditar(item) },
+                    ...(!somenteLeitura
+                      ? [{ rotulo: 'Editar', icone: Pencil, acao: () => abrirEditar(item) }]
+                      : []),
                     ...(podeGerenciar
                       ? [{ rotulo: 'Remover', icone: Trash2, perigo: true, acao: () => confirmarRemover(item) }]
                       : []),
@@ -285,9 +313,9 @@ useAutoRefresh(async () => {
       </div>
     </BaseModal>
 
-    <!-- Modal criar/editar -->
+    <!-- Modal criar/editar (escola FILHA nunca chega aqui: os botões não existem) -->
     <EquipamentoFormModal
-      :aberto="formAberto"
+      :aberto="formAberto && !somenteLeitura"
       :item="formItem"
       @fechar="formAberto = false"
       @salvo="aposSalvar"
@@ -347,6 +375,24 @@ useAutoRefresh(async () => {
   padding: 14px 18px;
   color: var(--red);
   font-weight: 500;
+}
+
+.aviso-leitura {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--blue-soft);
+  border-color: var(--blue-soft);
+}
+
+.aviso-leitura :deep(svg) {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--blue);
 }
 
 .table-card {

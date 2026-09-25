@@ -9,12 +9,21 @@
 
 export type Nivel = 'ADMIN' | 'TECNICO' | 'GESTOR' | 'VISUALIZADOR'
 
+/**
+ * Papel no grupo de escolas irmãs (mesmo prédio). As duas compartilham o painel
+ * de equipamentos no SCE, mas a FILHA tem acesso somente de visualização.
+ */
+export type PapelUnidade = 'MAE' | 'FILHA'
+
 export interface User {
   id: string
   email: string
   nome: string
   nivel: Nivel
   filial: string
+  /** Nome composto do grupo ("E.E. A / E.E. B"); igual a `filial` quando a unidade está sozinha. */
+  grupo?: string
+  papelUnidade?: PapelUnidade | null
   status?: string
   primeiroLogin?: boolean
 }

@@ -14,6 +14,13 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => user.value?.nivel === 'ADMIN')
   const mustChangePassword = computed(() => user.value?.primeiroLogin === true)
 
+  /**
+   * Escola FILHA (irmã que divide o prédio com a MÃE): o painel de equipamentos
+   * é compartilhado, mas ela só visualiza — não cadastra, não edita e não
+   * remove. O SCE aplica a mesma regra na API (usuarios.papel_unidade).
+   */
+  const somenteLeituraEquipamentos = computed(() => user.value?.papelUnidade === 'FILHA')
+
   /*
    * Simulação de perfil (abas Configurações → Testes de acesso).
    * Troca APENAS o `user.nivel` na memória: menus, guards de rota e botões
@@ -30,6 +37,8 @@ export const useAuthStore = defineStore('auth', () => {
     if (!user.value) return
     if (nivelOriginal.value === null) nivelOriginal.value = user.value.nivel
     simulacao.value = nivel
+    // A simulação troca o perfil, mas a escola (MÃE/FILHA) é real: uma FILHA
+    // continua somente leitura mesmo "simulando" um perfil com mais poder.
     user.value = { ...user.value, nivel }
   }
 
@@ -145,6 +154,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     mustChangePassword,
+    somenteLeituraEquipamentos,
     simulando,
     nivelSimulado,
     simularComo,

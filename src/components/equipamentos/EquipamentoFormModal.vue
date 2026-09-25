@@ -22,6 +22,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { Equipamento } from '@/types'
 
+/** Escola FILHA: só visualiza o parque compartilhado com a MÃE. */
+const somenteLeitura = computed(() => auth.somenteLeituraEquipamentos)
+
+const MODO_LEITURA_MSG =
+  'Sua unidade tem acesso somente de visualização aos equipamentos compartilhados com a escola principal.'
+
 const props = defineProps<{
   aberto: boolean
   item: Equipamento | null // null = criar
@@ -145,6 +151,10 @@ function validar(): string | null {
 }
 
 async function salvar() {
+  if (somenteLeitura.value) {
+    erroLocal.value = MODO_LEITURA_MSG
+    return
+  }
   const problema = validar()
   if (problema) {
     erroLocal.value = problema
@@ -329,8 +339,16 @@ onMounted(async () => {
     <p v-if="erroLocal" class="erro-form">{{ erroLocal }}</p>
 
     <template #footer>
-      <button class="btn btn-outline" type="button" @click="emit('fechar')">Cancelar</button>
-      <button class="btn btn-primary" type="button" :disabled="salvando" @click="salvar">
+      <button class="btn btn-outline" type="button" @click="emit('fechar')">
+        {{ somenteLeitura ? 'Fechar' : 'Cancelar' }}
+      </button>
+      <button
+        v-if="!somenteLeitura"
+        class="btn btn-primary"
+        type="button"
+        :disabled="salvando"
+        @click="salvar"
+      >
         <Loader2 v-if="salvando" class="spin" :size="16" />
         {{ editando ? 'Salvar alterações' : 'Cadastrar equipamento' }}
       </button>
