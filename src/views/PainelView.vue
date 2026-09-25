@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, type Component } from 'vue'
+import { RouterLink } from 'vue-router'
 import {
   AlertTriangle,
+  BookOpen,
   Box,
   CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Headset,
+  MessageCircle,
   Monitor,
   Radar,
   School,
@@ -22,11 +28,40 @@ import { formatDate } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import type { Chamado } from '@/types'
 
+/** Contato do SEINTEC (LTE 3) — item "Fale com o SEINTEC" do Acesso Rápido. */
+const CONTATO_SEINTEC = 'lt3.seintec@educacao.sp.gov.br'
+
 const auth = useAuthStore()
 const ehGestor = computed(() => auth.user?.nivel === 'GESTOR')
+const ehEscola = computed(() => ['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
 /* Cards auxiliares (unidades, modelos, avaliação) são da matriz — a escola
  * (Gestor/Visualizador) não os vê; o Gestor tem a visão dividida abaixo. */
 const cardsDaMatriz = computed(() => !['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
+
+/* Atalhos do menu de Acesso Rápido (só escola). `externo: true` abre em nova aba. */
+interface AtalhoRapido {
+  rotulo: string
+  icone: Component
+  para: string
+  externo?: boolean
+}
+
+const atalhosRapidos: AtalhoRapido[] = [
+  { rotulo: 'Meus Equipamentos', icone: Monitor, para: '/equipamentos' },
+  { rotulo: 'Meus Chamados', icone: AlertTriangle, para: '/chamados' },
+  { rotulo: 'Guias e Manuais', icone: BookOpen, para: '/tutoriais' },
+  {
+    rotulo: 'Fale com o SEINTEC',
+    icone: MessageCircle,
+    para: `mailto:${CONTATO_SEINTEC}`,
+    externo: true,
+  },
+]
+
+/** Props do `<component>` do atalho: `to` para rotas internas, `href` para o e-mail. */
+function propsDoLink(a: AtalhoRapido) {
+  return a.externo ? { href: a.para, target: '_blank', rel: 'noopener' } : { to: a.para }
+}
 
 const eq = useEquipamentos(10)
 
@@ -119,6 +154,39 @@ useAutoRefresh(async () => {
   <div class="painel">
     <p v-if="eq.state.erro" class="erro card">{{ eq.state.erro }}</p>
 
+    <!-- Acesso Rápido (escola: Gestor e Visualizador) -->
+    <template v-if="ehEscola">
+      <!-- Call-to-action: abrir novo chamado -->
+      <a class="cta-rapido" href="/chamado/novo" target="_blank" rel="noopener">
+        <span class="cta-icone"><Headset :size="26" /></span>
+        <span class="cta-texto">
+          <strong>+ Abrir Novo Chamado</strong>
+          <small>
+            Solicite suporte para manutenção, dúvidas ou necessidades de equipamentos.
+          </small>
+        </span>
+      </a>
+
+      <!-- Menu de atalhos -->
+      <div class="acesso-rapido card">
+        <h3 class="acesso-titulo">Acesso Rápido</h3>
+        <ul class="acesso-lista">
+          <li v-for="atalho in atalhosRapidos" :key="atalho.rotulo">
+            <!-- Rotas internas usam RouterLink (navegação SPA); o e-mail usa <a> -->
+            <component
+              :is="atalho.externo ? 'a' : RouterLink"
+              v-bind="propsDoLink(atalho)"
+              class="acesso-item"
+            >
+              <span class="acesso-item-icone"><component :is="atalho.icone" :size="18" /></span>
+              <span class="acesso-item-texto">{{ atalho.rotulo }}</span>
+              <ChevronRight class="acesso-item-seta" :size="18" />
+            </component>
+          </li>
+        </ul>
+      </div>
+    </template>
+
     <!-- KPIs de equipamentos (todos os perfis) -->
     <div class="stats-grid">
       <StatCard label="Equipamentos cadastrados" :value="eq.stats.value.total || '—'" tone="blue">
@@ -168,7 +236,7 @@ useAutoRefresh(async () => {
     <div v-if="ehGestor" class="split-grid">
       <div class="card table-card">
         <div class="table-header">
-          <h3>Equipamentos</h3>
+          <h3 class="com-icone"><Monitor :size="18" /> Equipamentos</h3>
           <RouterLink class="btn btn-primary" to="/equipamentos">Ver todos</RouterLink>
         </div>
         <div class="table-wrap">
@@ -202,7 +270,7 @@ useAutoRefresh(async () => {
 
       <div class="card table-card">
         <div class="table-header">
-          <h3>Chamados</h3>
+          <h3 class="com-icone"><ClipboardList :size="18" /> Chamados</h3>
           <RouterLink class="btn btn-primary" to="/chamados">Ver todos</RouterLink>
         </div>
         <div class="table-wrap">
@@ -371,6 +439,120 @@ useAutoRefresh(async () => {
   padding: 14px 18px;
   color: var(--red);
   font-weight: 500;
+}
+
+/* ---------- Acesso Rápido (escola) ---------- */
+
+.cta-rapido {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 24px;
+  background: #007bff;
+  border-radius: var(--radius-lg);
+  color: #fff;
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.cta-rapido:hover {
+  background: #0069d9;
+  transform: translateY(-1px);
+}
+
+.cta-icone {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #0056b3;
+  color: #fff;
+}
+
+.cta-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cta-texto strong {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.cta-texto small {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.4;
+}
+
+.acesso-rapido {
+  padding: 18px;
+}
+
+.acesso-titulo {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0056b3;
+  margin-bottom: 12px;
+}
+
+.acesso-lista {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.acesso-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f1f3f5;
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.acesso-item:hover {
+  background: #e6e9ec;
+}
+
+.acesso-item-icone {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: #007bff;
+}
+
+.acesso-item-texto {
+  flex: 1;
+  min-width: 0;
+}
+
+.acesso-item-seta {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+/* Título de card com ícone (metades do gestor) */
+.com-icone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.com-icone svg {
+  color: var(--blue);
 }
 
 .stats-grid {
