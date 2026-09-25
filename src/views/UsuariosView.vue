@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { apiError } from '@/utils/apiError'
-import { KeyRound, Pencil, Search, UserPlus, UserX } from '@lucide/vue'
+import { KeyRound, Pencil, Plus, Search, UserPlus, UserX, X } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
@@ -30,6 +30,7 @@ const perfisDisponiveis = computed(() =>
   isAdmin.value
     ? [
         { valor: 'ADMIN' as const, rotulo: 'Administrador' },
+        { valor: 'TECNICO' as const, rotulo: 'Técnico' },
         { valor: 'GESTOR' as const, rotulo: 'Gestor' },
         { valor: 'VISUALIZADOR' as const, rotulo: 'Visualizador' },
       ]
@@ -73,6 +74,52 @@ const editando = ref<User | null>(null)
 const salvando = ref(false)
 const form = reactive({ nome: '', email: '', nivel: 'GESTOR' as Nivel, filial: '', status: 'ATIVO' as 'ATIVO' | 'INATIVO' })
 
+/**
+ * Unidades do técnico: uma linha por select (o técnico atende N unidades).
+ * O backend guarda a lista em um único texto separado por vírgula
+ * (mesmo formato lido pelo SCE em `sessaoTemAcessoAUnidade`).
+ */
+const unidades = ref<string[]>([''])
+
+/** Unidades escolhidas (sem linhas em branco). */
+const unidadesPreenchidas = computed(() =>
+  unidades.value.map((u) => u.trim()).filter((u) => u.length > 0),
+)
+
+/** Opções de um select: esconde as unidades já escolhidas nas outras linhas. */
+function opcoesUnidade(indice: number): string[] {
+  const outras = unidades.value.filter((_, i) => i !== indice).map((u) => u.trim())
+  return escolas.value.filter((e) => outras.includes(e) || unidades.value[indice] === e)
+}
+
+/** Ainda há escola livre para uma nova linha? */
+const temUnidadeDisponivel = computed(
+  () => escolas.value.some((e) => !unidadesPreenchidas.value.includes(e)),
+)
+
+function adicionarUnidade() {
+  unidades.value.push('')
+}
+
+function removerUnidade(indice: number) {
+  if (unidades.value.length <= 1) return
+  unidades.value.splice(indice, 1)
+}
+
+/** Valor enviado ao backend: técnico → lista de unidades; outros → filial única. */
+function filialDoFormulario(): string {
+  if (form.nivel === 'ADMIN') return 'URE Leste 3'
+  if (form.nivel === 'TECNICO') return unidadesPreenchidas.value.join(', ')
+  return form.filial
+}
+
+/** Campo de unidade é obrigatório para todo perfil, exceto ADMIN. */
+const unidadePreenchida = computed(() => {
+  if (form.nivel === 'ADMIN') return true
+  if (form.nivel === 'TECNICO') return unidadesPreenchidas.value.length > 0
+  return !!form.filial
+})
+
 /** Senha temporária exibida após criar usuário / gerar nova senha */
 const senhaTempModal = ref<{ email: string; senha: string } | null>(null)
 
@@ -83,6 +130,7 @@ function abrirCriar() {
   form.nivel = isGestor.value ? 'VISUALIZADOR' : 'GESTOR'
   form.filial = isGestor.value ? auth.user?.filial || '' : ''
   form.status = 'ATIVO'
+  unidades.value = ['']
   modalAberto.value = true
 }
 
@@ -90,10 +138,17 @@ function abrirEditar(u: User) {
   editando.value = u
   form.nome = u.nome
   form.email = u.email
-  form.nivel = u.nivel === 'TECNICO' ? 'TECNICO' : u.nivel
+  form.nivel = u.nivel
   form.filial = u.filial
-  form.status = (u.status === 'ATIVO' ? 'ATIVO' : 'INATIVO')
+  form.status = u.status === 'ATIVO' ? 'ATIVO' : 'INATIVO'
+  unidades.value = u.nivel === 'TECNICO' ? separarUnidades(u.filial) : ['']
   modalAberto.value = true
+}
+
+/** Divide o texto de `filial` em unidades ("A, B" → ["A", "B"]). */
+function separarUnidades(filial: string): string[] {
+  const lista = filial.split(',').map((u) => u.trim()).filter(Boolean)
+  return lista.length ? lista : ['']
 }
 
 async function salvar() {
@@ -103,7 +158,7 @@ async function salvar() {
       await atualizarUsuario(editando.value.id, {
         nome: form.nome,
         nivel: form.nivel,
-        filial: form.nivel === 'ADMIN' ? 'URE Leste 3' : form.filial,
+        filial: filialDoFormulario(),
         status: form.status,
       })
       ui.success('Usuário atualizado.')
@@ -113,7 +168,7 @@ async function salvar() {
         email: form.email.trim().toLowerCase(),
         nome: form.nome.trim(),
         nivel: form.nivel,
-        filial: form.nivel === 'ADMIN' ? 'URE Leste 3' : form.filial,
+        filial: filialDoFormulario(),
       })
       modalAberto.value = false
       senhaTempModal.value = { email: criado.email, senha: criado.senhaTemporaria }
@@ -211,7 +266,12 @@ onMounted(async () => {
               <td><strong>{{ u.nome }}</strong></td>
               <td>{{ u.email }}</td>
               <td>{{ rotuloPerfil(u.nivel) }}</td>
-              <td>{{ u.filial || '—' }}</td>
+              <td>
+                <template v-if="separarUnidades(u.filial).length > 1">
+                  <span v-for="un in separarUnidades(u.filial)" :key="un" class="unidade-chip">{{ un }}</span>
+                </template>
+                <template v-else>{{ u.filial || '—' }}</template>
+              </td>
               <td><StatusPill :status="u.status === 'ATIVO' ? 'Ativo' : 'Inativo'" /></td>
               <td class="td-acoes">
                 <RowActions
@@ -260,12 +320,48 @@ onMounted(async () => {
           <small class="perfil-hint">
             <template v-if="isAdmin">
               <strong>Administrador</strong>: acesso total (portal, usuários, configurações) ·
-              <strong>Gestor</strong>: gere chamados e equipamentos da(s) unidade(s) ·
+              <strong>Técnico</strong>: atende uma ou mais unidades (chamados, equipamentos e manutenção) ·
+              <strong>Gestor</strong>: gere chamados e equipamentos da unidade ·
             </template>
             <strong>Visualizador</strong>: mesmas funções do Gestor na unidade, <em>sem</em> apagar usuários/equipamentos
           </small>
         </div>
-        <div class="field">
+
+        <!-- Técnico: uma ou mais unidades (matriz atende várias escolas) -->
+        <div v-if="!isGestor && form.nivel === 'TECNICO'" class="field field-linha">
+          <label>Unidades escolares</label>
+          <div v-for="(_, i) in unidades" :key="i" class="unidade-linha">
+            <select v-model="unidades[i]" class="select-input">
+              <option value="" disabled>Selecione a unidade...</option>
+              <option v-for="e in opcoesUnidade(i)" :key="e" :value="e">{{ e }}</option>
+            </select>
+            <button
+              v-if="unidades.length > 1"
+              class="btn btn-outline btn-remover"
+              type="button"
+              title="Remover esta unidade"
+              @click="removerUnidade(i)"
+            >
+              <X :size="15" />
+            </button>
+          </div>
+          <button
+            class="btn btn-outline btn-mais-unidade"
+            type="button"
+            :disabled="!temUnidadeDisponivel"
+            @click="adicionarUnidade"
+          >
+            <Plus :size="15" />
+            Adicionar mais uma unidade
+          </button>
+          <small class="perfil-hint">O técnico verá chamados e equipamentos de todas as unidades marcadas.</small>
+          <small v-if="!escolas.length" class="perfil-hint perfil-hint-erro">
+            Não foi possível carregar a lista de unidades — recarregue a página para tentar de novo.
+          </small>
+        </div>
+
+        <!-- Demais perfis: uma única unidade -->
+        <div v-else class="field">
           <label>Unidade escolar</label>
           <select v-if="!isGestor && form.nivel !== 'ADMIN'" v-model="form.filial" class="select-input">
             <option value="" disabled>Selecione a unidade...</option>
@@ -287,7 +383,7 @@ onMounted(async () => {
         <button
           class="btn btn-primary"
           type="button"
-          :disabled="salvando || !form.nome || (!editando && !form.email) || (form.nivel !== 'ADMIN' && !form.filial)"
+          :disabled="salvando || !form.nome || (!editando && !form.email) || !unidadePreenchida"
           @click="salvar"
         >
           {{ editando ? 'Salvar alterações' : 'Criar usuário' }}
@@ -389,6 +485,51 @@ onMounted(async () => {
   font-size: 11.5px;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.perfil-hint-erro {
+  color: var(--red);
+}
+
+/* Unidades do técnico: uma linha por select + botão de nova linha */
+.field-linha {
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
+.unidade-linha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-remover {
+  flex-shrink: 0;
+  padding: 10px 12px;
+  color: var(--text-muted);
+}
+
+.btn-remover:hover {
+  color: var(--red);
+}
+
+.btn-mais-unidade {
+  align-self: flex-start;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* Unidades múltiplas na tabela */
+.unidade-chip {
+  display: inline-block;
+  margin: 0 4px 4px 0;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  line-height: 1.4;
 }
 
 .senha-temp {

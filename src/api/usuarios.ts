@@ -57,9 +57,33 @@ export async function gerarSenhaTemporaria(email: string): Promise<string> {
   return data.senhaTemporaria
 }
 
-/** Escolas cadastradas (para o select de unidade). Endpoint autenticado. */
+/** Aceita tanto `["E.E. X"]` quanto `[{ nome: "E.E. X" }]`. */
+function extrairNomes(data: unknown): string[] {
+  if (!Array.isArray(data)) return []
+  return (data as Array<{ nome?: string } | string>)
+    .map((e) => (typeof e === 'string' ? e : e?.nome))
+    .filter((n): n is string => !!n && n.trim().length > 0)
+}
+
+/**
+ * Escolas cadastradas (para o select de unidade). Endpoint autenticado.
+ * Usa o endpoint enxuto e, conforme a versão do backend, cai para a lista
+ * padronizada ou para o cadastro completo — assim o select nunca fica vazio.
+ */
 export async function listarEscolas(): Promise<string[]> {
-  const { data } = await chamadosApi.get<Array<{ nome: string }> | string[]>('/escolas/nomes')
-  // aceita tanto [{nome}] quanto string[]
-  return (data as Array<{ nome: string } | string>).map((e) => (typeof e === 'string' ? e : e.nome))
+  const tentativas: Array<() => Promise<unknown>> = [
+    () => chamadosApi.get('/escolas/nomes').then((r) => r.data),
+    () => chamadosApi.get('/escolas/nomes-padronizados').then((r) => r.data),
+    () => chamadosApi.get('/escolas').then((r) => r.data),
+  ]
+
+  for (const tentar of tentativas) {
+    try {
+      const nomes = extrairNomes(await tentar())
+      if (nomes.length) return nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'))
+    } catch {
+      // tenta o próximo endpoint
+    }
+  }
+  return []
 }

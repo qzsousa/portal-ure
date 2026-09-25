@@ -129,8 +129,9 @@ export function rotuloPerfil(nivel: Nivel | undefined | null): string {
   switch (nivel) {
     case 'ADMIN':
       return 'Administrador'
-    case 'GESTOR':
     case 'TECNICO':
+      return 'Técnico'
+    case 'GESTOR':
       return 'Gestor'
     case 'VISUALIZADOR':
       return 'Visualizador'
