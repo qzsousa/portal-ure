@@ -39,6 +39,9 @@ const irmaDoGrupo = computed(() => {
   if (partes.length < 2) return ''
   return u.papelUnidade === 'FILHA' ? partes[0] : partes.slice(1).join(' / ')
 })
+/* GESTOR só enxerga a própria unidade — filtro de unidade não se aplica. */
+const ehGestor = computed(() => auth.user?.nivel === 'GESTOR')
+
 const detalheAberto = ref(false)
 const detalheItem = ref<Equipamento | null>(null)
 const historico = ref<HistoricoItem[]>([])
@@ -180,7 +183,7 @@ useAutoRefresh(async () => {
           <option value="">Status: Todos</option>
           <option v-for="s in Object.keys(eq.state.porStatus)" :key="s" :value="s">{{ s }}</option>
         </select>
-        <select v-model="eq.filtros.unidade" class="select-input slim" @change="eq.aplicarFiltros()">
+        <select v-if="!ehGestor" v-model="eq.filtros.unidade" class="select-input slim" @change="eq.aplicarFiltros()">
           <option value="">Unidade: Todas</option>
           <option v-for="u in eq.unidadesOpcoes.value" :key="u" :value="u">{{ u }}</option>
         </select>
