@@ -713,9 +713,9 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- TEXTO -->
+            <!-- TEXTO: ramo independente (ver nota abaixo) -->
             <input
-              v-else-if="p.tipo === 'TEXTO'"
+              v-if="p.tipo === 'TEXTO'"
               :id="`p-${p.id}`"
               v-model="respostas[p.id]"
               class="input"
@@ -726,7 +726,7 @@ onMounted(() => {
 
             <!-- TEXTO_LONGO -->
             <textarea
-              v-else
+              v-if="p.tipo === 'TEXTO_LONGO'"
               :id="`p-${p.id}`"
               v-model="respostas[p.id]"
               class="input textarea"
