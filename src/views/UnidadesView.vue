@@ -27,13 +27,29 @@ const filtroTecnico = ref('')
 const filtroInventario = ref('')
 
 /**
- * Mescla o resumo do SCE (nomes legados das unidades) com o catálogo oficial:
- * a contagem de equipamentos é do GRUPO — escolas irmãs dividem o mesmo painel.
+ * Mescla o resumo do SCE (nomes legados das unidades) com o catálogo oficial.
+ *
+ * Cada linha é um PRÉDIO: quando o SCE cadastra o equipamento no nome do grupo
+ * ("E.E. A / B") ou no nome de qualquer das duas escolas, ele cai na mesma
+ * linha. Como o catálogo já devolve só a mãe, cada equipamento é contado uma
+ * única vez.
+ *
+ * O que NÃO casa com o catálogo é descartado (ex.: a sede regional, que não é
+ * escola). Vale saber disso ao comparar com o painel de equipamentos, que conta
+ * nomes de unidade e não prédios: os dois números divergem por construção, e não
+ * só por falta de equipamento.
  */
 function mesclarEquipamentos(unidades: UnidadePainel[], resumo: UnidadeResumo[]): UnidadeLinha[] {
   const porNome = new Map<string, UnidadePainel[]>()
   for (const u of unidades) {
-    for (const chave of [u.nome, u.grupo]) {
+    // `new Set` é obrigatório: escola que NÃO divide prédio tem `nome === grupo`,
+    // e sem isso a mesma linha entrava duas vezes no mesmo chave — o `for` lá de
+    // baixo somava o equipamento duas vezes. Só as escolas com irmã escapavam,
+    // porque nelas `nome !== grupo`. Efeito medido: a soma da tela dava 8459
+    // contra 5090 do SCE (+66%), e "E.E. HAYDEÉ HIDALGO" aparecia com 122 em vez
+    // de 61. A contagem de LINHAS com equipamento não era afetada — por isso
+    // passava despercebido.
+    for (const chave of new Set([u.nome, u.grupo])) {
       const arr = porNome.get(chave) || []
       arr.push(u)
       porNome.set(chave, arr)
