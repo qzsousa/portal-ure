@@ -38,6 +38,7 @@ import {
 import { chamadosApi } from '@/api/http'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaEquipeReduzida, ordenarTecnicos } from '@/utils/tecnicos'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { Chamado, ChamadoMensagem, StatusChamado } from '@/types'
@@ -177,12 +178,16 @@ const gruposTecnicos = computed(() => {
   const rotulo = (t: TecnicoDestino) =>
     t.abertos === undefined ? t.nome : `${t.nome} · ${t.abertos} aberto${t.abertos === 1 ? '' : 's'}`
 
-  const daUnidade = tecnicos.value.filter((t) => atende.has(t.id))
-  const outros = tecnicos.value.filter((t) => !atende.has(t.id))
+  // Só a equipe de atendimento aparece no select, na ordem da escala — em
+  // Sistemas/E-mail, apenas as cinco pessoas que atendem esse tipo de chamado.
+  const ordenados = ordenarTecnicos(tecnicos.value, { categoriaChave: chaveCategoria.value })
+
+  const daUnidade = ordenados.filter((t) => atende.has(t.id))
+  const outros = ordenados.filter((t) => !atende.has(t.id))
 
   const grupos: Array<{ nome: string; opcoes: Array<{ valor: string; rotulo: string }> }> = []
   if (daUnidade.length) {
-    grupos.push({ nome: 'Atende esta unidade', opcoes: daUnidade.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
+    grupos.push({ nome: GRUPO_UNIDADE, opcoes: daUnidade.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
   }
   if (outros.length) {
     grupos.push({ nome: 'Outros técnicos', opcoes: outros.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
@@ -190,13 +195,24 @@ const gruposTecnicos = computed(() => {
   return grupos
 })
 
+/** true quando quem atende a unidade entrou no select (não entrou em Sistemas/E-mail). */
+const unidadeNaLista = computed(() => gruposTecnicos.value[0]?.nome === GRUPO_UNIDADE)
+
+/** Categoria do chamado, com fallback no texto de tipo dos chamados antigos. */
+const chaveCategoria = computed(() => chaveDaCategoria(detalhe.value))
+
+/** Chamado de Sistemas/E-mail — a lista de destino é a equipe restrita. */
+const equipeReduzida = computed(() => ehCategoriaEquipeReduzida(chaveCategoria.value))
+
 /** Rótulo da opção "Técnico da unidade" (o sucessor é a sugestão do backend). */
 const rotuloTecnicoDaUnidade = computed(() => {
   if (carregandoTecnicos.value) return 'Carregando técnicos...'
   const sugerido = tecnicosDaUnidade.value[0]
-  return sugerido
-    ? `Técnico da unidade — ${sugerido.nome} (sugerido)`
-    : 'Técnico da unidade — nenhum técnico cadastrado'
+  if (!sugerido) return 'Técnico da unidade — nenhum técnico cadastrado'
+  // Em Sistemas/E-mail o técnico da unidade pode não atender esse tipo de
+  // chamado: não nomeia ninguém que ficou fora da lista.
+  if (!unidadeNaLista.value) return 'Técnico da unidade'
+  return `Técnico da unidade — ${sugerido.nome} (sugerido)`
 })
 
 const podeEncaminhar = computed(
@@ -778,6 +794,10 @@ useAutoRefresh(async () => {
               <p v-if="carregandoTecnicos" class="acao-dica">Carregando técnicos...</p>
               <p v-else-if="!tecnicosDaUnidade.length" class="acao-dica enc-aviso">
                 Nenhum técnico ativo atendendo {{ detalhe.unidade }} está cadastrado — escolha um técnico na lista.
+              </p>
+              <p v-else-if="!unidadeNaLista && equipeReduzida" class="acao-dica enc-aviso">
+                Este chamado não é atendido pelo técnico de {{ detalhe.unidade }}: o responsável
+                sai de <strong>JESSICA, MATHEUS, PABLO, FERNANDA e FABIO</strong>.
               </p>
               <p v-else-if="detalhe.responsavel" class="acao-dica enc-aviso">
                 Ao encaminhar, <strong>{{ detalhe.responsavel }}</strong> deixa de ser o responsável.

@@ -32,6 +32,7 @@ import {
 import { chamadosApi } from '@/api/http'
 import { apiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
+import { ordenarTecnicos } from '@/utils/tecnicos'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { useErrorLogStore } from '@/stores/errorLog'
@@ -178,6 +179,19 @@ async function carregarRegras() {
   } finally {
     enc.loading = false
   }
+}
+
+/**
+ * Opções do select de destino da categoria: só a equipe de atendimento, na
+ * ordem da escala. O técnico já salvo na regra nunca some da lista — sem isso
+ * uma regra antiga apontaria para uma opção invisível e o select abriria vazio.
+ */
+function tecnicosDaCategoria(chave: string): TecnicoDestino[] {
+  const atual = enc.destino[chave] || ''
+  return ordenarTecnicos(enc.tecnicos, {
+    categoriaChave: chave,
+    extrasIds: atual.startsWith('TEC:') ? [atual.slice(4)] : [],
+  })
 }
 
 /** Cria/atualiza a regra da categoria com o destino escolhido no select. */
@@ -532,7 +546,7 @@ onMounted(() => {
                     <div class="enc-destino">
                       <select v-model="enc.destino[c.chave]" class="select-input slim" :disabled="enc.salvandoChave === c.chave">
                         <option value="UNIDADE">Técnico da unidade</option>
-                        <option v-for="t in enc.tecnicos" :key="t.id" :value="`TEC:${t.id}`">
+                        <option v-for="t in tecnicosDaCategoria(c.chave)" :key="t.id" :value="`TEC:${t.id}`">
                           {{ t.nome }} (fixo)
                         </option>
                       </select>

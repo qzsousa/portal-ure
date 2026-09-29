@@ -58,6 +58,7 @@ portal/
     ├── utils/
     │   ├── format.ts       formatDate / formatDateTime (America/Sao_Paulo)
     │   ├── apiError.ts     Extrai mensagem legível de erro da API
+    │   ├── tecnicos.ts     Escala de atendimento (quem pode receber um chamado)
     │   └── escola.ts       Casa nomes de escola entre os dois backends
     │
     ├── views/

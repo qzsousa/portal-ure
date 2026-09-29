@@ -386,7 +386,7 @@ Clicar na descrição expande/recua o texto (funciona bem no celular).
 
 | Ação | Detalhe |
 |---|---|
-| **Encaminhar para técnico** | Select com "Técnico da unidade (sugerido)" + optgroups "Atende esta unidade" e "Outros técnicos". Observação opcional (500 chars) vai para o histórico. Se já houver responsável, pede confirmação. |
+| **Encaminhar para técnico** | Select com "Técnico da unidade (sugerido)" + optgroups "Atende esta unidade" (sempre primeiro) e "Outros técnicos". A lista é a **escala de atendimento** (`utils/tecnicos.ts`) e muda conforme a categoria do chamado. Observação opcional (500 chars) vai para o histórico. Se já houver responsável, pede confirmação. |
 | **Alterar status** | Select + "Salvar". Ao escolher *Aguardando resposta*, **exige** escrever a pergunta para a escola. Ao escolher *Concluído*, pede a descrição da resolução. |
 | **Adicionar resposta ao histórico** | Input + "Registrar" |
 | **Excluir** | Só ADMIN (restrição do backend) |
@@ -600,6 +600,10 @@ e um alerta com texto, tipo, link e as flags `encerra` / `exigeAnexo`).
 Uma linha por categoria do formulário, com o destino (Técnico da unidade ou um
 técnico fixo), um switch **Ativo/Inativo** e o botão de excluir a regra.
 
+O select de técnico fixo segue a mesma **escala de atendimento** do modal de
+encaminhamento do chamado (ver abaixo) — a categoria *Sistemas* e *E-mail*
+aceitam só as cinco pessoas que atendem esse tipo de chamado.
+
 O botão **"Aplicar agora aos abertos"** roda as regras ativas sobre os chamados
 já abertos **sem responsável** — útil quando as regras foram criadas depois.
 Retorna quantos foram encaminhados e quantos ficaram sem técnico.
@@ -612,6 +616,29 @@ Retorna quantos foram encaminhados e quantos ficaram sem técnico.
 
 > Regras **nascem desativadas** (`ativa: false` no banco). Criar a regra não a
 > liga: é preciso ativar o switch de propósito.
+
+#### A escala de atendimento
+
+Quem pode ficar com um chamado não vem solto do cadastro de usuários: é a
+escala fixa de `src/utils/tecnicos.ts`, e a **ordem da lista é a ordem do
+select**.
+
+| Categoria do chamado | Equipe (nesta ordem) |
+|---|---|
+| Todas, exceto Sistemas/E-mail | PABLO, FERNANDA, MATHEUS, JESSICA, FABIO, JOAO, GUILHERME, JOSEMIR, VALDEIR, CHARLES, CAROL, HEBERT |
+| **Sistemas** e **E-mail** | JESSICA, MATHEUS, PABLO, FERNANDA, FABIO |
+
+No modal do chamado, quem atende a unidade vem sempre em primeiro (optgroup
+"Atende esta unidade"); nas categorias restritas, o técnico da unidade só
+aparece se estiver entre os cinco — caso contrário some da lista e a tela avisa
+que ele não atende aquele tipo de chamado.
+
+O casamento entre o nome cadastrado no backend e o nome da escala é pelo
+**primeiro nome**, sem acento e sem diferenciar maiúsculas/minúsculas
+("Carolina Prado" entra como CAROL, "Heberto" como HEBERT). Técnico ativo fora
+da escala não some do select: nas categorias comuns ele vai para o fim da
+lista; em Sistemas/E-mail sai da lista, a não ser o técnico que já estava
+salvo na regra.
 
 ### 5 · Logs do sistema
 
