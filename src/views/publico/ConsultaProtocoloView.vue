@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { AxiosError } from 'axios'
-import { Heart, Loader2, MessageSquareText, Paperclip, Search, SearchX, Send, Star } from '@lucide/vue'
+import { Heart, Loader2, Mail, MessageSquareText, Paperclip, Search, SearchX, Send, Star } from '@lucide/vue'
 import PublicoLayout from '@/components/publico/PublicoLayout.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
@@ -14,11 +14,21 @@ import { rotuloStatusChamado } from '@/api/chamados'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 
 const protocolo = ref('')
+/** E-mail usado na abertura do chamado — a segunda credencial da consulta. */
+const email = ref('')
 const buscando = ref(false)
 const erro = ref('')
+const erroEmail = ref('')
 const resultado = ref<ChamadoPublico | null>(null)
 
+/** E-mail já validado desta consulta (reutilizado no polling e na avaliação). */
+const emailConsultado = ref('')
+
 const resolvido = computed(() => resultado.value?.status === 'RESOLVIDO')
+
+function emailValido(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
+}
 
 /** Última mensagem é uma PERGUNTA da matriz e o chamado aguarda resposta. */
 const aguardandoResposta = computed(() => {
@@ -47,7 +57,7 @@ async function enviarAvaliacao() {
   erroAvaliacao.value = ''
   enviandoAvaliacao.value = true
   try {
-    await avaliarChamadoPorProtocolo(resultado.value.protocolo, {
+    await avaliarChamadoPorProtocolo(resultado.value.protocolo, emailConsultado.value, {
       nota: nota.value,
       comentario: comentario.value.trim() || undefined,
     })
@@ -68,6 +78,7 @@ async function enviarAvaliacao() {
 
 async function buscar() {
   erro.value = ''
+  erroEmail.value = ''
   resultado.value = null
   nota.value = 0
   notaHover.value = 0
@@ -79,13 +90,26 @@ async function buscar() {
     erro.value = 'Informe o número do protocolo.'
     return
   }
+  const e = email.value.trim()
+  if (!e) {
+    erroEmail.value = 'Informe o e-mail usado na abertura do chamado.'
+    return
+  }
+  if (!emailValido(e)) {
+    erroEmail.value = 'Informe um e-mail válido (ex.: nome@educacao.sp.gov.br).'
+    return
+  }
   buscando.value = true
   try {
-    resultado.value = await consultarChamadoPorProtocolo(p)
-  } catch (e) {
-    const err = e as AxiosError<{ message?: string }>
-    if (err.response?.status === 404) {
-      erro.value = 'Chamado não encontrado. Confira o número do protocolo e tente novamente.'
+    resultado.value = await consultarChamadoPorProtocolo(p, e)
+    emailConsultado.value = e
+  } catch (err) {
+    const ax = err as AxiosError<{ message?: string }>
+    if (ax.response?.status === 404) {
+      // Mesma mensagem do backend: não dizemos qual dos dois dados está errado.
+      erro.value = 'Chamado não encontrado. Confira o número do protocolo e o e-mail usados na abertura.'
+    } else if (ax.response?.status === 400) {
+      erro.value = 'Informe o protocolo e o e-mail para consultar o chamado.'
     } else {
       erro.value = 'Não foi possível consultar agora. Verifique sua conexão e tente novamente.'
     }
@@ -97,12 +121,13 @@ async function buscar() {
 /**
  * Reconsulta silenciosa: enquanto um resultado está na tela, o status do
  * chamado é atualizado sozinho — sem limpar o formulário de avaliação.
+ * Reusa o e-mail que já abriu a consulta (trocar o e-mail exige nova busca).
  */
 async function reconsultar() {
   const p = protocolo.value.trim()
   if (!p || !resultado.value || buscando.value) return
   try {
-    resultado.value = await consultarChamadoPorProtocolo(p)
+    resultado.value = await consultarChamadoPorProtocolo(p, emailConsultado.value || email.value)
   } catch {
     /* falhas de polling são silenciosas */
   }
@@ -110,13 +135,15 @@ async function reconsultar() {
 
 useAutoRefresh(reconsultar, AUTO_REFRESH_MS.rapido)
 
-/** Prefill via ?protocolo=CH-... (link vindo da tela de abertura de chamado). */
+/** Prefill via ?protocolo=CH-...&email=... (link vindo da tela de abertura de chamado). */
 const route = useRoute()
 onMounted(() => {
   const q = String(route.query.protocolo || '').trim()
+  const e = String(route.query.email || '').trim()
+  if (e) email.value = e
   if (q) {
     protocolo.value = q
-    void buscar()
+    if (e) void buscar()
   }
 })
 
@@ -132,24 +159,50 @@ function formatarData(ts: string | null | undefined): string {
   <PublicoLayout>
     <header class="cabecalho">
       <h1>Consultar chamado</h1>
-      <p>Informe o número de protocolo que você recebeu ao abrir o chamado para acompanhar o andamento.</p>
+      <p>
+        Informe o número de protocolo <strong>e o e-mail</strong> que você usou na abertura do chamado para
+        acompanhar o andamento.
+      </p>
     </header>
 
     <div class="card busca-card">
       <form class="busca-form" @submit.prevent="buscar">
-        <input
-          v-model="protocolo"
-          class="input busca-input"
-          type="text"
-          placeholder="Ex.: CH-20260101-0001"
-          @keyup.enter="buscar"
-        />
-        <button type="submit" class="btn btn-primary" :disabled="buscando">
+        <div class="busca-campo">
+          <label for="busca-protocolo">Protocolo</label>
+          <input
+            id="busca-protocolo"
+            v-model="protocolo"
+            class="input busca-input"
+            type="text"
+            placeholder="Ex.: CH-20260101-0001"
+            autocomplete="off"
+            @keyup.enter="buscar"
+          />
+        </div>
+        <div class="busca-campo">
+          <label for="busca-email">E-mail usado na abertura</label>
+          <input
+            id="busca-email"
+            v-model="email"
+            class="input busca-input"
+            :class="{ inv: erroEmail }"
+            type="email"
+            placeholder="nome@educacao.sp.gov.br"
+            autocomplete="email"
+            :aria-invalid="!!erroEmail"
+          />
+          <p v-if="erroEmail" class="busca-erro-campo">{{ erroEmail }}</p>
+        </div>
+        <button type="submit" class="btn btn-primary busca-btn" :disabled="buscando">
           <Loader2 v-if="buscando" class="spin" :size="16" />
           <Search v-else :size="16" />
           {{ buscando ? 'Buscando...' : 'Consultar' }}
         </button>
       </form>
+      <p class="busca-dica">
+        <Mail :size="13" />
+        Por segurança, o chamado só abre para quem o abriu: o e-mail precisa ser o mesmo informado no formulário.
+      </p>
       <p v-if="erro" class="busca-erro"><SearchX :size="15" /> {{ erro }}</p>
     </div>
 
@@ -354,12 +407,47 @@ function formatarData(ts: string | null | undefined): string {
 
 .busca-form {
   display: flex;
+  align-items: flex-start;
   gap: 10px;
 }
 
-.busca-input {
+.busca-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
   flex: 1;
   min-width: 0;
+}
+
+.busca-campo label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.busca-input {
+  min-width: 0;
+}
+
+.busca-btn {
+  flex-shrink: 0;
+  margin-top: 22px;
+}
+
+.busca-dica {
+  margin: 12px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.busca-erro-campo {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
 }
 
 .busca-erro {
@@ -586,9 +674,10 @@ function formatarData(ts: string | null | undefined): string {
   .busca-form {
     flex-direction: column;
   }
-  .busca-form .btn {
+  .busca-btn {
     width: 100%;
     justify-content: center;
+    margin-top: 4px;
   }
   .resultado-topo {
     flex-direction: column;

@@ -41,12 +41,31 @@ import {
 const ui = useUiStore()
 const router = useRouter()
 
-/** Busca de chamado por protocolo (vai para /consulta). */
+/**
+ * Busca de chamado já aberto (vai para /consulta).
+ * O protocolo sozinho não abre nada: o e-mail usado na abertura é obrigatório.
+ */
 const buscaProtocolo = ref('')
+const buscaEmail = ref('')
+const buscaErro = ref('')
+
 function consultarProtocolo() {
+  buscaErro.value = ''
   const p = buscaProtocolo.value.trim()
-  if (!p) return
-  void router.push({ path: '/consulta', query: { protocolo: p } })
+  if (!p) {
+    buscaErro.value = 'Informe o número do protocolo.'
+    return
+  }
+  const e = buscaEmail.value.trim()
+  if (!e) {
+    buscaErro.value = 'Informe o e-mail usado na abertura do chamado.'
+    return
+  }
+  if (!emailValido(e)) {
+    buscaErro.value = 'Informe um e-mail válido (ex.: nome@educacao.sp.gov.br).'
+    return
+  }
+  void router.push({ path: '/consulta', query: { protocolo: p, email: e } })
 }
 
 /** Opção especial "digitar manualmente" (mesma ideia do formulário antigo). */
@@ -599,26 +618,41 @@ onMounted(() => {
           </div>
         </section>
 
-        <!-- Busca de chamado por protocolo -->
+        <!-- Busca de chamado já aberto: protocolo + e-mail da abertura -->
         <section class="card busca-chamado">
           <div class="busca-info">
             <Search :size="18" />
             <div>
               <h2>Acompanhar chamado</h2>
-              <p>Já abriu um chamado? Consulte pelo número de protocolo.</p>
+              <p>Já abriu um chamado? Informe o protocolo e o e-mail usado na abertura.</p>
             </div>
           </div>
           <form class="busca-grupo" @submit.prevent="consultarProtocolo">
-            <input
-              v-model="buscaProtocolo"
-              type="text"
-              placeholder="Ex.: CH-20260923-0007"
-              aria-label="Número do protocolo"
-            />
-            <button type="submit" :disabled="!buscaProtocolo.trim()">
+            <div class="busca-campo">
+              <label for="busca-protocolo">Protocolo</label>
+              <input
+                id="busca-protocolo"
+                v-model="buscaProtocolo"
+                type="text"
+                placeholder="Ex.: CH-20260923-0007"
+                autocomplete="off"
+              />
+            </div>
+            <div class="busca-campo">
+              <label for="busca-email">E-mail usado na abertura</label>
+              <input
+                id="busca-email"
+                v-model="buscaEmail"
+                type="email"
+                placeholder="nome@educacao.sp.gov.br"
+                autocomplete="email"
+              />
+            </div>
+            <button type="submit" :disabled="!buscaProtocolo.trim() || !buscaEmail.trim()">
               <Search :size="15" />
               Consultar
             </button>
+            <p v-if="buscaErro" class="busca-erro">{{ buscaErro }}</p>
           </form>
         </section>
       </template>
@@ -956,10 +990,15 @@ onMounted(() => {
           </button>
         </div>
         <p class="sucesso-dica">
-          Guarde este número. A equipe do SETEC foi notificada e entrará em contato com a sua unidade.
+          Guarde este número junto com o e-mail informado no formulário — os dois juntos são o acesso para
+          acompanhar o chamado. A equipe do SETEC foi notificada e entrará em contato com a sua unidade.
         </p>
         <div class="sucesso-acoes">
-          <RouterLink to="/consulta" class="btn btn-primary btn-grande">
+          <!-- Já leva protocolo + e-mail: a consulta exige o par -->
+          <RouterLink
+            :to="{ path: '/consulta', query: { protocolo, email: ident.email.trim() } }"
+            class="btn btn-primary btn-grande"
+          >
             <Search :size="15" />
             Acompanhar chamado
           </RouterLink>
@@ -1699,19 +1738,35 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
+/* Consulta: protocolo + e-mail empilhados (o par é a credencial) */
 .busca-grupo {
   display: flex;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 1 300px;
+  min-width: 260px;
+}
+
+.busca-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.busca-campo label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
 }
 
 .busca-grupo input {
   border: 1.5px solid var(--border-strong);
-  border-right: none;
-  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   font-size: 13.5px;
   font-family: inherit;
-  min-width: 220px;
+  min-width: 0;
+  width: 100%;
   color: var(--text-primary);
   background: var(--surface);
 }
@@ -1720,16 +1775,15 @@ onMounted(() => {
   outline: none;
   border-color: var(--blue);
   box-shadow: 0 0 0 3px var(--blue-soft);
-  position: relative;
-  z-index: 1;
 }
 
 .busca-grupo button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 10px 16px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius-sm);
   border: 1.5px solid var(--blue);
   background: var(--blue);
   color: #fff;
@@ -1748,23 +1802,21 @@ onMounted(() => {
   filter: brightness(1.08);
 }
 
+.busca-erro {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
+}
+
 @media (max-width: 640px) {
   .busca-chamado {
     flex-direction: column;
     align-items: stretch;
   }
   .busca-grupo {
-    flex-direction: column;
-  }
-  .busca-grupo input {
     min-width: 0;
-    border-right: 1.5px solid var(--border-strong);
-    border-bottom: none;
-    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  }
-  .busca-grupo button {
-    justify-content: center;
-    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    width: 100%;
   }
   .contato {
     flex-direction: column;

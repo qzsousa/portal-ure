@@ -100,9 +100,17 @@ export interface ChamadoPublico {
   mensagens?: MensagemConversa[]
 }
 
-/** Consulta pública por protocolo. Lança AxiosError com status 404 se não existir. */
-export async function consultarChamadoPorProtocolo(protocolo: string): Promise<ChamadoPublico> {
-  const { data } = await publicoHttp.get<ChamadoPublico>(`/chamados/protocolo/${encodeURIComponent(protocolo)}`)
+/**
+ * Consulta pública por PROTOCOLO + E-MAIL.
+ *
+ * O e-mail precisa ser o mesmo informado na abertura do chamado — sozinho, o
+ * protocolo é sequencial e adivinhável. Lança AxiosError 404 quando o par não
+ * confere (o backend responde a mesma coisa para protocolo inexistente).
+ */
+export async function consultarChamadoPorProtocolo(protocolo: string, email: string): Promise<ChamadoPublico> {
+  const { data } = await publicoHttp.get<ChamadoPublico>(`/chamados/protocolo/${encodeURIComponent(protocolo)}`, {
+    params: { email: email.trim() },
+  })
   return data
 }
 
@@ -140,11 +148,19 @@ export interface AvaliacaoPayload {
 }
 
 /**
- * Avalia um chamado RESOLVIDO (público).
- * Lança AxiosError: 400 se o chamado não está resolvido, 409 se já foi avaliado.
+ * Avalia um chamado RESOLVIDO (público). Exige o mesmo par protocolo + e-mail
+ * da consulta — sem ele, qualquer um com o protocolo avaliaria o chamado.
+ * Lança AxiosError: 400 se não está resolvido, 404 se o par não confere,
+ * 409 se já foi avaliado.
  */
-export async function avaliarChamadoPorProtocolo(protocolo: string, payload: AvaliacaoPayload): Promise<void> {
-  await publicoHttp.post(`/chamados/protocolo/${encodeURIComponent(protocolo)}/avaliar`, payload)
+export async function avaliarChamadoPorProtocolo(
+  protocolo: string,
+  email: string,
+  payload: AvaliacaoPayload,
+): Promise<void> {
+  await publicoHttp.post(`/chamados/protocolo/${encodeURIComponent(protocolo)}/avaliar`, payload, {
+    params: { email: email.trim() },
+  })
 }
 
 /* ---------- Tutoriais (público, link compartilhável) ---------- */
