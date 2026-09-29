@@ -5,6 +5,20 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      CSP de fallback para o dev server do Vite (que não lê o vercel.json).
+      `connect-src` lista as duas APIs; em produção o header do vercel.json
+      restringe a 'self' + https.
+
+      `style-src` precisa de 'unsafe-inline' porque o Vue injeta <style>
+      no escopo do componente. `script-src` NÃO tem 'unsafe-inline' nem
+      'unsafe-eval': é o que impede injeção de script ser executada.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' http://localhost:10000 http://localhost:3000 ws://localhost:5173 ws://localhost:10000 ws://localhost:3000; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -44,15 +44,27 @@ const auth = useAuthStore()
 const router = useRouter()
 const aba = ref<Aba>('catalogo')
 
-const ABAS: Array<{ id: Aba; rotulo: string }> = [
+const ABAS_BASE: Array<{ id: Aba; rotulo: string }> = [
   { id: 'catalogo', rotulo: 'Catálogo de equipamentos' },
   { id: 'status', rotulo: 'Status do parque' },
   { id: 'formulario', rotulo: 'Formulário de chamados' },
   { id: 'encaminhamento', rotulo: 'Encaminhamento' },
   { id: 'logs', rotulo: 'Logs do sistema' },
   { id: 'integracoes', rotulo: 'Integrações' },
-  { id: 'acesso', rotulo: 'Testes de acesso' },
 ]
+
+/**
+ * "Testes de acesso" só existe em desenvolvimento.
+ *
+ * O simulador troca o `nivel` apenas na memória — o servidor continua
+ * autorizando pelo perfil real. Em produção ele levava o usuário a crer que
+ * a troca de perfil era uma função de autorização de verdade, e escondia
+ * bugs de menu/guard (o item sumia para o perfil errado sem o backend
+ * recusar a requisição).
+ */
+const ABAS: Array<{ id: Aba; rotulo: string }> = auth.simulacaoAtivavel
+  ? [...ABAS_BASE, { id: 'acesso' as Aba, rotulo: 'Testes de acesso' }]
+  : ABAS_BASE
 
 /* ---------------- Catálogo ---------------- */
 const catalogo = reactive({ loading: true, items: [] as ItemLista[], page: 1, busca: '' })

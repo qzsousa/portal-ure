@@ -36,13 +36,39 @@ const STORAGE_KEY = 'portal.backendErrors'
 const MAX_ENTRIES = 100
 /** Intervalo mínimo entre dois toasts da MESMA assinatura de erro. */
 const TOAST_COOLDOWN_MS = 60_000
+/**
+ * Tamanho máximo da mensagem persistida.
+ *
+ * A mensagem vem do corpo da resposta do backend e pode carregar dados do
+ * pedido (id de chamado, nome de arquivo, trecho de e-mail). Como o log é
+ * gravado em `localStorage` — legível por qualquer script da página — ela
+ * fica limitada e sem as credenciais que às vezes aparecem na URL.
+ */
+const MAX_MENSAGEM = 300
+
+/**
+ * Remove credenciais que o backend pode ecoar na URL da requisição (o SCE
+ * aceitou `?token=` até a correção) e corta no limite.
+ */
+function sanitizarMensagem(mensagem: string): string {
+  return String(mensagem || '')
+    .replace(/([?&](?:token|access_token|refreshToken)=)[^&\s"']+/gi, '$1[redigido]')
+    .replace(/Bearer\s+[\w.-]+/gi, 'Bearer [redigido]')
+    .slice(0, MAX_MENSAGEM)
+}
 
 function carregarPersistidos(): ErroBackend[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as ErroBackend[]) : []
+    if (!Array.isArray(parsed)) return []
+    // Re-sanitiza o que já estava gravado: pode ter vindo de uma versão
+    // anterior, sem a truncagem/redação.
+    return (parsed as ErroBackend[])
+      .filter((e) => e && typeof e === 'object')
+      .slice(0, MAX_ENTRIES)
+      .map((e) => ({ ...e, mensagem: sanitizarMensagem(e.mensagem) }))
   } catch {
     return []
   }
@@ -68,19 +94,20 @@ export const useErrorLogStore = defineStore('errorLog', () => {
   function registrar(input: Omit<ErroBackend, 'id' | 'data' | 'repeticoes'>) {
     const agora = Date.now()
     const assinaturaAtual = assinatura(input)
+    const entrada = { ...input, mensagem: sanitizarMensagem(input.mensagem) }
 
     // Mesma assinatura do erro mais recente → só incrementa o contador.
     const ultimo = erros[0]
     if (ultimo && assinatura(ultimo) === assinaturaAtual) {
       ultimo.repeticoes += 1
       ultimo.data = new Date(agora).toISOString()
-      ultimo.mensagem = input.mensagem
+      ultimo.mensagem = entrada.mensagem
     } else {
       erros.unshift({
         id: nextId++,
         data: new Date(agora).toISOString(),
         repeticoes: 1,
-        ...input,
+        ...entrada,
       })
       if (erros.length > MAX_ENTRIES) erros.splice(MAX_ENTRIES)
     }

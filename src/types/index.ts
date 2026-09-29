@@ -33,9 +33,15 @@ export interface LoginRequest {
   senha: string
 }
 
+/**
+ * Resposta de login/refresh.
+ *
+ * Não traz `refreshToken`: ele viaja num cookie `httpOnly`, que o
+ * JavaScript não lê. Guardá-lo em `localStorage` (como antes) expunha uma
+ * credencial de 7 dias para qualquer script da página.
+ */
 export interface LoginResponse {
   accessToken: string
-  refreshToken: string
   user: User
   primeiroLogin: boolean
 }

@@ -6,6 +6,17 @@ import type { ChangePasswordRequest, LoginRequest, LoginResponse, Nivel, User } 
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
+  /**
+   * Access token — SOMENTE EM MEMÓRIA.
+   *
+   * Ficava no `localStorage`, que é legível por qualquer script da página:
+   * uma única dependência comprometida (ou um XSS) dava acesso à sessão.
+   * O refresh token de 7 dias não é guardado aqui — viaja num cookie
+   * `httpOnly` que o JavaScript não consegue ler.
+   *
+   * Efeito colateral: ao recarregar a página o access token se perde, e a
+   * sessão é reconstruída chamando `/auth/refresh` com o cookie.
+   */
   const accessToken = ref<string | null>(null)
   const isLoading = ref(false)
   const isInitialized = ref(false)
@@ -23,18 +34,25 @@ export const useAuthStore = defineStore('auth', () => {
 
   /*
    * Simulação de perfil (abas Configurações → Testes de acesso).
+   *
    * Troca APENAS o `user.nivel` na memória: menus, guards de rota e botões
    * reagem como se o usuário fosse do perfil escolhido. O token JWT e a
    * sessão continuam os mesmos (o backend segue autorizando pelo perfil
    * real) e a simulação some ao recarregar a página.
+   *
+   * Bloqueada fora de desenvolvimento: em produção ela levava o usuário a
+   * acreditar que a troca de perfil era uma função real de autorização, e
+   * escondia bugs — o menu sumia para o perfil errado sem o servidor
+   * recusar nada.
    */
+  const simulacaoAtivavel = import.meta.env.DEV
   const simulacao = ref<Nivel | null>(null)
   const nivelOriginal = ref<Nivel | null>(null)
   const simulando = computed(() => simulacao.value !== null)
   const nivelSimulado = computed(() => simulacao.value)
 
   function simularComo(nivel: Nivel) {
-    if (!user.value) return
+    if (!user.value || !simulacaoAtivavel) return
     if (nivelOriginal.value === null) nivelOriginal.value = user.value.nivel
     simulacao.value = nivel
     // A simulação troca o perfil, mas a escola (MÃE/FILHA) é real: uma FILHA
@@ -50,29 +68,34 @@ export const useAuthStore = defineStore('auth', () => {
     nivelOriginal.value = null
   }
 
-  function setTokens(newAccessToken: string, newRefreshToken: string) {
-    accessToken.value = newAccessToken
-    localStorage.setItem('accessToken', newAccessToken)
-    if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken)
+  function setAccessToken(novo: string | null) {
+    accessToken.value = novo
   }
 
-  /** Chamado pelo interceptor de 401 dos dois clientes HTTP. */
+  /**
+   * Renova o access token.
+   *
+   * O refresh token NÃO é lido nem enviado: o navegador anexa o cookie
+   * `httpOnly` sozinho, e o corpo fica vazio. É chamado pelo interceptor de
+   * 401 e também na inicialização, para reconstruir a sessão após um
+   * recarregamento da página.
+   */
   async function refreshTokens(): Promise<string | null> {
-    const refreshToken = localStorage.getItem('refreshToken')
-    if (!refreshToken) {
+    try {
+      const { data } = await axios.post<LoginResponse>(
+        `${CHAMADOS_BASE}/auth/refresh`,
+        {},
+        { withCredentials: true },
+      )
+      setAccessToken(data.accessToken)
+      // Mantém a simulação ativa mesmo após o refresh (nível real se atualiza junto)
+      if (simulacao.value) nivelOriginal.value = data.user.nivel
+      user.value = simulacao.value ? { ...data.user, nivel: simulacao.value } : data.user
+      return data.accessToken
+    } catch {
       clearSession()
       return null
     }
-    const { data } = await axios.post<LoginResponse>(
-      `${CHAMADOS_BASE}/auth/refresh`,
-      { refreshToken },
-      { withCredentials: true },
-    )
-    setTokens(data.accessToken, data.refreshToken)
-    // Mantém a simulação ativa mesmo após o refresh (nível real se atualiza junto)
-    if (simulacao.value) nivelOriginal.value = data.user.nivel
-    user.value = simulacao.value ? { ...data.user, nivel: simulacao.value } : data.user
-    return data.accessToken
   }
 
   function clearSession() {
@@ -80,8 +103,6 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     simulacao.value = null
     nivelOriginal.value = null
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
   }
 
   async function initialize() {
@@ -94,15 +115,18 @@ export const useAuthStore = defineStore('auth', () => {
       onUnauthorized: () => clearSession(),
     })
 
-    const savedToken = localStorage.getItem('accessToken')
-    if (savedToken) {
-      accessToken.value = savedToken
+    // Não há token em storage para recuperar: quem reconstrói a sessão é o
+    // cookie httpOnly, via /auth/refresh. Se não houver cookie, o 401 é
+    // esperado e o usuário segue deslogado.
+    const renovou = await refreshTokens()
+    if (renovou) {
       try {
         await fetchMe()
       } catch {
         clearSession()
       }
     }
+
     isInitialized.value = true
   }
 
@@ -110,10 +134,8 @@ export const useAuthStore = defineStore('auth', () => {
     isLoading.value = true
     try {
       const { data } = await chamadosApi.post<LoginResponse>('/auth/login', credentials)
-      accessToken.value = data.accessToken
+      setAccessToken(data.accessToken)
       user.value = data.user
-      localStorage.setItem('accessToken', data.accessToken)
-      localStorage.setItem('refreshToken', data.refreshToken)
       return data
     } finally {
       isLoading.value = false
@@ -138,6 +160,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     try {
+      // Revoga a sessão no servidor (o cookie httpOnly é limpo na resposta).
       await chamadosApi.post('/auth/logout')
     } catch {
       // ignora falhas de rede no logout
@@ -155,6 +178,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     mustChangePassword,
     somenteLeituraEquipamentos,
+    simulacaoAtivavel,
     simulando,
     nivelSimulado,
     simularComo,

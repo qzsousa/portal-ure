@@ -18,7 +18,7 @@ type TokenProvider = () => string | null
 type RefreshHandler = () => Promise<string | null>
 type UnauthorizedHandler = () => void
 
-let getToken: TokenProvider = () => localStorage.getItem('accessToken')
+let getToken: TokenProvider = () => null
 let doRefresh: RefreshHandler = async () => null
 let onUnauthorized: UnauthorizedHandler = () => {}
 
