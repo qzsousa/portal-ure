@@ -192,6 +192,7 @@ const gruposTecnicos = computed(() => {
 
 /** Rótulo da opção "Técnico da unidade" (o sucessor é a sugestão do backend). */
 const rotuloTecnicoDaUnidade = computed(() => {
+  if (carregandoTecnicos.value) return 'Carregando técnicos...'
   const sugerido = tecnicosDaUnidade.value[0]
   return sugerido
     ? `Técnico da unidade — ${sugerido.nome} (sugerido)`
