@@ -430,6 +430,9 @@ async function enviar() {
       solicitante: ident.nome.trim(),
       funcao: ident.cargo,
       tipo: tipoFinal(),
+      // Chave da categoria: é ela que permite encaminhar o chamado para o
+      // técnico da unidade automaticamente (não depende do texto de `tipo`).
+      categoriaChave: categoriaSelecionada.value?.chave,
       descricao: descricaoFinal(),
       urgencia: ident.urgencia,
       email: ident.email.trim(),

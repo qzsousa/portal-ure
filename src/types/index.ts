@@ -89,6 +89,12 @@ export interface Chamado {
   descricaoResolucao?: string | null
   tecnicoSetor?: string | null
   email?: string | null
+  /**
+   * Chave da categoria do formulário público (ex.: 'equipamento'). É o que
+   * permite encaminhar o chamado para o técnico sem depender do texto de `tipo`
+   * — chamado antigo vem sem a chave.
+   */
+  categoriaChave?: string | null
   mensagens?: ChamadoMensagem[]
 }
 

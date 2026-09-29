@@ -2,13 +2,23 @@
 /**
  * Configurações do portal (somente Administrador).
  * Abas: Catálogo (categoria/marca/modelo), Status do parque, Formulário de
- * chamados, Logs do sistema, Integrações.
+ * chamados, Encaminhamento automático, Logs do sistema, Integrações.
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { CheckCircle2, Eye, Loader2, Plus, ShieldCheck, Trash2, Users, Wrench, XCircle } from '@lucide/vue'
+import { CheckCircle2, Eye, Loader2, Plus, ShieldCheck, Trash2, Users, Wrench, XCircle, Zap } from '@lucide/vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import FormularioAdmin from '@/components/config/FormularioAdmin.vue'
+import {
+  alternarRegraEncaminhamento,
+  aplicarEncaminhamentoPendente,
+  listarRegrasEncaminhamento,
+  removerRegraEncaminhamento,
+  salvarRegraEncaminhamento,
+  type CategoriaRegra,
+  type RegraEncaminhamento,
+} from '@/api/encaminhamentos'
+import type { TecnicoDestino } from '@/api/chamados'
 import {
   adicionarItemCatalogo,
   listarAuditoria,
@@ -27,7 +37,7 @@ import { useUiStore } from '@/stores/ui'
 import { useErrorLogStore } from '@/stores/errorLog'
 import type { Nivel } from '@/types'
 
-type Aba = 'catalogo' | 'status' | 'formulario' | 'logs' | 'integracoes' | 'acesso'
+type Aba = 'catalogo' | 'status' | 'formulario' | 'encaminhamento' | 'logs' | 'integracoes' | 'acesso'
 
 const ui = useUiStore()
 const auth = useAuthStore()
@@ -38,6 +48,7 @@ const ABAS: Array<{ id: Aba; rotulo: string }> = [
   { id: 'catalogo', rotulo: 'Catálogo de equipamentos' },
   { id: 'status', rotulo: 'Status do parque' },
   { id: 'formulario', rotulo: 'Formulário de chamados' },
+  { id: 'encaminhamento', rotulo: 'Encaminhamento' },
   { id: 'logs', rotulo: 'Logs do sistema' },
   { id: 'integracoes', rotulo: 'Integrações' },
   { id: 'acesso', rotulo: 'Testes de acesso' },
@@ -122,6 +133,129 @@ async function carregarStatus() {
 const statusOrdenados = computed(() =>
   Object.entries(statusParque.porStatus).sort((a, b) => b[1] - a[1]),
 )
+
+/* ---------------- Encaminhamento automático ---------------- */
+const enc = reactive({
+  loading: true,
+  salvandoChave: '',
+  aplicando: false,
+  categorias: [] as CategoriaRegra[],
+  tecnicos: [] as TecnicoDestino[],
+  regras: {} as Record<string, RegraEncaminhamento>,
+  /** Select de destino por categoria: 'UNIDADE' ou 'TEC:<id>'. */
+  destino: {} as Record<string, string>,
+})
+
+async function carregarRegras() {
+  enc.loading = true
+  try {
+    const res = await listarRegrasEncaminhamento()
+    enc.categorias = res.categorias
+    enc.tecnicos = res.tecnicos
+    enc.regras = {}
+    enc.destino = {}
+    for (const r of res.data) {
+      enc.regras[r.categoriaChave] = r
+      enc.destino[r.categoriaChave] = r.modo === 'TECNICO' && r.tecnicoId ? `TEC:${r.tecnicoId}` : 'UNIDADE'
+    }
+    for (const c of res.categorias) {
+      if (!enc.destino[c.chave]) enc.destino[c.chave] = 'UNIDADE'
+    }
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível carregar as regras de encaminhamento.'))
+  } finally {
+    enc.loading = false
+  }
+}
+
+/** Cria/atualiza a regra da categoria com o destino escolhido no select. */
+async function salvarRegra(categoria: CategoriaRegra) {
+  const escolha = enc.destino[categoria.chave] || 'UNIDADE'
+  if (escolha.startsWith('TEC:') && escolha.length <= 4) {
+    ui.error('Escolha o técnico de destino.')
+    return
+  }
+  const atual = enc.regras[categoria.chave]
+  enc.salvandoChave = categoria.chave
+  try {
+    await salvarRegraEncaminhamento({
+      categoriaChave: categoria.chave,
+      modo: escolha === 'UNIDADE' ? 'UNIDADE' : 'TECNICO',
+      tecnicoId: escolha === 'UNIDADE' ? undefined : escolha.slice(4),
+      ativa: atual?.ativa ?? true,
+    })
+    ui.success(`Regra de "${categoria.nome}" salva.`)
+    await carregarRegras()
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao salvar a regra.'))
+  } finally {
+    enc.salvandoChave = ''
+  }
+}
+
+/** Liga/desliga a regra; sem regra ainda, a primeira ativação cria uma. */
+async function alternarRegra(categoria: CategoriaRegra) {
+  const atual = enc.regras[categoria.chave]
+  const nova = !(atual?.ativa ?? false)
+  enc.salvandoChave = categoria.chave
+  try {
+    if (!atual) {
+      await salvarRegraEncaminhamento({
+        categoriaChave: categoria.chave,
+        modo: (enc.destino[categoria.chave] || 'UNIDADE') === 'UNIDADE' ? 'UNIDADE' : 'TECNICO',
+        tecnicoId: (enc.destino[categoria.chave] || '').startsWith('TEC:')
+          ? enc.destino[categoria.chave].slice(4)
+          : undefined,
+        ativa: true,
+      })
+    } else {
+      await alternarRegraEncaminhamento(atual.id, nova)
+    }
+    ui.success(nova ? `Encaminhamento automático ativado para "${categoria.nome}".` : `Encaminhamento automático desativado para "${categoria.nome}".`)
+    await carregarRegras()
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao alterar a regra.'))
+  } finally {
+    enc.salvandoChave = ''
+  }
+}
+
+async function removerRegra(categoria: CategoriaRegra) {
+  const atual = enc.regras[categoria.chave]
+  if (!atual) return
+  if (!window.confirm(`Remover a regra de encaminhamento de "${categoria.nome}"?`)) return
+  enc.salvandoChave = categoria.chave
+  try {
+    await removerRegraEncaminhamento(atual.id)
+    ui.success('Regra removida.')
+    await carregarRegras()
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao remover a regra.'))
+  } finally {
+    enc.salvandoChave = ''
+  }
+}
+
+/** Aplica as regras ativas nos chamados abertos que ainda não têm responsável. */
+async function aplicarPendentes() {
+  if (enc.aplicando) return
+  const ativas = Object.values(enc.regras).filter((r) => r.ativa).length
+  if (!ativas) {
+    ui.error('Ative ao menos uma regra antes de aplicar.')
+    return
+  }
+  if (!window.confirm('Encaminhar agora os chamados abertos das categorias com regra ativa?\nSó os que ainda estão sem responsável são afetados.')) return
+  enc.aplicando = true
+  try {
+    const r = await aplicarEncaminhamentoPendente()
+    const extra = r.semTecnico ? ` ${r.semTecnico} ficaram sem técnico cadastrado.` : ''
+    ui.success(`${r.encaminhados} de ${r.total} chamados abertos encaminhados.${extra}`)
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao aplicar as regras.'))
+  } finally {
+    enc.aplicando = false
+  }
+}
 
 /* ---------------- Logs ---------------- */
 const logs = reactive({ loading: true, items: [] as AuditoriaItem[] })
@@ -228,6 +362,7 @@ onMounted(() => {
   void carregarCatalogo()
   void carregarStatus()
   void carregarLogs()
+  void carregarRegras()
 })
 </script>
 
@@ -332,6 +467,106 @@ onMounted(() => {
         <!-- ============ FORMULÁRIO DE CHAMADOS ============ -->
         <section v-else-if="aba === 'formulario'" class="card conf-card">
           <FormularioAdmin />
+        </section>
+
+        <!-- ============ ENCAMINHAMENTO AUTOMÁTICO ============ -->
+        <section v-else-if="aba === 'encaminhamento'" class="card conf-card">
+          <div class="enc-header">
+            <h3>Encaminhamento automático para técnicos</h3>
+            <button
+              class="btn btn-outline"
+              type="button"
+              :disabled="enc.aplicando || enc.loading"
+              @click="aplicarPendentes"
+            >
+              <Loader2 v-if="enc.aplicando" class="spin" :size="15" />
+              <Zap v-else :size="15" />
+              Aplicar agora aos abertos
+            </button>
+          </div>
+          <p class="conf-desc">
+            Escolha a categoria do formulário público que deve chegar sozinha ao técnico. O chamado
+            nasce com o responsável preenchido, o registro no histórico e um aviso no sino do técnico.
+            Para os chamados que já estão abertos sem responsável, use
+            <strong>Aplicar agora</strong> ou o botão <strong>Encaminhar</strong> no detalhe do chamado.
+          </p>
+
+          <p v-if="enc.loading" class="td-center">Carregando...</p>
+          <div v-else class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Categoria</th>
+                  <th>Destino</th>
+                  <th>Automático</th>
+                  <th class="th-acoes"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="enc.categorias.length === 0">
+                  <td colspan="4" class="td-center">
+                    Nenhuma categoria de formulário cadastrada.
+                  </td>
+                </tr>
+                <tr v-for="c in enc.categorias" :key="c.chave">
+                  <td>
+                    <span class="enc-cat">
+                      <span class="enc-cor" :style="{ background: c.cor || 'var(--blue)' }" />
+                      <strong>{{ c.nome }}</strong>
+                      <code class="enc-chave">{{ c.chave }}</code>
+                    </span>
+                  </td>
+                  <td>
+                    <div class="enc-destino">
+                      <select v-model="enc.destino[c.chave]" class="select-input slim" :disabled="enc.salvandoChave === c.chave">
+                        <option value="UNIDADE">Técnico da unidade</option>
+                        <option v-for="t in enc.tecnicos" :key="t.id" :value="`TEC:${t.id}`">
+                          {{ t.nome }} (fixo)
+                        </option>
+                      </select>
+                      <button
+                        class="btn btn-outline btn-mini"
+                        type="button"
+                        :disabled="enc.salvandoChave === c.chave"
+                        @click="salvarRegra(c)"
+                      >
+                        Salvar
+                      </button>
+                    </div>
+                    <small v-if="enc.regras[c.chave]?.tecnicoNome" class="enc-nota">
+                      Técnico fixo: {{ enc.regras[c.chave]?.tecnicoNome }}
+                    </small>
+                  </td>
+                  <td>
+                    <button
+                      class="switch"
+                      :class="{ on: enc.regras[c.chave]?.ativa }"
+                      type="button"
+                      role="switch"
+                      :aria-checked="!!enc.regras[c.chave]?.ativa"
+                      :disabled="enc.salvandoChave === c.chave"
+                      @click="alternarRegra(c)"
+                    >
+                      <span class="switch-bola" />
+                      {{ enc.regras[c.chave]?.ativa ? 'Ativo' : 'Inativo' }}
+                    </button>
+                  </td>
+                  <td class="td-acoes">
+                    <button
+                      v-if="enc.regras[c.chave]"
+                      class="btn-del"
+                      type="button"
+                      title="Remover regra"
+                      :disabled="enc.salvandoChave === c.chave"
+                      @click="removerRegra(c)"
+                    >
+                      <Trash2 :size="15" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <!-- ============ LOGS ============ -->
@@ -647,6 +882,112 @@ onMounted(() => {
   text-align: center;
   color: var(--text-muted);
   padding: 26px !important;
+}
+
+/* ---------- Encaminhamento automático ---------- */
+.enc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.enc-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.enc-cor {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.enc-chave {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.enc-destino {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.enc-destino .select-input {
+  min-width: 220px;
+}
+
+.enc-nota {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.btn-mini {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* Interruptor Ativo/Inativo */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.switch-bola {
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.switch-bola::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.switch.on {
+  color: var(--text-primary);
+  border-color: transparent;
+}
+
+.switch.on .switch-bola {
+  background: #16a34a;
+}
+
+.switch.on .switch-bola::after {
+  transform: translateX(13px);
+}
+
+.switch:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .status-lista {

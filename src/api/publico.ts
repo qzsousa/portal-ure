@@ -29,6 +29,11 @@ export interface NovoChamadoPayload {
   descricao: string
   urgencia: string
   email?: string
+  /**
+   * Chave da categoria escolhida (ex.: 'equipamento'). O backend usa para
+   * encaminhar automaticamente o chamado para o técnico da unidade.
+   */
+  categoriaChave?: string
   anexoBase64?: string
   anexoNome?: string
   anexoTipo?: string

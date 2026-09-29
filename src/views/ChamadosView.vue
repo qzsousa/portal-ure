@@ -11,6 +11,8 @@ import {
   Paperclip,
   School,
   Search,
+  UserPlus,
+  Wrench,
   X,
 } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -22,12 +24,16 @@ import {
   atualizarChamadosEmLote,
   atualizarStatusChamado,
   deletarChamado,
+  encaminharChamado,
   getChamado,
   listarChamados,
+  listarTecnicos,
+  listarTecnicosDaUnidade,
   responderChamado,
   rotuloStatusChamado,
   type AnexoMensagemPayload,
   type FiltrosChamado,
+  type TecnicoDestino,
 } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
@@ -155,6 +161,100 @@ const novoStatus = ref<StatusChamado>('ANDAMENTO')
 const descricaoResolucao = ref('')
 const textoResposta = ref('')
 
+/* ------- Encaminhar para técnico (matriz) ------- */
+const encaminharAberto = ref(false)
+const encaminhando = ref(false)
+const carregandoTecnicos = ref(false)
+const tecnicos = ref<TecnicoDestino[]>([])
+const tecnicosDaUnidade = ref<TecnicoDestino[]>([])
+/** 'UNIDADE' = deixa o backend escolher o técnico da unidade; 'TEC:<id>' = o escolhido. */
+const encDestino = ref('UNIDADE')
+const encObservacao = ref('')
+
+/** Opções do select agrupadas: quem atende a escola e os demais técnicos. */
+const gruposTecnicos = computed(() => {
+  const atende = new Set(tecnicosDaUnidade.value.map((t) => t.id))
+  const rotulo = (t: TecnicoDestino) =>
+    t.abertos === undefined ? t.nome : `${t.nome} · ${t.abertos} aberto${t.abertos === 1 ? '' : 's'}`
+
+  const daUnidade = tecnicos.value.filter((t) => atende.has(t.id))
+  const outros = tecnicos.value.filter((t) => !atende.has(t.id))
+
+  const grupos: Array<{ nome: string; opcoes: Array<{ valor: string; rotulo: string }> }> = []
+  if (daUnidade.length) {
+    grupos.push({ nome: 'Atende esta unidade', opcoes: daUnidade.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
+  }
+  if (outros.length) {
+    grupos.push({ nome: 'Outros técnicos', opcoes: outros.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
+  }
+  return grupos
+})
+
+/** Rótulo da opção "Técnico da unidade" (o sucessor é a sugestão do backend). */
+const rotuloTecnicoDaUnidade = computed(() => {
+  const sugerido = tecnicosDaUnidade.value[0]
+  return sugerido
+    ? `Técnico da unidade — ${sugerido.nome} (sugerido)`
+    : 'Técnico da unidade — nenhum técnico cadastrado'
+})
+
+const podeEncaminhar = computed(
+  () => !encaminhando.value && (encDestino.value === 'UNIDADE' || encDestino.value.startsWith('TEC:')),
+)
+
+/** Abre o modal de detalhes (se preciso) e já abre a caixa de encaminhamento. */
+async function abrirEncaminhar(c: Chamado) {
+  if (detalhe.value?.id !== c.id) await abrirDetalhe(c)
+  if (detalhe.value?.id !== c.id) return
+  encaminharAberto.value = true
+  encDestino.value = 'UNIDADE'
+  encObservacao.value = ''
+  tecnicos.value = []
+  tecnicosDaUnidade.value = []
+  carregandoTecnicos.value = true
+  try {
+    // As sugestões da unidade vêm primeiro: o select já abre com
+    // "Técnico da unidade" escolhido, que é o comportamento padrão.
+    const [daUnidade, todos] = await Promise.all([
+      listarTecnicosDaUnidade(c.id).catch(() => []),
+      listarTecnicos().catch(() => []),
+    ])
+    tecnicosDaUnidade.value = daUnidade
+    tecnicos.value = todos
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível carregar os técnicos.'))
+  } finally {
+    carregandoTecnicos.value = false
+  }
+}
+
+async function confirmarEncaminhar() {
+  if (!detalhe.value || !podeEncaminhar.value) return
+  const alvo = detalhe.value
+  const anterior = alvo.responsavel
+  if (anterior && !window.confirm(
+    `O chamado já tem ${anterior} como responsável. Reencaminhar para outro técnico?`,
+  )) return
+
+  encaminhando.value = true
+  try {
+    const ehUnidade = encDestino.value === 'UNIDADE'
+    const res = await encaminharChamado(alvo.id, {
+      modo: ehUnidade ? 'UNIDADE' : 'TECNICO',
+      tecnicoId: ehUnidade ? undefined : encDestino.value.slice(4),
+      observacao: encObservacao.value.trim() || undefined,
+    })
+    detalhe.value = res.chamado
+    encaminharAberto.value = false
+    ui.success(`Chamado encaminhado para ${res.tecnico.nome}.`)
+    await carregar(true)
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao encaminhar o chamado.'))
+  } finally {
+    encaminhando.value = false
+  }
+}
+
 /* ------- Pergunta & resposta (matriz ↔ escola) ------- */
 const TAMANHO_MAX_ANEXO = 5 * 1024 * 1024 // 5 MB por arquivo (limite do backend)
 const MAX_ANEXOS = 5
@@ -200,6 +300,7 @@ async function abrirDetalhe(c: Chamado) {
   respostaEscola.value = ''
   anexosResposta.value = []
   responderAberto.value = false
+  encaminharAberto.value = false
   detalheAberto.value = true
   // A listagem não traz a conversa — busca o chamado completo (perguntas, respostas e anexos)
   try {
@@ -548,7 +649,12 @@ useAutoRefresh(async () => {
                 <RowActions
                   :itens="[
                     { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
-                    ...(ehMatriz ? [{ rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) }] : []),
+                    ...(ehMatriz
+                      ? [
+                          { rotulo: 'Encaminhar para técnico', icone: UserPlus, acao: () => abrirEncaminhar(c) },
+                          { rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) },
+                        ]
+                      : []),
                   ]"
                 />
               </td>
@@ -619,6 +725,65 @@ useAutoRefresh(async () => {
 
         <!-- ===== Ações da MATRIZ (ADMIN/TECNICO) ===== -->
         <template v-if="ehMatriz">
+          <!-- Encaminhar para técnico: categoria errada na abertura, equipamento,
+               ou qualquer chamado que precise chegar a um técnico específico. -->
+          <div class="acao-box acao-encaminhar">
+            <h4><Wrench :size="15" /> Encaminhar para técnico</h4>
+            <div v-if="!encaminharAberto" class="acao-linha">
+              <p class="acao-dica">
+                <template v-if="detalhe.responsavel">
+                  Este chamado está com <strong>{{ detalhe.responsavel }}</strong> como responsável.
+                </template>
+                <template v-else>Ainda sem responsável técnico.</template>
+              </p>
+              <button class="btn btn-outline" type="button" @click="abrirEncaminhar(detalhe)">
+                <UserPlus :size="15" />
+                {{ detalhe.responsavel ? 'Reencaminhar' : 'Encaminhar' }}
+              </button>
+            </div>
+
+            <template v-else>
+              <div class="acao-linha">
+                <select v-model="encDestino" class="select-input" :disabled="carregandoTecnicos">
+                  <option value="UNIDADE">{{ rotuloTecnicoDaUnidade }}</option>
+                  <optgroup v-for="grupo in gruposTecnicos" :key="grupo.nome" :label="grupo.nome">
+                    <option v-for="o in grupo.opcoes" :key="o.valor" :value="o.valor">{{ o.rotulo }}</option>
+                  </optgroup>
+                </select>
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  :disabled="!podeEncaminhar"
+                  @click="confirmarEncaminhar"
+                >
+                  <UserPlus :size="15" />
+                  Encaminhar
+                </button>
+                <button
+                  class="btn btn-outline"
+                  type="button"
+                  :disabled="encaminhando"
+                  @click="encaminharAberto = false"
+                >
+                  Cancelar
+                </button>
+              </div>
+              <input
+                v-model="encObservacao"
+                class="input"
+                maxlength="500"
+                placeholder="Observação (opcional) — fica registrada no histórico"
+              />
+              <p v-if="carregandoTecnicos" class="acao-dica">Carregando técnicos...</p>
+              <p v-else-if="!tecnicosDaUnidade.length" class="acao-dica enc-aviso">
+                Nenhum técnico ativo atendendo {{ detalhe.unidade }} está cadastrado — escolha um técnico na lista.
+              </p>
+              <p v-else-if="detalhe.responsavel" class="acao-dica enc-aviso">
+                Ao encaminhar, <strong>{{ detalhe.responsavel }}</strong> deixa de ser o responsável.
+              </p>
+            </template>
+          </div>
+
           <div class="acao-box">
             <h4>Alterar status</h4>
             <div class="acao-linha">
@@ -1129,6 +1294,11 @@ tr.selecionado td {
   align-self: center;
 }
 
+/* Aviso do encaminhamento (sem técnico na unidade / troca de responsável) */
+.enc-aviso {
+  color: var(--brand-gold);
+}
+
 .acao-linha {
   display: flex;
   gap: 10px;
@@ -1136,6 +1306,27 @@ tr.selecionado td {
 
 .acao-linha .select-input {
   max-width: 220px;
+}
+
+/* Encaminhamento: select largo (nome do técnico + unidades) e empilhado */
+.acao-encaminhar h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acao-encaminhar .acao-linha {
+  flex-wrap: wrap;
+}
+
+.acao-encaminhar .select-input {
+  flex: 1;
+  min-width: 220px;
+  max-width: none;
+}
+
+.acao-encaminhar .input {
+  margin-top: 10px;
 }
 
 .textarea {

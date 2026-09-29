@@ -66,9 +66,10 @@ function extrairNomes(data: unknown): string[] {
 }
 
 /**
- * Escolas cadastradas (para o select de unidade). Endpoint autenticado.
- * Usa o endpoint enxuto e, conforme a versão do backend, cai para a lista
- * padronizada ou para o cadastro completo — assim o select nunca fica vazio.
+ * Escolas cadastradas (para o select de unidade).
+ * Usa a rota pública enxuta (`/escolas/nomes`, montada no index do backend) e,
+ * se ela não responder na versão em uso, cai para a lista padronizada ou para o
+ * cadastro completo — assim o select nunca fica vazio sem o usuário perceber.
  */
 export async function listarEscolas(): Promise<string[]> {
   const tentativas: Array<() => Promise<unknown>> = [

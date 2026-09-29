@@ -78,6 +78,59 @@ export async function atualizarChamadosEmLote(
   return data
 }
 
+/* ---------- Encaminhamento para técnico ---------- */
+
+/** Técnico que pode receber um encaminhamento. */
+export interface TecnicoDestino {
+  id: string
+  nome: string
+  email: string
+  filial: string
+  /** Chamados abertos dele — o backend usa para sugerir quem está mais livre. */
+  abertos?: number
+}
+
+/** `UNIDADE` = técnico da própria unidade (escolhido pelo backend); `TECNICO` = o escolhido. */
+export type ModoEncaminhamento = 'UNIDADE' | 'TECNICO'
+
+/** Todos os técnicos ativos — usado como lista de destinos. */
+export async function listarTecnicos(): Promise<TecnicoDestino[]> {
+  const { data } = await chamadosApi.get<{ data: TecnicoDestino[] }>('/chamados/encaminhar/tecnicos')
+  return data.data
+}
+
+/**
+ * Técnicos que atendem a unidade do chamado, na ordem de sugestão do backend
+ * (casa exata > schools irmãs > menos chamados abertos).
+ */
+export async function listarTecnicosDaUnidade(chamadoId: string): Promise<TecnicoDestino[]> {
+  const { data } = await chamadosApi.get<{ data: TecnicoDestino[] }>(`/chamados/encaminhar/tecnicos/${chamadoId}`)
+  return data.data
+}
+
+export interface EncaminharChamadoPayload {
+  modo: ModoEncaminhamento
+  /** Obrigatório quando `modo` = 'TECNICO'. */
+  tecnicoId?: string
+  /** Observação opcional registrada no histórico do chamado. */
+  observacao?: string
+}
+
+/**
+ * Encaminha/reencaminha o chamado para um técnico (modal de detalhes).
+ * Lança AxiosError 422 quando não há técnico atendendo a unidade.
+ */
+export async function encaminharChamado(
+  id: string,
+  payload: EncaminharChamadoPayload,
+): Promise<{ chamado: Chamado; tecnico: TecnicoDestino }> {
+  const { data } = await chamadosApi.post<{ chamado: Chamado; tecnico: TecnicoDestino }>(
+    `/chamados/${id}/encaminhar`,
+    payload,
+  )
+  return data
+}
+
 /* ---------- Apresentação ---------- */
 
 export const ROTULO_STATUS_CHAMADO: Record<StatusChamado, string> = {
