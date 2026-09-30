@@ -94,6 +94,8 @@ A pessoa vê cinco estrelas (clicáveis, com destaque no `mouseenter`) e um
 campo de comentário marcado como *opcional*. O botão **Enviar avaliação** só
 libera com pelo menos uma estrela marcada.
 
+![Bloco de avaliação aparecendo depois que o chamado foi resolvido](./screenshots/30-avaliacao-formulario.png)
+
 > O bloco aparece **sozinho** — não há nem um botão para "avaliar". Quem
 > escreveu a regra `v-if="resolvido"` economizou a escola de um passo extra:
 > basta a tela estar aberta quando o chamado é concluído.
@@ -116,6 +118,8 @@ a nota agora vem do servidor, em `resultado.avaliacao`.
 
 Depois de enviar, o formulário some e sobra o cartão de agradecimento, com as
 estrelas preenchidas e o ícone de coração:
+
+![Estado de agradecimento depois de enviar a avaliação](./screenshots/31-avaliacao-enviada.png)
 
 > O cartão é **visual, não é confirmação**: os dados já gravados são os que
 > voltam do servidor. Se a pessoa fechar a aba, a nota continua registrada.
