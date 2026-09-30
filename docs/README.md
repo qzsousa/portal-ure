@@ -76,6 +76,8 @@ sistema rodando com dados reais.
 | 30 | Consulta — bloco de avaliação depois do chamado resolvido | [`30-avaliacao-formulario.png`](./screenshots/30-avaliacao-formulario.png) |
 | 31 | Consulta — agradecimento depois de enviar a avaliação | [`31-avaliacao-enviada.png`](./screenshots/31-avaliacao-enviada.png) |
 | 32 | Elogios e avaliações — tabela de avaliações com comentário (matriz) | [`32-feedback-avaliacoes.png`](./screenshots/32-feedback-avaliacoes.png) |
+| 33 | Painel de chamados — avaliação no detalhe (perfil Gestor) | [`33-avaliacao-painel.png`](./screenshots/33-avaliacao-painel.png) |
+| 34 | Painel de chamados — agradecimento depois de avaliar | [`34-avaliacao-painel-enviada.png`](./screenshots/34-avaliacao-painel-enviada.png) |
 
 > **Sobre os prints.** Todos foram capturados do portal rodando localmente
 > (`localhost:5173`) contra o banco de desenvolvimento, com um usuário
@@ -91,12 +93,15 @@ sistema rodando com dados reais.
 >   filtros e a tabela completa de equipamentos continuam — é o comportamento do
 >   VISUALIZADOR descrito em
 >   [Autenticação e permissões](./04-autenticacao-e-permissoes.md).
-> - **30, 31 e 32 — Avaliação:** capturados com uma **API de mentira** servindo
->   um chamado `RESOLVIDO` e cinco avaliações montadas para a demonstração.
+> - **30 a 34 — Avaliação:** capturados com uma **API de mentira** servindo um
+>   chamado `RESOLVIDO` e cinco avaliações montadas para a demonstração.
 >   Unidade, solicitante, técnico, conversa e notas são **fictícios**, e
 >   **nada foi gravado em nenhum banco** — o banco de produção tem 0 avaliações
 >   até o momento. Ver
 >   [Avaliação de atendimento](./13-avaliacao-de-atendimento.md).
+>
+> Todos os prints de avaliação são de **página inteira** (não da dobra da
+> janela), para nenhum bloco ficar cortado pela altura da tela.
 >
 > Os prints 01–06 e 07 usam o chamado **`CH-20260929-0006`**, criado durante a
 > captura para demonstrar o fluxo completo de ponta a ponta.

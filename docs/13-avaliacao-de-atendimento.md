@@ -102,6 +102,45 @@ libera com pelo menos uma estrela marcada.
 
 ---
 
+## Onde a escola avalia
+
+Há **dois lugares**, e os dois mostram o mesmo formulário de 5 estrelas.
+
+| Onde | Quem entra | Credencial |
+|---|---|---|
+| `/consulta` | qualquer pessoa, **sem login** | digita protocolo + e-mail |
+| `/chamados` (detalhe) | **GESTOR/VISUALIZADOR**, com login | o e-mail da sessão |
+
+### No painel de chamados
+
+A escola acompanha e conclui o chamado pelo `/chamados`. Ao abrir o detalhe de
+um chamado `RESOLVIDO`, o bloco de avaliação aparece abaixo do histórico:
+
+![Avaliação no detalhe do chamado, no painel da escola](./screenshots/33-avaliacao-painel.png)
+
+Depois de enviar, o bloco vira o cartão de agradecimento:
+
+![Cartão de agradecimento no painel da escola](./screenshots/34-avaliacao-painel-enviada.png)
+
+**A credencial não é perguntada.** O frontend manda o **e-mail da sessão**
+(`auth.user.email`) junto com o protocolo, e o backend continua comparando os
+dois — só grava se baterem. Ou seja: **não se libera nada além do que já era
+permitido na tela pública**, só se elimina o trabalho de redigitar o e-mail.
+
+Duas consequências que valem registrar:
+
+- Se outra conta abriu o chamado, a sessão não é a dona e o formulário não
+  aparece. No lugar há o aviso de que só quem abriu pode avaliar, com a
+  indicação de usar a tela de consulta.
+- Abrir o chamado por um e-mail e avaliar por outro **não funciona**, nem aqui
+  nem na tela pública. É a trava `emailConfere`, a mesma.
+
+> Para o bloco aparecer, o backend precisa devolver `avaliacao` em
+> `GET /chamados/:id` — sem isso o painel mostraria o formulário mesmo depois de
+> avaliado, e o envio bateria em `409`.
+
+---
+
 ## As três situações do bloco
 
 A mesma tela mostra três coisas diferentes, dependendo do histórico:
