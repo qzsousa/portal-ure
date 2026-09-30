@@ -52,11 +52,16 @@ function primeiroNome(nome: string): string {
 }
 
 /**
- * Posição do técnico na escala, ou null quando não está nela.
+ * Posição na escala, ou null quando o cadastro não é de ninguém dela.
  *
- * Casa pelo primeiro nome, aceitando o nome completo ou abreviado em
- * relação à escala ("Carolina" cai em CAROL, "Heberto" em HEBERT). O piso de 4
- * letras evita que um nome curto capture alguém que não é da equipe.
+ * Casa pelo primeiro nome e aceita o abreviado em relação à escala: "Carolina
+ * Prado" cai em CAROL, "Heberto" em HEBERT. O piso de 4 letras evita que um
+ * nome curto capture alguém que não é da equipe.
+ *
+ * Como o casamento é por primeiro nome, DUAS contas da mesma pessoa entram
+ * como duas opções ("Pablo" e "Pablo - Estagiário"). Isso é cadastro, não
+ * código: quem escreve o nome na conta escreve também o primeiro nome de
+ * quem vai atender. Desative a conta antiga.
  */
 function posicaoNaEscala(nome: string, posicao: Map<string, number>): number | null {
   const primeiro = primeiroNome(nome)
@@ -113,12 +118,15 @@ export interface OrdenarTecnicosOpcoes {
 /**
  * Ordena (e filtra) a lista de destinos de um select de responsável.
  *
- * - A equipe da categoria vem na ordem de `EQUIPE_ATENDIMENTO` /
- *   `EQUIPE_SISTEMAS_EMAIL`. Quem atende a unidade entra antes, no grupo
- *   `GRUPO_UNIDADE`, que já preserva esta ordem.
- * - Técnico ativo fora da escala não some: nas categorias comuns ele vai para
- *   o fim da lista; nas restritas (Sistemas/E-mail) sai da lista, salvo se
- *   estiver em `extrasIds` (o que já estava salvo na regra).
+ * - A escala é a lista FECHADA de quem pode atender: o que não está nela não
+ *   entra no select, mesmo sendo ADMIN ou TECNICO ativo. É o que impede a
+ *   conta de teste ("Teste Local") e o homônimo ("Pablo - Estagiário" ao lado
+ *   do "Pablo") de aparecerem como destino.
+ * - A ordem é a de `EQUIPE_ATENDIMENTO` / `EQUIPE_SISTEMAS_EMAIL`. Quem atende
+ *   a unidade entra antes, no grupo `GRUPO_UNIDADE`, que preserva essa ordem.
+ * - Única exceção: o técnico já salvo na regra (`extrasIds`) continua na lista
+ *   para uma regra antiga não abrir vazia — sem isso o select ficaria sem
+ *   seleção e o "Salvar" viraria "Técnico da unidade" sem ninguém querer.
  */
 export function ordenarTecnicos(
   tecnicos: TecnicoDestino[],
@@ -144,9 +152,6 @@ export function ordenarTecnicos(
   daEscala.sort((a, b) => (ordem.get(a.id) ?? 0) - (ordem.get(b.id) ?? 0))
 
   const extrasPresentes = foraDaEscala.filter((t) => extras.has(t.id))
-  const resto = ehCategoriaEquipeReduzida(opcoes.categoriaChave)
-    ? []
-    : foraDaEscala.filter((t) => !extras.has(t.id))
 
-  return [...daEscala, ...extrasPresentes, ...resto]
+  return [...daEscala, ...extrasPresentes]
 }
