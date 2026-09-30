@@ -3,6 +3,14 @@ import type { Chamado, StatusChamado } from '@/types'
 
 /** Cliente da API de chamados (backend que também provê autenticação). */
 
+/**
+ * Valor reservado do filtro por categoria para os chamados que não se encaixam
+ * em NENHUMA categoria do formulário — quase todo o histórico anterior a ele ter
+ * virado dinâmico. Espelha `CATEGORIA_SEM_CHAVE` do backend
+ * (`shared/types/api.ts`) — se mudar lá, muda aqui.
+ */
+export const CATEGORIA_SEM_CHAVE = '__sem__'
+
 export interface Paginado<T> {
   data: T[]
   meta: { total: number; page: number; limit: number; totalPages: number }
@@ -11,8 +19,12 @@ export interface Paginado<T> {
 export interface FiltrosChamado {
   unidade?: string
   categoria?: string
+  /** Chave da categoria do formulário público (ex.: 'equipamento'). */
+  categoriaChave?: string
   status?: StatusChamado | ''
   urgencia?: string
+  /** Nome do técnico responsável — o backend casa por nome, não por id. */
+  responsavel?: string
   page?: number
   limit?: number
 }
@@ -22,8 +34,10 @@ export async function listarChamados(f: FiltrosChamado = {}): Promise<Paginado<C
   const params: Record<string, string | number> = { page: f.page ?? 1, limit: f.limit ?? 20 }
   if (f.unidade?.trim()) params.unidade = f.unidade.trim()
   if (f.categoria?.trim()) params.categoria = f.categoria.trim()
+  if (f.categoriaChave?.trim()) params.categoriaChave = f.categoriaChave.trim()
   if (f.status) params.status = f.status
   if (f.urgencia?.trim()) params.urgencia = f.urgencia.trim()
+  if (f.responsavel?.trim()) params.responsavel = f.responsavel.trim()
   const { data } = await chamadosApi.get<Paginado<Chamado>>('/chamados', { params })
   return data
 }
@@ -76,6 +90,19 @@ export async function atualizarChamadosEmLote(
 ): Promise<{ atualizados: number }> {
   const { data } = await chamadosApi.patch<{ atualizados: number }>('/chamados/batch', { ids, ...payload })
   return data
+}
+
+/**
+ * Nomes disponíveis no filtro "Técnico" da listagem de chamados.
+ *
+ * Não é a mesma lista de `listarTecnicos()`: aquela é de ADMIN/TECNICO e serve
+ * para ENCAMINHAR (quem pode receber chamado agora). Esta entra também quem já
+ * tem chamado em seu nome, mesmo desativado — sem isso, o filtro não alcançaria
+ * o trabalho já feito por quem saiu da equipe.
+ */
+export async function listarTecnicosDoFiltro(): Promise<string[]> {
+  const { data } = await chamadosApi.get<{ data: string[] }>('/chamados/filtros/tecnicos')
+  return data.data
 }
 
 /* ---------- Encaminhamento para técnico ---------- */

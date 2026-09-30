@@ -34,14 +34,20 @@ import {
   listarChamados,
   listarTecnicos,
   listarTecnicosDaUnidade,
+  listarTecnicosDoFiltro,
   responderChamado,
   rotuloStatusChamado,
+  CATEGORIA_SEM_CHAVE,
   type AnexoMensagemPayload,
   type FiltrosChamado,
   type TecnicoDestino,
 } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
-import { avaliarChamadoPorProtocolo } from '@/api/publico'
+import {
+  avaliarChamadoPorProtocolo,
+  getFormularioPublico,
+  type FormularioCategoria,
+} from '@/api/publico'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaEquipeReduzida, ordenarTecnicos } from '@/utils/tecnicos'
@@ -65,7 +71,13 @@ const estado = reactive({
 })
 const PAGE_SIZE = 10
 
-const filtros = reactive<FiltrosChamado>({ status: '', unidade: '', urgencia: '' })
+const filtros = reactive<FiltrosChamado>({
+  status: '',
+  unidade: '',
+  urgencia: '',
+  categoriaChave: '',
+  responsavel: '',
+})
 
 /* Matriz (ADMIN/TECNICO) tem controle total; escola (GESTOR/VISUALIZADOR) só responde e conclui. */
 const ehMatriz = computed(() => ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || ''))
@@ -136,6 +148,29 @@ function aplicarFiltros() {
   void carregar()
 }
 
+/* ------- Opções dos filtros de categoria e técnico ------- */
+
+/** Categorias do formulário público — o mesmo catálogo da tela de abertura. */
+const categorias = ref<FormularioCategoria[]>([])
+const tecnicosFiltro = ref<string[]>([])
+
+/** Só as ativas, na ordem em que aparecem para quem abre chamado. */
+const opcoesCategoria = computed(() => categorias.value.filter((c) => c.ativa))
+
+/**
+ * Falha ao carregar as opções NÃO pode derrubar a tela: os dois selects ficam
+ * só com "Todos" e a listagem segue funcionando. Filtro é conveniência, não
+ * requisito para ver os chamados.
+ */
+async function carregarOpcoesFiltro() {
+  const [cats, tecnicos] = await Promise.all([
+    getFormularioPublico().catch(() => []),
+    listarTecnicosDoFiltro().catch(() => []),
+  ])
+  categorias.value = cats
+  tecnicosFiltro.value = tecnicos
+}
+
 /* ------- Chips de filtro rápido ------- */
 const STATUS_CHIPS: Array<{ rotulo: string; valor: StatusChamado | '' }> = [
   { rotulo: 'Todos', valor: '' },
@@ -157,6 +192,16 @@ function alternarUrgentes() {
 
 function alternarPortalNet() {
   filtros.categoria = filtros.categoria === 'PortalNet' ? '' : 'PortalNet'
+  // O chip filtra por TEXTO do tipo; o select filtra pela chave da categoria.
+  // Deixar os dois marcados seria um filtro invisível somando ao outro.
+  if (filtros.categoria) filtros.categoriaChave = ''
+  aplicarFiltros()
+}
+
+/** Selecionar categoria no select desmarca o chip de texto, pelo mesmo motivo. */
+function aplicarCategoria(chave: string) {
+  filtros.categoriaChave = chave
+  if (chave) filtros.categoria = ''
   aplicarFiltros()
 }
 
@@ -330,6 +375,9 @@ const erroAvaliacao = ref('')
 const avaliacaoEnviada = ref(0)
 
 const notaExibida = computed(() => notaHover.value || nota.value)
+
+/** Rótulo da nota exibido ao lado das estrelas. Índice 1..5. */
+const NOMES_NOTA = ['', 'Muito ruim', 'Ruim', 'Regular', 'Bom', 'Excelente']
 
 /**
  * A sessão é a dona do chamado? Se outra conta abriu, o backend recusaria com
@@ -596,6 +644,7 @@ async function excluirChamado(c: Chamado) {
 onMounted(() => {
   void carregar()
   void carregarStats()
+  void carregarOpcoesFiltro()
 })
 
 /* Atualização automática: chamados novos/mudanças de status chegam sozinhos. */
@@ -677,6 +726,21 @@ useAutoRefresh(async () => {
         <option value="Alta">Alta</option>
         <option value="Média">Média</option>
         <option value="Baixa">Baixa</option>
+      </select>
+      <select
+        :value="filtros.categoriaChave"
+        class="select-input slim"
+        @change="aplicarCategoria(($event.target as HTMLSelectElement).value)"
+      >
+        <option value="">Categoria: Todas</option>
+        <option v-for="c in opcoesCategoria" :key="c.id" :value="c.chave">{{ c.nome }}</option>
+        <!-- O que não se encaixa em NENHUMA categoria do formulário: quase
+             todo o histórico anterior a ele ter virado dinâmico. -->
+        <option :value="CATEGORIA_SEM_CHAVE">Fora das categorias</option>
+      </select>
+      <select v-model="filtros.responsavel" class="select-input slim" @change="aplicarFiltros">
+        <option value="">Técnico: Todos</option>
+        <option v-for="t in tecnicosFiltro" :key="t" :value="t">{{ t }}</option>
       </select>
       <button class="btn btn-primary" type="button" @click="aplicarFiltros">Filtrar</button>
       <a class="btn btn-gold" href="/chamado/novo" target="_blank" rel="noopener">
@@ -1001,19 +1065,19 @@ useAutoRefresh(async () => {
           <!-- Enviada agora, nesta sessão. Vem ANTES de `detalhe.avaliacao`
                porque o envio também escreve o campo local: com a ordem
                invertida, o cartão de agradecimento nunca apareceria. -->
-          <div v-if="avaliacaoEnviada" class="acao-box ava-agradecimento">
-            <Heart :size="20" />
-            <div>
-              <h4>Obrigado pela sua avaliação!</h4>
-              <p class="acao-dica">
-                Seu retorno ajuda a equipe a melhorar o atendimento às escolas.
-              </p>
+          <div v-if="avaliacaoEnviada" class="acao-box ava-box ava-agradecimento">
+            <div class="ava-topo">
+              <span class="ava-icone"><Heart :size="20" /></span>
+              <div>
+                <h4>Obrigado pela sua avaliação!</h4>
+                <p>Seu retorno ajuda a equipe a melhorar o atendimento às escolas.</p>
+              </div>
             </div>
             <div class="ava-estrelas readonly" :aria-label="`Nota ${avaliacaoEnviada} de 5`">
               <Star
                 v-for="i in 5"
                 :key="i"
-                :size="22"
+                :size="26"
                 :fill="i <= avaliacaoEnviada ? '#f5b921' : 'none'"
                 :color="i <= avaliacaoEnviada ? '#f5b921' : '#cbd5e1'"
               />
@@ -1021,13 +1085,22 @@ useAutoRefresh(async () => {
           </div>
 
           <!-- Já avaliado antes (sessão anterior ou pela tela de consulta) -->
-          <div v-else-if="detalhe.avaliacao" class="acao-box ava-ja">
-            <h4>Sua avaliação</h4>
+          <div v-else-if="detalhe.avaliacao" class="acao-box ava-box ava-ja">
+            <div class="ava-topo">
+              <span class="ava-icone"><Star :size="20" /></span>
+              <div>
+                <h4>Sua avaliação</h4>
+                <p>
+                  Você já avaliou este atendimento. Obrigado — a equipe usa o
+                  comentário para melhorar o serviço.
+                </p>
+              </div>
+            </div>
             <div class="ava-estrelas readonly" :aria-label="`Nota ${detalhe.avaliacao.nota} de 5`">
               <Star
                 v-for="i in 5"
                 :key="i"
-                :size="22"
+                :size="26"
                 :fill="i <= detalhe.avaliacao.nota ? '#f5b921' : 'none'"
                 :color="i <= detalhe.avaliacao.nota ? '#f5b921' : '#cbd5e1'"
               />
@@ -1035,17 +1108,21 @@ useAutoRefresh(async () => {
             <p v-if="detalhe.avaliacao.comentario" class="ava-comentario">
               "{{ detalhe.avaliacao.comentario }}"
             </p>
-            <span class="acao-dica">
-              Obrigado pelo retorno. A equipe usa o comentário para melhorar o atendimento.
-            </span>
           </div>
 
-          <!-- Formulário -->
-          <div v-else-if="podeAvaliar && eDonoDoChamado" class="acao-box">
-            <h4>Avalie o atendimento</h4>
-            <p class="acao-dica">
-              O chamado foi concluído. Como foi o atendimento da nossa equipe?
-            </p>
+          <!-- Formulário: o bloco mais chamativo do modal, é a ação principal
+               que sobra para a escola depois de concluir o chamado. -->
+          <div v-else-if="podeAvaliar && eDonoDoChamado" class="acao-box ava-box ava-form">
+            <div class="ava-topo">
+              <span class="ava-icone"><Star :size="20" /></span>
+              <div>
+                <h4>Avalie o atendimento</h4>
+                <p>
+                  Este chamado foi concluído. Conte como foi o atendimento da
+                  nossa equipe — leva menos de um minuto e ajuda a melhorar.
+                </p>
+              </div>
+            </div>
             <div class="ava-estrelas" role="radiogroup" aria-label="Nota de 1 a 5 estrelas">
               <button
                 v-for="i in 5"
@@ -1058,14 +1135,15 @@ useAutoRefresh(async () => {
                 @mouseleave="notaHover = 0"
               >
                 <Star
-                  :size="28"
+                  :size="34"
                   :fill="i <= notaExibida ? '#f5b921' : 'none'"
                   :color="i <= notaExibida ? '#f5b921' : '#cbd5e1'"
                 />
               </button>
+              <span v-if="nota > 0" class="ava-nome">{{ NOMES_NOTA[nota] }}</span>
             </div>
             <label class="ava-label" for="comentario-avaliacao-painel">
-              Comentário <span class="acao-dica">(opcional)</span>
+              Comentário <span class="ava-opcional">opcional</span>
             </label>
             <textarea
               id="comentario-avaliacao-painel"
@@ -1077,7 +1155,7 @@ useAutoRefresh(async () => {
             <p v-if="erroAvaliacao" class="ava-erro">{{ erroAvaliacao }}</p>
             <div class="acao-linha">
               <button
-                class="btn btn-primary"
+                class="btn btn-primary ava-btn"
                 type="button"
                 :disabled="enviandoAvaliacao || nota < 1"
                 @click="enviarAvaliacao"
@@ -1086,16 +1164,23 @@ useAutoRefresh(async () => {
                 <Send v-else :size="16" />
                 {{ enviandoAvaliacao ? 'Enviando...' : 'Enviar avaliação' }}
               </button>
+              <span v-if="nota < 1" class="acao-dica">Escolha uma nota para enviar.</span>
             </div>
           </div>
 
           <!-- Concluído por outra conta: só o solicitante avalia -->
-          <div v-else-if="podeAvaliar" class="acao-box ava-avisada">
-            <h4>Avaliação</h4>
-            <p class="acao-dica">
-              Este chamado foi aberto com outro e-mail, então só quem abriu pode avaliá-lo. Se
-              preferir, use a tela de consulta com o e-mail da abertura.
-            </p>
+          <div v-else-if="podeAvaliar" class="acao-box ava-box ava-avisada">
+            <div class="ava-topo">
+              <span class="ava-icone ava-icone-info"><Star :size="20" /></span>
+              <div>
+                <h4>Avaliação</h4>
+                <p>
+                  Este chamado foi aberto com outro e-mail, então só quem abriu
+                  pode avaliá-lo. Se preferir, use a tela de consulta com o
+                  e-mail da abertura.
+                </p>
+              </div>
+            </div>
           </div>
         </template>
       </div>
@@ -1112,81 +1197,145 @@ useAutoRefresh(async () => {
 
 /* ---------- Avaliação do atendimento (escola) ---------- */
 
+/*
+ * Cartão próprio, mais encorpado que os outros `.acao-box` do modal. Depois de
+ * concluir o chamado, avaliar é a ÚNICA ação que sobra para a escola — se o
+ * bloco se misturar às caixas de pergunta e encaminhamento, passa batido.
+ */
+.ava-box {
+  padding: 18px 18px 20px;
+  border-radius: var(--radius-md, 10px);
+  border: 1.5px solid var(--brand-gold);
+  background: linear-gradient(180deg, var(--brand-gold-soft) 0%, #fff 55%);
+}
+
+.ava-topo {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ava-icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--brand-gold);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.ava-icone-info {
+  background: var(--text-muted);
+}
+
+.ava-box h4 {
+  font-size: 15.5px;
+  font-weight: 700;
+  margin: 2px 0 3px;
+  color: var(--text-primary);
+}
+
+.ava-box .ava-topo p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
 .ava-estrelas {
   display: flex;
-  gap: 4px;
-  margin: 10px 0 4px;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 0 6px;
 }
 
 .ava-estrelas.readonly {
-  margin: 8px 0 4px;
+  margin: 12px 0 4px;
+  padding-left: 2px;
 }
 
 .ava-estrela {
   background: none;
   border: none;
-  padding: 2px;
+  padding: 3px;
   cursor: pointer;
   line-height: 0;
   border-radius: var(--radius-sm);
+  transition: transform 0.12s ease;
 }
 
 .ava-estrela:hover {
-  transform: scale(1.12);
+  transform: scale(1.15);
+}
+
+.ava-estrela:focus-visible {
+  outline: 2px solid var(--brand-gold);
+  outline-offset: 2px;
+}
+
+/* Nome da nota ao lado das estrelas — confirma o que a pessoa marcou. */
+.ava-nome {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-gold);
 }
 
 .ava-label {
   display: block;
-  margin-top: 12px;
+  margin-top: 14px;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
 }
 
+.ava-opcional {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .ava-comentario {
-  margin: 8px 0 0;
-  padding: 10px 12px;
+  margin: 12px 0 0;
+  padding: 11px 13px;
   border-left: 3px solid var(--brand-gold);
-  background: var(--gold-soft, #fdf6e3);
+  background: rgb(255 255 255 / 0.75);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-size: 13.5px;
+  line-height: 1.5;
   color: var(--text-secondary);
   font-style: italic;
 }
 
 .ava-erro {
-  margin: 8px 0 0;
+  margin: 9px 0 0;
   font-size: 13px;
   font-weight: 500;
   color: var(--red);
 }
 
-.ava-agradecimento {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-  border-color: var(--gold, #d4a017);
-  background: var(--gold-soft, #fdf6e3);
+.ava-btn {
+  font-weight: 600;
 }
 
-.ava-agradecimento > svg {
-  color: var(--green);
-  flex-shrink: 0;
-  margin-top: 2px;
+/* Já avaliado: acalma o cartão, não precisa competir com nada. */
+.ava-agradecimento,
+.ava-ja {
+  border-color: var(--green);
+  background: var(--green-soft);
 }
 
-.ava-agradecimento h4 {
-  margin: 0;
+.ava-agradecimento .ava-icone {
+  background: var(--green);
 }
 
-.ava-agradecimento .ava-estrelas {
-  width: 100%;
-  margin: 0;
-}
-
+/* Não é a dona: aviso, não convite. */
 .ava-avisada {
-  border-style: dashed;
+  border: 1.5px dashed var(--border);
+  background: var(--bg-subtle, #f8fafc);
 }
 
 .stats-grid {

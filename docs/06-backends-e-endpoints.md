@@ -151,12 +151,46 @@ Duas consequências que afetam o tratamento de erro:
 | DELETE | `/chamados/:id` | "Excluir" (só ADMIN no backend) |
 | GET | `/chamados/encaminhar/tecnicos` | select de destino |
 | GET | `/chamados/encaminhar/tecnicos/:id` | opções que atendem a unidade |
+| GET | `/chamados/filtros/tecnicos` | select "Técnico" do filtro |
 | POST | `/chamados/:id/encaminhar` | "Encaminhar para técnico" |
 | GET | `/dashboard/stats` | KPIs de `ChamadosView` e aba Integrações |
 
-> `/chamados` aceita `page`, `limit`, `unidade`, `categoria`, `status` e
-> `urgencia`. **Filtros vazios são removidos antes do envio** — o backend rejeita
-> `''` em enums.
+> `/chamados` aceita `page`, `limit`, `unidade`, `categoria`, `categoriaChave`,
+> `status`, `urgencia` e `responsavel`. **Filtros vazios são removidos antes do
+> envio** — o backend rejeita `''` em enums.
+
+**`categoria` × `categoriaChave`.** As duas filtram por categoria, mas não são
+equivalentes:
+
+| | `categoria` | `categoriaChave` |
+|---|---|---|
+| Casa com | texto de `tipo` (`contains`) | a chave **ou** o texto de `tipo` |
+| Quem usa | chip "PortalNet" | select "Categoria" |
+| Renomeou a categoria | quebra — o texto é o nome antigo | continua valendo |
+
+> A chave sozinha não serviria: no banco, **364 dos 366 chamados** vieram sem
+> `categoriaChave` (abertos antes do formulário ficar dinâmico). Por isso a rota
+> casa também pelo `tipo` com `startsWith` no nome atual da categoria.
+
+O valor reservado `categoriaChave=__sem__` traz o que **não se encaixa em
+nenhuma** categoria atual — 338 dos 366 chamados, na prática todo o histórico
+antigo. É o complemento exato das outras opções: categoria + "Fora das
+categorias" fecha exatamente o total, sem chamado aparecer nos dois filtros.
+
+> **`/chamados/filtros/tecnicos` não é o mesmo que `/encaminhar/tecnicos`.** O
+> primeiro lista nomes para o filtro (qualquer autenticado — a tela é aberta
+> também por GESTOR/VISUALIZADOR) e junta quem **já tem chamado em seu nome**,
+> mesmo desativado. O segundo lista quem pode **receber** encaminhamento agora
+> (só ADMIN/TECNICO, via `destinoWhere`).
+>
+> Os nomes são agrupados por MAIÚSCULA (o mesmo técnico aparece como "JESSICA",
+> "Jessica" e "jessica" no histórico), mas **não** por acento: o filtro casa por
+> `contains`, que não ignora acento, então agrupar "Joao" com "JOÃO" geraria uma
+> opção que não acha chamado nenhum.
+
+> No `ChamadosView`, marcar o chip "PortalNet" **desmarca** o select de
+> categoria, e vice-versa. Ambos filtrariam por categoria ao mesmo tempo e a
+> pessoa não teria como ver que existia um segundo filtro escondido.
 
 #### Usuários, escolas, inventário
 

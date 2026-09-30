@@ -363,8 +363,25 @@ A tela mais densa do sistema.
 atendimento, Aguardando resposta, Concluídos. Grupo 2 (alternadores): **Só
 urgentes**, **PortalNet**.
 
-**Toolbar** — busca por unidade, select de status, select de urgência, botão
-"Filtrar" e link dourado "Abrir chamado" (nova aba).
+**Toolbar** — busca por unidade, select de status, select de urgência, select de
+**categoria**, select de **técnico**, botão "Filtrar" e link dourado "Abrir
+chamado" (nova aba).
+
+> Os dois selects novos carregam as opções uma vez, no `onMounted`, e
+> **toleram falha**: se a chamada cair, ficam só com "Todos" e a listagem
+> continua funcionando — filtro é conveniência, não requisito para ver os
+> chamados. O de categoria vem de `/formulario/publico` (o mesmo catálogo da
+> tela de abertura, já que é de graça e sem exigir login); o de técnico, de
+> `/chamados/filtros/tecnicos`.
+>
+> O de categoria tem uma opção a mais, **"Fora das categorias"**: no banco, 364
+> dos 366 chamados foram abertos antes do formulário ficar dinâmico e não têm
+> vínculo com nenhuma categoria do catálogo. Sem essa opção, 92% do histórico
+> ficaria fora de qualquer escolha.
+
+> **Os dois se limpam entre si.** Marcar o chip "PortalNet" desmarca o select de
+> categoria, e escolher uma categoria desmarca o chip. Ambos filtram por
+> categoria — deixá-los marcados somaria um filtro que ninguém vê na tela.
 
 **Barra de lote** (só ADMIN/TÉCNICO) — aparece quando há seleção: "N chamado(s)
 selecionado(s)", select de novo status e botão "Aplicar em lote".
