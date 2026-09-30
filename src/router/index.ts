@@ -103,7 +103,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Elogios e avaliações',
           breadcrumb: 'Elogios e avaliações',
-          roles: ['ADMIN'] as Nivel[],
+          roles: ['ADMIN', 'TECNICO'] as Nivel[],
         },
       },
       {

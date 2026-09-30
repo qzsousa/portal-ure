@@ -106,8 +106,8 @@ com professores que não têm acesso ao portal.
 ### 8. Elogios, sugestões e avaliações
 
 - `/elogios` (público) — qualquer pessoa manda um elogio ou sugestão.
-- `/feedback` (ADMIN) — leitura consolidada, com média de avaliação e
-  distribuição das notas.
+- `/feedback` (matriz) — leitura consolidada, com média de avaliação e
+  distribuição das notas. Fica no menu como **Elogios e Avaliações**.
 
 ### 9. Configurações (ADMIN)
 

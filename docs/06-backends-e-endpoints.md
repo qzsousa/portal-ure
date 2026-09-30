@@ -220,8 +220,9 @@ direto.
 
 | Método | Rota | Quem chama |
 |---|---|---|
-| GET | `/feedback` | `FeedbackView` (ADMIN) |
+| GET | `/feedback` | `FeedbackView` (ADMIN/TÉCNICO) |
 | GET | `/feedback/stats` | `FeedbackView` + card do `PainelView` |
+| GET | `/feedback/avaliacoes` | `FeedbackView` — notas **com comentário** |
 
 ---
 

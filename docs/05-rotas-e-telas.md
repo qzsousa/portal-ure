@@ -543,17 +543,30 @@ senha".
 
 ---
 
-## `/feedback` — Elogios e avaliações *(ADMIN)*
+## `/feedback` — Elogios e avaliações *(matriz: ADMIN/TÉCNICO)*
 
-Somente leitura. 4 KPIs (média, total de avaliações, elogios, sugestões),
-rosca com a distribuição das notas e a tabela de elogios/sugestões com filtro
-por tipo.
+Somente leitura, em três blocos:
 
-Atualização: 60 s.
+1. **4 KPIs** — média (`x.x/5`), total de avaliações, elogios, sugestões.
+2. **Rosca** com a distribuição das notas (1 a 5, cores vermelho→verde).
+3. **Tabela de avaliações do atendimento** — a nota **com o comentário** que a
+   escola deixou, ligado ao chamado (protocolo, unidade, solicitante) e ao
+   atendente. Filtros: checkbox "somente com comentário" (ligado por padrão,
+   porque nota sem texto não diz o que deu errado) e seletor de nota.
+4. **Tabela de elogios e sugestões** com filtro por tipo.
+
+Atualização: 60 s (os três blocos).
 
 ![Tela de elogios e avaliações](screenshots/28-feedback.png)
 
-> Não há item de menu para esta rota — o acesso é por URL.
+> Item do menu **Elogios e Avaliações**, visível só para a matriz. O backend
+> exige `ADMIN` ou `TECNICO` nas três rotas (`GET /feedback`,
+> `GET /feedback/stats`, `GET /feedback/avaliacoes`); a escola não vê nem os
+> números nem a caixa de retorno.
+>
+> O comentário da avaliação era gravado desde o começo mas **ninguém da matriz
+> conseguia ler** — só quem abriu o chamado, em `/consulta`. A rota
+> `/feedback/avaliacoes` existe para fechar essa lacuna.
 
 ---
 

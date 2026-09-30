@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ClipboardList, Heart, Lightbulb, Star } from '@lucide/vue'
+import { ClipboardList, Heart, Lightbulb, MessageSquareQuote, Star } from '@lucide/vue'
 import DonutCard from '@/components/ui/DonutCard.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import {
   getFeedbackStats,
+  listarAvaliacoes,
   listarFeedbacks,
+  type AvaliacaoItem,
   type FeedbackItem,
   type FeedbackStats,
   type TipoFeedback,
@@ -84,6 +86,52 @@ function aplicarFiltro() {
   void carregar()
 }
 
+/* ---------- Avaliações com comentário ---------- */
+
+/**
+ * Cada avaliação traz a nota e o comentário que a escola deixou. A nota sozinha
+ * não diz o que deu errado (ou certo); o comentário é o que a equipe consegue
+ * usar de verdade.
+ */
+const aval = reactive({
+  loading: true,
+  erro: '',
+  items: [] as AvaliacaoItem[],
+  total: 0,
+  page: 1,
+})
+const filtroNota = ref<'' | number>('')
+const somenteComentarios = ref(true)
+
+async function carregarAvaliacoes(silencioso = false) {
+  if (!silencioso) aval.loading = true
+  try {
+    const res = await listarAvaliacoes({
+      nota: filtroNota.value === '' ? undefined : filtroNota.value,
+      somenteComentarios: somenteComentarios.value,
+      page: aval.page,
+      limit: PAGE_SIZE,
+    })
+    aval.items = res.data
+    aval.total = res.meta.total
+    aval.erro = ''
+  } catch {
+    if (!silencioso) aval.erro = 'Não foi possível carregar as avaliações.'
+  } finally {
+    aval.loading = false
+  }
+}
+
+function aplicarFiltroAvaliacoes() {
+  aval.page = 1
+  void carregarAvaliacoes()
+}
+
+/** Cor da nota: a mesma da rosca de distribuição, para o olho casar. */
+function corDaNota(nota: number): string {
+  return CORES_NOTAS[`Nota ${nota}`] || 'var(--text-muted)'
+}
+
 function formatarData(ts: string | null | undefined): string {
   if (!ts) return '—'
   const d = new Date(ts)
@@ -94,16 +142,25 @@ function formatarData(ts: string | null | undefined): string {
 onMounted(() => {
   void carregar()
   void carregarStats()
+  void carregarAvaliacoes()
 })
 
 /* Atualização automática: avaliações/feedbacks novos chegam sozinhos. */
 useAutoRefresh(async () => {
-  await Promise.all([carregar(true), carregarStats(true)])
+  await Promise.all([carregar(true), carregarStats(true), carregarAvaliacoes(true)])
 }, AUTO_REFRESH_MS.normal)
 </script>
 
 <template>
   <div class="feedback-page">
+    <!-- Cabeçalho -->
+    <div class="page-head">
+      <div>
+        <h2>Elogios e avaliações</h2>
+        <p>Como as escolas avaliam o atendimento e o que enviam para a caixa de retorno</p>
+      </div>
+    </div>
+
     <!-- KPIs -->
     <div class="stats-grid">
       <StatCard label="Média de avaliação" :value="mediaFormatada" tone="yellow">
@@ -123,6 +180,87 @@ useAutoRefresh(async () => {
     <!-- Distribuição das notas -->
     <div v-if="stats" class="charts-grid">
       <DonutCard titulo="Distribuição das notas" :fatias="fatiasNotas" :cores="CORES_NOTAS" />
+    </div>
+
+    <!-- Avaliações com comentário -->
+    <p v-if="aval.erro" class="erro card">{{ aval.erro }}</p>
+
+    <div class="card table-card">
+      <div class="table-header">
+        <h3 class="com-icone"><MessageSquareQuote :size="18" /> Avaliações do atendimento</h3>
+        <div class="filtros-inline">
+          <label class="check">
+            <input v-model="somenteComentarios" type="checkbox" @change="aplicarFiltroAvaliacoes" />
+            <span>Somente com comentário</span>
+          </label>
+          <select
+            v-model="filtroNota"
+            class="select-input slim"
+            @change="aplicarFiltroAvaliacoes"
+          >
+            <option value="">Todas as notas</option>
+            <option v-for="n in [5, 4, 3, 2, 1]" :key="n" :value="n">
+              {{ n }} estrela{{ n > 1 ? 's' : '' }}
+            </option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Nota</th>
+              <th>Comentário da escola</th>
+              <th>Chamado</th>
+              <th>Unidade</th>
+              <th>Atendente</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="aval.loading">
+              <td colspan="6" class="td-center">Carregando...</td>
+            </tr>
+            <tr v-else-if="aval.items.length === 0">
+              <td colspan="6" class="td-center">
+                Nenhuma avaliação encontrada com esses filtros.
+              </td>
+            </tr>
+            <tr v-for="a in aval.items" :key="a.id">
+              <td>
+                <span class="nota-badge" :style="{ background: corDaNota(a.nota) }">{{ a.nota }}</span>
+                <span class="estrelas-mini" :aria-label="`${a.nota} de 5 estrelas`">
+                  <Star
+                    v-for="i in 5"
+                    :key="i"
+                    :size="12"
+                    :fill="i <= a.nota ? corDaNota(a.nota) : 'none'"
+                    :color="i <= a.nota ? corDaNota(a.nota) : '#cbd5e1'"
+                  />
+                </span>
+              </td>
+              <td class="td-comentario">
+                <template v-if="a.comentario">{{ a.comentario }}</template>
+                <em v-else class="sem-comentario">Sem comentário</em>
+              </td>
+              <td class="nowrap">
+                <strong>#{{ a.protocolo }}</strong>
+                <span class="sub">{{ a.tipo }}</span>
+              </td>
+              <td>{{ a.unidade }}</td>
+              <td>{{ a.tecnico || '—' }}</td>
+              <td class="nowrap">{{ formatarData(a.criadoEm) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <PaginationBar
+        :page="aval.page"
+        :page-size="PAGE_SIZE"
+        :total="aval.total"
+        @change="(p) => { aval.page = p; void carregarAvaliacoes() }"
+      />
     </div>
 
     <!-- Lista -->
@@ -184,6 +322,16 @@ useAutoRefresh(async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.page-head h2 {
+  font-size: 20px;
+}
+
+.page-head p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .stats-grid {
@@ -264,5 +412,75 @@ useAutoRefresh(async () => {
 .tipo-pill.sugestao {
   background: var(--blue-soft);
   color: var(--blue);
+}
+
+/* ---------- Avaliações ---------- */
+
+.com-icone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filtros-inline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--brand-gold);
+  cursor: pointer;
+}
+
+/* Nota: número em destaque + estrelas ao lado. */
+.nota-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.estrelas-mini {
+  display: inline-flex;
+  gap: 1px;
+  margin-left: 7px;
+  vertical-align: middle;
+}
+
+/* O comentário é a coluna principal: largura maior e quebra preservada. */
+.td-comentario {
+  max-width: 380px;
+  white-space: pre-wrap;
+}
+
+.sem-comentario {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.sub {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

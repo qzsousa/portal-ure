@@ -177,7 +177,7 @@ Três decisões importantes:
 | `/chamados` | Chamados | — | todos os autenticados |
 | `/tutoriais` | Tutoriais | — | todos os autenticados |
 | `/tutoriais/:id` | Detalhe do tutorial | — | leitura: todos · escrita: ADMIN |
-| `/feedback` | Elogios e avaliações | — | **ADMIN** |
+| `/feedback` | Elogios e avaliações | — | **ADMIN, TECNICO** |
 | `/unidades` | Unidades escolares | — | **ADMIN, TECNICO** |
 | `/relatorios` | Relatórios | — | todos os autenticados |
 | `/usuarios` | Usuários | — | **ADMIN, GESTOR** |

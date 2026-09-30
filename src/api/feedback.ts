@@ -54,3 +54,49 @@ export async function getFeedbackStats(): Promise<FeedbackStats> {
   const { data } = await chamadosApi.get<FeedbackStats>('/feedback/stats')
   return data
 }
+
+/** Uma avaliação de atendimento com o comentário que a escola deixou. */
+export interface AvaliacaoItem {
+  id: string
+  nota: number
+  comentario: string | null
+  criadoEm: string
+  protocolo: string
+  unidade: string
+  solicitante: string
+  tipo: string
+  /** Técnico que fechou o chamado ou, na falta, o técnico da unidade. */
+  tecnico: string | null
+}
+
+export interface AvaliacaoLista {
+  data: AvaliacaoItem[]
+  meta: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+  }
+}
+
+/**
+ * Lista as avaliações COM o comentário (ADMIN/TECNICO).
+ *
+ * É o que dá sentido à nota: quem avaliou, sobre qual chamado e o que
+ * escreveu. `somenteComentarios` esconde as notas sem texto.
+ */
+export async function listarAvaliacoes(params?: {
+  nota?: number
+  somenteComentarios?: boolean
+  page?: number
+  limit?: number
+}): Promise<AvaliacaoLista> {
+  const { data } = await chamadosApi.get<AvaliacaoLista>('/feedback/avaliacoes', {
+    params: {
+      ...params,
+      somenteComentarios: params?.somenteComentarios ? 'true' : undefined,
+    },
+  })
+  return data
+}
+
