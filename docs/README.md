@@ -75,6 +75,7 @@ sistema rodando com dados reais.
 | 29 | Configurações — Encaminhamento automático | [`29-config-encaminhamento.png`](./screenshots/29-config-encaminhamento.png) |
 | 30 | Consulta — bloco de avaliação depois do chamado resolvido | [`30-avaliacao-formulario.png`](./screenshots/30-avaliacao-formulario.png) |
 | 31 | Consulta — agradecimento depois de enviar a avaliação | [`31-avaliacao-enviada.png`](./screenshots/31-avaliacao-enviada.png) |
+| 32 | Elogios e avaliações — tabela de avaliações com comentário (matriz) | [`32-feedback-avaliacoes.png`](./screenshots/32-feedback-avaliacoes.png) |
 
 > **Sobre os prints.** Todos foram capturados do portal rodando localmente
 > (`localhost:5173`) contra o banco de desenvolvimento, com um usuário
@@ -90,11 +91,12 @@ sistema rodando com dados reais.
 >   filtros e a tabela completa de equipamentos continuam — é o comportamento do
 >   VISUALIZADOR descrito em
 >   [Autenticação e permissões](./04-autenticacao-e-permissoes.md).
-> - **30 e 31 — Avaliação:** capturados com uma **API de mentira** servindo um
->   chamado `RESOLVIDO` montado para a demonstração. Unitário, solicitante,
->   técnico e conversa são fictícios, e **nada foi gravado em nenhum banco** —
->   o print 31 mostra o cartão de agradecimento depois que o envio respondeu
->   `201`. Ver [Avaliação de atendimento](./13-avaliacao-de-atendimento.md).
+> - **30, 31 e 32 — Avaliação:** capturados com uma **API de mentira** servindo
+>   um chamado `RESOLVIDO` e cinco avaliações montadas para a demonstração.
+>   Unidade, solicitante, técnico, conversa e notas são **fictícios**, e
+>   **nada foi gravado em nenhum banco** — o banco de produção tem 0 avaliações
+>   até o momento. Ver
+>   [Avaliação de atendimento](./13-avaliacao-de-atendimento.md).
 >
 > Os prints 01–06 e 07 usam o chamado **`CH-20260929-0006`**, criado durante a
 > captura para demonstrar o fluxo completo de ponta a ponta.

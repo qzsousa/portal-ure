@@ -202,6 +202,24 @@ Junto ficam os agregados de `GET /api/feedback/stats`: média, total e a
 distribuição por nota (que vira a rosca). **A média é global** — não existe
 média por técnico.
 
+A tela inteira, com os quatro KPIs no topo, a rosca e a tabela:
+
+![Tela de Elogios e Avaliações da matriz, com a tabela de avaliações por chamado](./screenshots/32-feedback-avaliacoes.png)
+
+Repare em três detalhes que só a imagem deixa claros:
+
+- **A nota tem cor, e as estrelas também.** O número usa a mesma paleta da rosca
+  (vermelho → verde), então o olho casa a nota da tabela com a fatia do gráfico.
+- **O comentário ocupa a coluna mais larga.** É a informação mais valuable da
+  tela — protocolo e unidade são só o contexto de quem escreveu.
+- **O atendente aparece por linha.** Dá para ler as reclamações e ver quem
+  atendeu. Mas a **média é do conjunto todo**: não existe agregado por técnico
+  que indique quem precisa de reciclagem.
+
+> O print usa uma **API de mentira** com avaliações fictícias — nenhuma
+> avaliação real existe ainda no banco. Ver a nota de rodapé em
+> [docs/README](./README.md).
+
 ---
 
 ## Diagrama do caminho completo
