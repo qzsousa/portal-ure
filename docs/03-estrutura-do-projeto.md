@@ -180,7 +180,8 @@ drama, mas é duplicação que existe para evitar mais um arquivo global.
 Para perfil não-matriz, `useEquipamentos` baixa a lista completa uma vez, cacheia
 e filtra/pagina no navegador. Para ADMIN, usa `/equipamentos-global`, que pagina
 e agrega no servidor. É a diferença entre "requisição pesada única" e "requisições
-pequenas sempre".
+pequenas sempre". Exceção: se o SCE estiver numa versão sem `stats.porModelo`, o
+ADMIN deriva o drilldown do gráfico pela lista completa (compatibilidade).
 
 **`api/usuarios.ts` tem comentário dizendo "somente ADMIN", mas GESTOR também
 usa.** A rota aceita `['ADMIN', 'GESTOR']` e o próprio backend limita o Gestor à

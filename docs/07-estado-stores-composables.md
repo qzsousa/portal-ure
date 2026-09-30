@@ -305,12 +305,12 @@ const isGlobal = computed(() => auth.user?.nivel === 'ADMIN')
 | Endpoint | `/equipamentos-global` | `/equipamentos-da-filial` |
 | Paginação | **no servidor** | **no navegador** |
 | Filtros | **no servidor** | **no navegador** |
-| Agregados | **no servidor** (`stats`) | recalculados a cada filtro |
+| Agregados | **no servidor** (`stats`, inclui `porModelo`) | recalculados a cada filtro (`agregar()`) |
 | Requisições | uma por página/filtro | uma só, cacheada |
 
 ```ts
 state: { loading, erro, page, items, total, porStatus, porCategoria, porUnidade,
-         todosCache, cacheCarregado }
+         porModelo, todosCache, cacheCarregado }
 filtros: { busca, unidade, categoria, status }
 ```
 
@@ -322,18 +322,24 @@ equipamento cadastrado diretamente no SCE nunca apareceria na tela.
 
 ### Drilldown por categoria
 
-```ts
-itensDaCategoria(categoria): Promise<Equipamento[]>
-```
+O clique numa barra do gráfico **não faz requisição**: os modelos saem de
+`state.porModelo`, que já veio na mesma resposta da tela (`stats.porModelo` na
+Matriz, `agregar()` nos demais perfis). É exato por construção — a soma dos
+modelos sempre fecha com o total da categoria — e não existe corrida entre
+cliques, porque é um retrato só do estado (clicar Notebook e depois Tablet não
+deixa a resposta antiga aparecer sob o título novo).
 
-- ADMIN → nova consulta ao servidor com `limite: 10000` e a categoria
-- demais → filtra o cache local, **sem nova requisição**
+NÃO voltar a contar modelo no cliente sobre a página do `/equipamentos-global`:
+o SCE corta `limite` em 500 e pagina por `modelo`, coluna que se repete milhares
+de vezes, então o mesmo equipamento volta em duas páginas e outros nunca
+aparecem (Notebook com 2.847 itens viravam 2.554 linhas — o gráfico mostrava só
+"Chromebook 500").
 
 ### Agregados
 
-`agregar()` recalcula `porStatus`, `porCategoria` e `porUnidade` a partir da lista
-filtrada — e `resumirStatus()` (em `api/sce.ts`) transforma o mapa de status nos
-cinco números que o painel mostra, classificando por substring:
+`agregar()` recalcula `porStatus`, `porCategoria`, `porUnidade` e `porModelo` a
+partir da lista filtrada — e `resumirStatus()` (em `api/sce.ts`) transforma o mapa
+de status nos cinco números que o painel mostra, classificando por substring:
 
 ```ts
 if (s === 'disponível')        → disponiveis

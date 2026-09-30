@@ -117,37 +117,37 @@ async function baixarPdf() {
 
 /* ---------- Drilldown do gráfico de categorias ---------- */
 const categoriaAberta = ref<string | null>(null)
-const detalheModelos = ref<Array<{ rotulo: string; qtd: number }>>([])
-const carregandoDetalhe = ref(false)
 
-/** `silencioso`: no auto-refresh atualiza sem piscar o "Carregando modelos...". */
-async function carregarDetalheCategoria(silencioso = false) {
-  if (!categoriaAberta.value) return
-  if (!silencioso) carregandoDetalhe.value = true
-  try {
-    const itens = await eq.itensDaCategoria(categoriaAberta.value)
-    const mapa = new Map<string, number>()
-    for (const item of itens) {
-      const rotulo =
-        [item.marca, item.modelo]
-          .map((s) => (s || '').trim())
-          .filter(Boolean)
-          .join(' ') || 'Sem marca/modelo'
-      mapa.set(rotulo, (mapa.get(rotulo) || 0) + 1)
-    }
-    detalheModelos.value = [...mapa.entries()]
-      .map(([rotulo, qtd]) => ({ rotulo, qtd }))
-      .sort((a, b) => b.qtd - a.qtd)
-  } catch {
-    /* silencioso: mantém os modelos exibidos até a próxima rodada */
-  } finally {
-    carregandoDetalhe.value = false
+/**
+ * Modelos da categoria aberta, em "Marca Modelo" → quantidade.
+ *
+ * Sai dos agregados que a tela JÁ carregou (`stats.porModelo` na Matriz,
+ * contagem local nos demais perfis). Por isso é exato por construção, não tem
+ * requisição própria e não existe corrida entre cliques: é um retrato só do
+ * estado — clicar Notebook e depois Tablet não deixa a resposta antiga
+ * (Chromebook) aparecer sob o título novo.
+ */
+const detalheModelos = computed<Array<{ rotulo: string; qtd: number }>>(() => {
+  if (!categoriaAberta.value) return []
+  const mapa = new Map<string, number>()
+  for (const m of eq.state.porModelo) {
+    if (m.categoria !== categoriaAberta.value) continue
+    const rotulo =
+      [m.marca, m.modelo]
+        .map((s) => (s || '').trim())
+        .filter(Boolean)
+        .join(' ') || 'Sem marca/modelo'
+    /* Marcas/modelos que diferem só por espaço viram a mesma linha: sem esta
+     * soma o v-for receberia rótulos repetidos. */
+    mapa.set(rotulo, (mapa.get(rotulo) || 0) + m.qtd)
   }
-}
+  return [...mapa.entries()]
+    .map(([rotulo, qtd]) => ({ rotulo, qtd }))
+    .sort((a, b) => b.qtd - a.qtd)
+})
 
 function alternarCategoria(categoria: string) {
   categoriaAberta.value = categoriaAberta.value === categoria ? null : categoria
-  if (categoriaAberta.value) void carregarDetalheCategoria()
 }
 
 onMounted(() => {
@@ -155,10 +155,9 @@ onMounted(() => {
 })
 
 /* Atualização automática: equipamentos recém-registrados no SCE aparecem sozinhos
- * (inclusive no drilldown aberto do gráfico). */
+ * (inclusive no drilldown aberto do gráfico, que sai dos mesmos agregados). */
 useAutoRefresh(async () => {
   await eq.carregar(true)
-  await carregarDetalheCategoria(true)
 }, AUTO_REFRESH_MS.rapido)
 </script>
 
@@ -216,7 +215,6 @@ useAutoRefresh(async () => {
       :fatias="eq.state.porCategoria"
       :aberta="categoriaAberta"
       :detalhe="detalheModelos"
-      :carregando-detalhe="carregandoDetalhe"
       @selecionar="alternarCategoria"
     />
 

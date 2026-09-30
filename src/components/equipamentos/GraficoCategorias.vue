@@ -13,6 +13,9 @@ export interface ModeloQtd {
  * equipamentos por categoria, ordenado da maior para a menor.
  * Clicar numa categoria expande logo abaixo os modelos/marcas com
  * as quantidades correspondentes (drilldown).
+ *
+ * O detalhe chega pronto nos agregados da tela — não há carregamento aqui,
+ * e por isso a soma dos modelos sempre fecha com o total da categoria.
  */
 const props = withDefaults(
   defineProps<{
@@ -23,9 +26,8 @@ const props = withDefaults(
     aberta?: string | null
     /** modelos da categoria expandida (já ordenados por quantidade) */
     detalhe?: ModeloQtd[]
-    carregandoDetalhe?: boolean
   }>(),
-  { titulo: 'Equipamentos por categoria', aberta: null, detalhe: () => [], carregandoDetalhe: false },
+  { titulo: 'Equipamentos por categoria', aberta: null, detalhe: () => [] },
 )
 
 const emit = defineEmits<{ selecionar: [categoria: string] }>()
@@ -34,6 +36,9 @@ const entradas = computed(() => Object.entries(props.fatias).sort((a, b) => b[1]
 const maior = computed(() => entradas.value[0]?.[1] ?? 0)
 const total = computed(() => entradas.value.reduce((acc, [, v]) => acc + v, 0))
 const maiorDetalhe = computed(() => props.detalhe[0]?.qtd ?? 0)
+/** Soma dos modelos listados: tem que fechar com o total da categoria aberta. */
+const somaDetalhe = computed(() => props.detalhe.reduce((acc, d) => acc + d.qtd, 0))
+const totalDaAberta = computed(() => (props.aberta ? (props.fatias[props.aberta] ?? 0) : 0))
 
 /* Piso de 2% para valores pequenos continuarem visíveis */
 function largura(valor: number): string {
@@ -74,8 +79,12 @@ function larguraDetalhe(qtd: number): string {
 
         <!-- Drilldown: modelos e quantidades da categoria clicada -->
         <div v-if="aberta === categoria" class="cat-detalhe">
-          <p v-if="carregandoDetalhe && detalhe.length === 0" class="det-vazio">Carregando modelos...</p>
-          <p v-else-if="detalhe.length === 0" class="det-vazio">Nenhum modelo nesta categoria.</p>
+          <p v-if="detalhe.length" class="det-resumo">
+            {{ detalhe.length }} {{ detalhe.length === 1 ? 'modelo' : 'modelos' }}
+            · {{ somaDetalhe.toLocaleString('pt-BR') }} de
+            {{ totalDaAberta.toLocaleString('pt-BR') }} equipamentos
+          </p>
+          <p v-if="detalhe.length === 0" class="det-vazio">Nenhum modelo nesta categoria.</p>
           <ul v-else class="det-lista">
             <li v-for="m in detalhe" :key="m.rotulo" :title="`${m.rotulo}: ${m.qtd}`">
               <span class="det-nome">{{ m.rotulo }}</span>
@@ -221,6 +230,12 @@ function larguraDetalhe(qtd: number): string {
   /* Contido: muitas variantes rolam dentro do próprio painel */
   max-height: 150px;
   overflow-y: auto;
+}
+
+.det-resumo {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .det-lista li {

@@ -8,6 +8,14 @@ import type { Equipamento, SceResponse } from '@/types'
  * Respostas seguem o padrão { success, data, error }.
  */
 
+/** Uma linha do drilldown de modelos: categoria + marca + modelo + quantidade. */
+export interface ModeloCategoria {
+  categoria: string
+  marca: string
+  modelo: string
+  qtd: number
+}
+
 export interface EquipamentosGlobalResult {
   data: Equipamento[]
   total: number
@@ -15,6 +23,12 @@ export interface EquipamentosGlobalResult {
     porStatus: Record<string, number>
     porUnidade: Record<string, number>
     porCategoria: Record<string, number>
+    /**
+     * Contagem por categoria/marca/modelo. Vem no MESMO payload da página — é o
+     * que o gráfico de categorias abre no clique, sem o cliente precisar baixar
+     * a lista inteira (MB) só para contar. Ausente em SCE ainda não atualizado.
+     */
+    porModelo?: ModeloCategoria[]
   }
 }
 

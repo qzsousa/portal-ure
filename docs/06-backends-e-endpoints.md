@@ -230,8 +230,8 @@ direto.
 
 | Método | Rota | Quem chama | Observação |
 |---|---|---|---|
-| GET | `/equipamentos-global` | `useEquipamentos` (ADMIN) | Pagina e agrega no servidor |
-| GET | `/equipamentos-da-filial` | `useEquipamentos` (outros) | Devolve o escopo inteiro; filtro é local |
+| GET | `/equipamentos-global` | `useEquipamentos` (ADMIN) | Pagina e agrega no servidor (`stats.porModelo` alimenta o drilldown do gráfico, sem requisição extra) |
+| GET | `/equipamentos-da-filial` | `useEquipamentos` (outros) | Devolve o escopo inteiro; filtro é local. No ADMIN só é chamada se o SCE ainda não mandar `porModelo` (compatibilidade) |
 | GET | `/unidades-resumo` | `UnidadesView`, modal de equipamento, aba Integrações | Falha aqui **não** quebra a tela — cai para zeros |
 | GET | `/listas-cadastro` | "Modelos cadastrados" no painel, aba Catálogo | — |
 | GET | `/catalogo-equipamentos` | `EquipamentoFormModal` | Lista maior (listas + o que existe em campo) |
