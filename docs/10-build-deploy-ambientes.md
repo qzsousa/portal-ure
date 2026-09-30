@@ -183,6 +183,12 @@ E as regras de cache:
 > o dev server do Vite não lê esse arquivo, então o `index.html` traz um
 > `<meta http-equiv="Content-Security-Policy">` equivalente. **Ao mudar um, mude
 > o outro** — ver [Erros · I7](./09-tratamento-de-erros.md).
+>
+> ⚠️ **Com as duas políticas ativas, vale a mais restritiva.** Em 30/09/2026 o
+> `<meta>` tinha só `http://localhost:*` no `connect-src` enquanto o header
+> permitia `https:` — resultado: o `POST /auth/login` para o Render era
+> cancelado pelo navegador e **ninguém conseguia entrar**, sem erro na tela.
+> O `<meta>` precisa manter `https:` além dos `localhost` do dev.
 
 #### Configuração da plataforma
 

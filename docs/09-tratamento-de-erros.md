@@ -706,6 +706,20 @@ Veja [Falsos positivos no log](#falsos-positivos-no-log).
 > produção, e o `<meta>` cobre o dev server — que não aplica os headers da
 > plataforma. Por isso o CSP está duplicado.
 
+#### ⚠️ O caso grave: login quebrado sem mensagem na tela
+
+| | |
+|---|---|
+| **Sintoma** | Clicar em "Entrar" não faz nada. Na tela, o toast *"Erro no backend Chamados: POST /auth/login (**sem resposta**)"*. O backend está no ar, o `/health` responde 200, e o login com senha errada devolve 401 normalmente quando testado direto. |
+| **Causa** | O `<meta>` do `index.html` tinha `connect-src` **só com `http://localhost:*`**, enquanto o header do `vercel.json` permitia `https:`. Com duas políticas CSP, o navegador aplica **a mais restritiva** — então o `<meta>` bloqueava a API de produção. |
+| **Por que é confuso** | O navegador cancela a requisição **antes de ela sair**, então não existe status nem resposta. O "sem resposta" do log de erros é a única pista na interface. |
+| **Diagnóstico** | Abrir o console: `violates … connect-src` com a URL da API. Conferir se ela está no `connect-src` do **`<meta>`**, não só do `vercel.json`. |
+| **Solução** | Manter `https:` no `connect-src` do `<meta>` (além dos `localhost` do dev). O `script-src 'self'` é o que realmente estreita a política. |
+
+> **Regra:** quando o `<meta>` e o header divergirem, vale a **mais restritiva**.
+> O `<meta>` é fácil de esquecer porque só se vê o header do `vercel.json` ao
+> revisar a configuração de produção.
+
 ---
 
 # Parte 3 — Diagnóstico
