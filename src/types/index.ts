@@ -102,6 +102,11 @@ export interface Chamado {
    */
   categoriaChave?: string | null
   mensagens?: ChamadoMensagem[]
+  /**
+   * Avaliação do atendimento, quando existe (só no detalhe do chamado).
+   * Ausente na listagem — o backend inclui apenas em `GET /chamados/:id`.
+   */
+  avaliacao?: { nota: number; comentario: string | null } | null
 }
 
 /* ---------- Notificações (backend chamados) ---------- */

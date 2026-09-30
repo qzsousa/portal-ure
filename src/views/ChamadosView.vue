@@ -1,16 +1,21 @@
 ﻿<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { AxiosError } from 'axios'
 import { apiError } from '@/utils/apiError'
 import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
   Clock,
+  Heart,
   Layers,
+  Loader2,
   Paperclip,
   School,
   Search,
+  Send,
+  Star,
   UserPlus,
   Wrench,
   X,
@@ -36,6 +41,7 @@ import {
   type TecnicoDestino,
 } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
+import { avaliarChamadoPorProtocolo } from '@/api/publico'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaEquipeReduzida, ordenarTecnicos } from '@/utils/tecnicos'
@@ -307,6 +313,82 @@ async function onAnexosChange(e: Event, destino: AnexoMensagemPayload[]) {
   input.value = ''
 }
 
+/* ------- Avaliação do atendimento (escola, chamado concluído) ------- */
+
+/**
+ * A escola avalia daqui quando o chamado é concluído. A credencial enviada é o
+ * **e-mail da sessão** (`auth.user.email`), não o e-mail do solicitante: o
+ * backend compara os dois e só grava se baterem, então não se libera nada além
+ * do que já era permitido na tela pública — apenas sem a pessoa redigitar.
+ */
+const nota = ref(0)
+const notaHover = ref(0)
+const comentarioAvaliacao = ref('')
+const enviandoAvaliacao = ref(false)
+const erroAvaliacao = ref('')
+/** Nota enviada agora — controla o cartão de agradecimento. */
+const avaliacaoEnviada = ref(0)
+
+const notaExibida = computed(() => notaHover.value || nota.value)
+
+/**
+ * A sessão é a dona do chamado? Se outra conta abriu, o backend recusaria com
+ * 404. Detectamos aqui para explicar, em vez de a pessoa tomar um erro sem
+ * origem.
+ */
+const eDonoDoChamado = computed(() => {
+  const emailChamado = detalhe.value?.email?.trim().toLowerCase()
+  const emailSessao = auth.user?.email?.trim().toLowerCase()
+  // Chamado legado sem e-mail gravado: o backend também recusa, e dizemos o
+  // mesmo que a tela pública diria.
+  if (!emailChamado) return false
+  return emailChamado === emailSessao
+})
+
+/** Formulário só depois de concluído e ainda sem nota. */
+const podeAvaliar = computed(
+  () =>
+    ehEscola.value &&
+    detalhe.value?.status === 'RESOLVIDO' &&
+    !detalhe.value?.avaliacao &&
+    !avaliacaoEnviada.value,
+)
+
+async function enviarAvaliacao() {
+  if (!detalhe.value || enviandoAvaliacao.value) return
+  if (nota.value < 1) {
+    erroAvaliacao.value = 'Escolha uma nota de 1 a 5 estrelas.'
+    return
+  }
+  erroAvaliacao.value = ''
+  enviandoAvaliacao.value = true
+  try {
+    await avaliarChamadoPorProtocolo(detalhe.value.protocolo, auth.user?.email || '', {
+      nota: nota.value,
+      comentario: comentarioAvaliacao.value.trim() || undefined,
+    })
+    // Reflete localmente: o bloco vira "já avaliado" sem reabrir o chamado.
+    detalhe.value = {
+      ...detalhe.value,
+      avaliacao: { nota: nota.value, comentario: comentarioAvaliacao.value.trim() || null },
+    }
+    avaliacaoEnviada.value = nota.value
+  } catch (e) {
+    const ax = e as AxiosError
+    if (ax.response?.status === 409) {
+      erroAvaliacao.value = 'Este chamado já recebeu uma avaliação.'
+    } else if (ax.response?.status === 400) {
+      erroAvaliacao.value = 'Este chamado ainda não está disponível para avaliação.'
+    } else if (ax.response?.status === 404) {
+      erroAvaliacao.value = 'Não foi possível confirmar a avaliação deste chamado.'
+    } else {
+      erroAvaliacao.value = 'Não foi possível enviar sua avaliação agora. Tente novamente.'
+    }
+  } finally {
+    enviandoAvaliacao.value = false
+  }
+}
+
 async function abrirDetalhe(c: Chamado) {
   detalhe.value = c
   novoStatus.value = c.status
@@ -318,6 +400,11 @@ async function abrirDetalhe(c: Chamado) {
   anexosResposta.value = []
   responderAberto.value = false
   encaminharAberto.value = false
+  nota.value = 0
+  notaHover.value = 0
+  comentarioAvaliacao.value = ''
+  erroAvaliacao.value = ''
+  avaliacaoEnviada.value = 0
   detalheAberto.value = true
   // A listagem não traz a conversa — busca o chamado completo (perguntas, respostas e anexos)
   try {
@@ -908,6 +995,109 @@ useAutoRefresh(async () => {
             </div>
           </div>
         </template>
+
+        <!-- ===== Avaliação do atendimento (escola, chamado concluído) ===== -->
+        <template v-if="ehEscola && detalhe.status === 'RESOLVIDO'">
+          <!-- Enviada agora, nesta sessão. Vem ANTES de `detalhe.avaliacao`
+               porque o envio também escreve o campo local: com a ordem
+               invertida, o cartão de agradecimento nunca apareceria. -->
+          <div v-if="avaliacaoEnviada" class="acao-box ava-agradecimento">
+            <Heart :size="20" />
+            <div>
+              <h4>Obrigado pela sua avaliação!</h4>
+              <p class="acao-dica">
+                Seu retorno ajuda a equipe a melhorar o atendimento às escolas.
+              </p>
+            </div>
+            <div class="ava-estrelas readonly" :aria-label="`Nota ${avaliacaoEnviada} de 5`">
+              <Star
+                v-for="i in 5"
+                :key="i"
+                :size="22"
+                :fill="i <= avaliacaoEnviada ? '#f5b921' : 'none'"
+                :color="i <= avaliacaoEnviada ? '#f5b921' : '#cbd5e1'"
+              />
+            </div>
+          </div>
+
+          <!-- Já avaliado antes (sessão anterior ou pela tela de consulta) -->
+          <div v-else-if="detalhe.avaliacao" class="acao-box ava-ja">
+            <h4>Sua avaliação</h4>
+            <div class="ava-estrelas readonly" :aria-label="`Nota ${detalhe.avaliacao.nota} de 5`">
+              <Star
+                v-for="i in 5"
+                :key="i"
+                :size="22"
+                :fill="i <= detalhe.avaliacao.nota ? '#f5b921' : 'none'"
+                :color="i <= detalhe.avaliacao.nota ? '#f5b921' : '#cbd5e1'"
+              />
+            </div>
+            <p v-if="detalhe.avaliacao.comentario" class="ava-comentario">
+              "{{ detalhe.avaliacao.comentario }}"
+            </p>
+            <span class="acao-dica">
+              Obrigado pelo retorno. A equipe usa o comentário para melhorar o atendimento.
+            </span>
+          </div>
+
+          <!-- Formulário -->
+          <div v-else-if="podeAvaliar && eDonoDoChamado" class="acao-box">
+            <h4>Avalie o atendimento</h4>
+            <p class="acao-dica">
+              O chamado foi concluído. Como foi o atendimento da nossa equipe?
+            </p>
+            <div class="ava-estrelas" role="radiogroup" aria-label="Nota de 1 a 5 estrelas">
+              <button
+                v-for="i in 5"
+                :key="i"
+                type="button"
+                class="ava-estrela"
+                :aria-label="`${i} ${i === 1 ? 'estrela' : 'estrelas'}`"
+                @click="nota = i"
+                @mouseenter="notaHover = i"
+                @mouseleave="notaHover = 0"
+              >
+                <Star
+                  :size="28"
+                  :fill="i <= notaExibida ? '#f5b921' : 'none'"
+                  :color="i <= notaExibida ? '#f5b921' : '#cbd5e1'"
+                />
+              </button>
+            </div>
+            <label class="ava-label" for="comentario-avaliacao-painel">
+              Comentário <span class="acao-dica">(opcional)</span>
+            </label>
+            <textarea
+              id="comentario-avaliacao-painel"
+              v-model="comentarioAvaliacao"
+              class="input textarea"
+              rows="3"
+              placeholder="Conte como foi o atendimento (opcional)..."
+            ></textarea>
+            <p v-if="erroAvaliacao" class="ava-erro">{{ erroAvaliacao }}</p>
+            <div class="acao-linha">
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="enviandoAvaliacao || nota < 1"
+                @click="enviarAvaliacao"
+              >
+                <Loader2 v-if="enviandoAvaliacao" class="spin" :size="16" />
+                <Send v-else :size="16" />
+                {{ enviandoAvaliacao ? 'Enviando...' : 'Enviar avaliação' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Concluído por outra conta: só o solicitante avalia -->
+          <div v-else-if="podeAvaliar" class="acao-box ava-avisada">
+            <h4>Avaliação</h4>
+            <p class="acao-dica">
+              Este chamado foi aberto com outro e-mail, então só quem abriu pode avaliá-lo. Se
+              preferir, use a tela de consulta com o e-mail da abertura.
+            </p>
+          </div>
+        </template>
       </div>
     </BaseModal>
   </div>
@@ -918,6 +1108,85 @@ useAutoRefresh(async () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* ---------- Avaliação do atendimento (escola) ---------- */
+
+.ava-estrelas {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0 4px;
+}
+
+.ava-estrelas.readonly {
+  margin: 8px 0 4px;
+}
+
+.ava-estrela {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: var(--radius-sm);
+}
+
+.ava-estrela:hover {
+  transform: scale(1.12);
+}
+
+.ava-label {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.ava-comentario {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--brand-gold);
+  background: var(--gold-soft, #fdf6e3);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.ava-erro {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--red);
+}
+
+.ava-agradecimento {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-color: var(--gold, #d4a017);
+  background: var(--gold-soft, #fdf6e3);
+}
+
+.ava-agradecimento > svg {
+  color: var(--green);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ava-agradecimento h4 {
+  margin: 0;
+}
+
+.ava-agradecimento .ava-estrelas {
+  width: 100%;
+  margin: 0;
+}
+
+.ava-avisada {
+  border-style: dashed;
 }
 
 .stats-grid {
