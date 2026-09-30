@@ -26,6 +26,7 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | Rodar, compilar e publicar | [10 · Build, deploy e ambientes](./10-build-deploy-ambientes.md) |
 | Fazer uma manutenção comum | [11 · Manutenção e checklists](./11-manutencao-e-checklists.md) |
 | Decifrar siglas e nomes próprios | [12 · Glossário](./12-glossario.md) |
+| **Entender a avaliação de atendimento** (do fechamento à nota) | **[13 · Avaliação de atendimento](./13-avaliacao-de-atendimento.md)** |
 
 ---
 
