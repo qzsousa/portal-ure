@@ -3,8 +3,8 @@ import { LogIn } from '@lucide/vue'
 
 /**
  * Moldura das páginas públicas (sem autenticação):
- * fundo em gradiente azul-marinho (mesmo padrão do login), header com a
- * marca do portal + link "Entrar" e rodapé discreto.
+ * fundo branco, header branco com a marca do portal + link "Entrar" e rodapé
+ * discreto. Mesmo padrão da tela de abertura de chamado (`NovoChamadoView`).
  *
  * Use `wide` em páginas com muito conteúdo (painéis/dashboards).
  */
@@ -41,9 +41,7 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(1200px 600px at 80% -10%, rgb(245 185 33 / 0.12), transparent 60%),
-    linear-gradient(160deg, #081a33 0%, #0a2140 45%, #061429 100%);
+  background: var(--surface);
 }
 
 .pub-topo {
@@ -78,7 +76,7 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
 }
 
 .marca-texto {
-  color: #fff;
+  color: var(--sidebar-bg);
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.05em;
@@ -94,17 +92,19 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
   gap: 7px;
   padding: 8px 16px;
   border-radius: var(--radius-sm);
-  background: rgb(255 255 255 / 0.09);
-  border: 1px solid rgb(255 255 255 / 0.16);
-  color: #fff;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
   flex-shrink: 0;
 }
 
 .pub-entrar:hover {
-  background: rgb(255 255 255 / 0.18);
+  background: var(--surface);
+  border-color: var(--blue);
+  color: var(--blue);
 }
 
 .pub-conteudo {
@@ -122,8 +122,9 @@ withDefaults(defineProps<{ wide?: boolean }>(), { wide: false })
 .pub-rodape {
   text-align: center;
   padding: 18px;
-  color: rgb(255 255 255 / 0.45);
+  color: var(--text-muted);
   font-size: 12px;
+  border-top: 1px solid var(--border);
 }
 
 .pub-rodape em {

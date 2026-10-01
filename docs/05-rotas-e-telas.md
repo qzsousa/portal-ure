@@ -36,8 +36,9 @@ Rota desconhecida → redireciona para `/painel`.
 
 Duas "molduras" diferentes, de propósito:
 
-- **`PublicoLayout`** — fundo azul-marinho, marca, botão "Entrar", rodapé.
-  Usada em `/consulta`, `/elogios`, `/tutorial/:id`, `/matriz`, `/dirigente`.
+- **`PublicoLayout`** — fundo branco, cabeçalho branco com marca + botão
+  "Entrar", rodapé. Usada em `/consulta`, `/elogios`, `/tutorial/:id`, `/matriz`,
+  `/dirigente`.
 - **Shell legado** (`NovoChamadoView`) — fundo claro, cabeçalho
   "GOVERNO DO ESTADO DE SÃO PAULO / SETEC — Unidade Regional de Ensino Leste 3".
   Mantido porque o formulário de chamado é usado por toda a rede e o visual
@@ -255,8 +256,9 @@ Painel de transparência, público, atualizado sozinho a cada 30 s.
 
 Mesma fonte de dados, recorte executivo:
 
-- 4 KPIs: total, aguardando atendimento (em aberto), em atendimento, **taxa de
-  resolução**.
+- 5 KPIs: total, aguardando atendimento (em aberto), em atendimento, **taxa de
+  resolução** e **nota de atendimento** (média das avaliações, ex.: `4,3/5`;
+  `—` quando ninguém avaliou).
 - Gráfico de barras **empilhado** por categoria (empilhado por situação).
 - Rosca de situação geral.
 - Chamados por unidade (top 10) e resolvidos por técnico.

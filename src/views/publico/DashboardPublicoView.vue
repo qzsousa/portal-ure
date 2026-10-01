@@ -203,13 +203,13 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.rapido)
 }
 
 .cabecalho h1 {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
 .cabecalho p {
   margin: 6px 0 0;
-  color: rgb(255 255 255 / 0.7);
+  color: var(--text-secondary);
   font-size: 13.5px;
 }
 
@@ -219,17 +219,18 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.rapido)
   gap: 7px;
   padding: 9px 16px;
   border-radius: var(--radius-sm);
-  background: rgb(255 255 255 / 0.09);
-  border: 1px solid rgb(255 255 255 / 0.16);
-  color: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   flex-shrink: 0;
 }
 
 .btn-atualizar:hover {
-  background: rgb(255 255 255 / 0.18);
+  border-color: var(--blue);
+  color: var(--blue);
 }
 
 .btn-atualizar:disabled {

@@ -299,13 +299,15 @@ direto.
 | POST | `/chamados` | envio do chamado |
 | GET | `/chamados/protocolo/:protocolo?email=` | consulta |
 | POST | `/chamados/protocolo/:protocolo/avaliar?email=` | avaliação 1–5 |
-| GET | `/dashboard/matriz` | `/matriz` e `/dirigente` |
+| GET | `/dashboard/matriz` | `/matriz` e `/dirigente` (KPI de nota) |
 | GET | `/tutoriais/publico/:id` | tutorial público |
 | POST | `/feedback` | `/elogios` |
 
 > `/dashboard/matriz` **não exige autenticação** no backend. Ele devolve a lista
-> de todos os chamados não excluídos. As telas públicas mostram apenas os 10
-> mais recentes, mas a resposta completa trafega. Se um dia isso for um problema
+> de todos os chamados não excluídos, além de `avaliacoes: { total, media,
+> porNota }` — só o agregado das notas, sem quem avaliou. As telas públicas
+> mostram apenas os 10 mais recentes, mas a resposta completa trafega. Se um dia
+> isso for um problema
 > (volume, privacidade), o caminho é criar um `/dashboard/publico` com resumo
 > agregado e sem a lista — o frontend precisaria de uma função nova em
 > `api/publico.ts` e nada mais.

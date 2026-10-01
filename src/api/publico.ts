@@ -133,6 +133,16 @@ export interface MatrizKpis {
 export interface DashboardMatriz {
   kpis: MatrizKpis
   chamados: Chamado[]
+  /**
+   * Nota média do atendimento (só agregado). Ausente em backends antigos —
+   * o painel do dirigente mostra "—" enquanto isso.
+   */
+  avaliacoes?: {
+    total: number
+    media: number | null
+    /** chaves '1'..'5' → quantidade de avaliações com aquela nota */
+    porNota: Record<string, number>
+  }
   graficos: {
     porStatus: Record<string, number>
     porUrgencia: Record<string, number>

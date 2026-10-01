@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { CheckCircle2, ClipboardList, Clock, Hourglass, RefreshCw } from '@lucide/vue'
+import { CheckCircle2, ClipboardList, Clock, Hourglass, RefreshCw, Star } from '@lucide/vue'
 import PublicoLayout from '@/components/publico/PublicoLayout.vue'
 import BarChartCard from '@/components/publico/BarChartCard.vue'
 import DonutCard from '@/components/ui/DonutCard.vue'
@@ -36,6 +36,20 @@ const kpis = computed(() => dados.value?.kpis)
 const emAtendimento = computed(() => (kpis.value ? kpis.value.andamento + kpis.value.comunicado : 0))
 const taxaResolucao = computed(() =>
   kpis.value && kpis.value.total > 0 ? Math.round((kpis.value.resolvidos / kpis.value.total) * 100) : 0,
+)
+
+/* ------- Nota de atendimento ------- */
+const avaliacoes = computed(() => dados.value?.avaliacoes)
+const totalAvaliacoes = computed(() => avaliacoes.value?.total ?? 0)
+
+/** Nota média formatada ("4,3/5") ou "—" enquanto ninguém avaliou. */
+const notaAtendimento = computed(() => {
+  const media = avaliacoes.value?.media
+  return typeof media === 'number' ? `${media.toFixed(1).replace('.', ',')}/5` : '—'
+})
+
+const detalheNota = computed(() =>
+  totalAvaliacoes.value === 1 ? '1 chamado avaliado' : `${totalAvaliacoes.value} chamados avaliados`,
 )
 
 /* ------- Chamados por categoria (barras empilhadas por status) ------- */
@@ -171,6 +185,9 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
         >
           <CheckCircle2 :size="22" />
         </StatCard>
+        <StatCard label="Nota de atendimento" :value="notaAtendimento" tone="purple" :detail="detalheNota">
+          <Star :size="22" />
+        </StatCard>
       </div>
 
       <!-- Gráficos -->
@@ -242,17 +259,17 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--brand-gold);
+  color: var(--blue);
 }
 
 .cabecalho h1 {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 24px;
 }
 
 .sub {
   margin: 6px 0 0;
-  color: rgb(255 255 255 / 0.7);
+  color: var(--text-secondary);
   font-size: 13.5px;
 }
 
@@ -262,17 +279,18 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
   gap: 7px;
   padding: 9px 16px;
   border-radius: var(--radius-sm);
-  background: rgb(255 255 255 / 0.09);
-  border: 1px solid rgb(255 255 255 / 0.16);
-  color: #fff;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   flex-shrink: 0;
 }
 
 .btn-atualizar:hover {
-  background: rgb(255 255 255 / 0.18);
+  border-color: var(--blue);
+  color: var(--blue);
 }
 
 .btn-atualizar:disabled {

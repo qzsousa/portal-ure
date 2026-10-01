@@ -169,13 +169,13 @@ function enviarOutra() {
 }
 
 .cabecalho h1 {
-  color: #fff;
+  color: var(--text-primary);
   font-size: 26px;
 }
 
 .cabecalho p {
   margin: 6px 0 0;
-  color: rgb(255 255 255 / 0.7);
+  color: var(--text-secondary);
   font-size: 14px;
   max-width: 60ch;
 }
@@ -333,11 +333,11 @@ function enviarOutra() {
   margin: 22px 0 0;
   text-align: center;
   font-size: 13px;
-  color: rgb(255 255 255 / 0.65);
+  color: var(--text-muted);
 }
 
 .ajuda-link {
-  color: var(--brand-gold);
+  color: var(--blue);
   font-weight: 600;
 }
 
