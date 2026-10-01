@@ -18,8 +18,13 @@ const estado = reactive({
   loading: true,
   erro: '',
   items: [] as UnidadeLinha[],
+  naoAtribuidos: [] as NaoAtribuido[],
   page: 1,
 })
+
+const totalNaoAtribuido = computed(() =>
+  estado.naoAtribuidos.reduce((acc, n) => acc + n.total, 0),
+)
 
 const busca = ref('')
 const filtroEquip = ref<'' | 'com' | 'sem'>('')
@@ -34,12 +39,21 @@ const filtroInventario = ref('')
  * linha. Como o catálogo já devolve só a mãe, cada equipamento é contado uma
  * única vez.
  *
- * O que NÃO casa com o catálogo é descartado (ex.: a sede regional, que não é
- * escola). Vale saber disso ao comparar com o painel de equipamentos, que conta
- * nomes de unidade e não prédios: os dois números divergem por construção, e não
- * só por falta de equipamento.
+ * DEFESA: o que NÃO casa com o catálogo NÃO é mais descartado em silêncio.
+ * Antes um `continue` sumia com o equipamento e a escola aparecia como "Sem
+ * equipamentos" sem nenhuma pista do motivo — foi assim que "E.E. ISAAC
+ * SCHRAIBER" (239 equipamentos) sumiu quando o catálogo ficou com a grafia
+ * "E.E. ISAAC SCHIRAIBER". Agora volta como `naoAtribuidos` e a tela avisa.
  */
-function mesclarEquipamentos(unidades: UnidadePainel[], resumo: UnidadeResumo[]): UnidadeLinha[] {
+interface NaoAtribuido {
+  nome: string
+  total: number
+}
+
+function mesclarEquipamentos(
+  unidades: UnidadePainel[],
+  resumo: UnidadeResumo[],
+): { linhas: UnidadeLinha[]; naoAtribuidos: NaoAtribuido[] } {
   const porNome = new Map<string, UnidadePainel[]>()
   for (const u of unidades) {
     // `new Set` é obrigatório: escola que NÃO divide prédio tem `nome === grupo`,
@@ -58,11 +72,15 @@ function mesclarEquipamentos(unidades: UnidadePainel[], resumo: UnidadeResumo[])
 
   // equipamentos atribuídos a cada unidade individual (nome = chave do catálogo casada)
   const totais = new Map<string, UnidadeLinha['equip']>()
+  const naoAtribuidos: NaoAtribuido[] = []
   const zero = () => ({ total: 0, disponiveis: 0, manutencao: 0, quebrados: 0, extraviados: 0 })
   for (const r of resumo) {
     const casado = casarNomeEscola(r.nome, [...porNome.keys()])
     const alvos = casado ? porNome.get(casado) : undefined
-    if (!alvos) continue
+    if (!alvos) {
+      naoAtribuidos.push({ nome: r.nome, total: r.total })
+      continue
+    }
     for (const u of alvos) {
       const t = totais.get(u.nome) || zero()
       t.total += r.total
@@ -74,7 +92,9 @@ function mesclarEquipamentos(unidades: UnidadePainel[], resumo: UnidadeResumo[])
     }
   }
 
-  return unidades.map((u) => ({ ...u, equip: totais.get(u.nome) || zero() }))
+  const linhas = unidades.map((u) => ({ ...u, equip: totais.get(u.nome) || zero() }))
+  naoAtribuidos.sort((a, b) => b.total - a.total)
+  return { linhas, naoAtribuidos }
 }
 
 /** Normaliza para busca sem distinção de maiúsculas/acentos. */
@@ -163,7 +183,9 @@ async function carregar() {
       listarPainelUnidades(),
       listarUnidadesResumo().catch(() => [] as UnidadeResumo[]),
     ])
-    estado.items = mesclarEquipamentos(painel, resumo)
+    const { linhas, naoAtribuidos } = mesclarEquipamentos(painel, resumo)
+    estado.items = linhas
+    estado.naoAtribuidos = naoAtribuidos
   } catch {
     estado.items = []
     estado.erro =
@@ -225,6 +247,27 @@ onMounted(() => {
     </div>
 
     <p v-if="estado.erro" class="erro card">{{ estado.erro }}</p>
+
+    <!--
+      DEFESA: equipamento que existe no SCE mas não casa com nenhuma linha do
+      catálogo. Não some em silêncio — a Matriz precisa saber o nome para
+      corrigir o cadastro, senão a escola aparece como "Sem equipamentos".
+    -->
+    <div v-if="totalNaoAtribuido > 0" class="aviso card">
+      <strong>
+        {{ totalNaoAtribuido }} equipamento(s) não foram atribuídos a nenhuma unidade
+      </strong>
+      <p>
+        O nome da unidade no SCE não corresponde a nenhuma escola do catálogo. As
+        unidades abaixo aparecem como “Sem equipamentos” mesmo tendo parque
+        cadastrado. Cadastre/ corrija o nome da unidade no SCE:
+      </p>
+      <ul>
+        <li v-for="n in estado.naoAtribuidos" :key="n.nome">
+          <strong>{{ n.total }}</strong> eq — “{{ n.nome }}”
+        </li>
+      </ul>
+    </div>
 
     <!-- Tabela -->
     <div class="card table-card">
@@ -392,5 +435,28 @@ onMounted(() => {
   padding: 14px 18px;
   color: var(--red);
   font-weight: 500;
+}
+
+.aviso {
+  padding: 14px 18px;
+  border-left: 4px solid var(--yellow);
+  background: #fffbeb;
+}
+
+.aviso strong {
+  color: #92400e;
+}
+
+.aviso p {
+  margin: 6px 0;
+  color: #78350f;
+  font-size: 13.5px;
+}
+
+.aviso ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: #78350f;
+  font-size: 13px;
 }
 </style>
