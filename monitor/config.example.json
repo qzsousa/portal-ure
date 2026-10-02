@@ -1,0 +1,45 @@
+{
+  "_comentario": [
+    "Copia para config.json e ajuste. O config.json NÃO é versionado.",
+    "Cada faixa vira um grupo na tela. Formatos aceitos por faixa:",
+    "  cidr  : \"10.20.0.0/24\"  -> todos os hosts úteis da rede (sem endereço de rede/broadcast)",
+    "  inicio/fim : \"10.20.1.10\" .. \"10.20.1.60\"  -> intervalo fechado",
+    "  ips   : [\"10.20.5.7\"]  -> endereços avulsos (exceções)",
+    "portas: portas TCP sondadas quando o ICMP não responde (evita falso offline).",
+    "Um IP em duas faixas é erro de configuração — o log acusa na subida."
+  ],
+
+  "intervaloSegundos": 30,
+  "concorrencia": 48,
+  "timeoutPingMs": 1000,
+  "timeoutPortaMs": 800,
+  "historico": 30,
+  "portasPadrao": [445, 3389],
+
+  "faixas": [
+    {
+      "id": "reitoria",
+      "rotulo": "Reitoria / Administração",
+      "cidr": "10.20.0.0/24"
+    },
+    {
+      "id": "pedagogica",
+      "rotulo": "Pedagógica",
+      "inicio": "10.20.1.10",
+      "fim": "10.20.1.60"
+    },
+    {
+      "id": "lab-informatica",
+      "rotulo": "Laboratório de Informática",
+      "inicio": "10.20.2.10",
+      "fim": "10.20.2.70",
+      "portas": [445, 3389, 80]
+    },
+    {
+      "id": "servidores",
+      "rotulo": "Servidores e infraestrutura",
+      "ips": ["10.20.9.10", "10.20.9.11", "10.20.9.20"],
+      "portas": [445, 3389, 80, 443]
+    }
+  ]
+}

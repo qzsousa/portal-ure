@@ -13,6 +13,11 @@ dist-ssr
 *.local
 .env
 
+# Monitor de rede: o config.json local tem a topologia da rede e NUNCA entra
+# no repositório (config.example.json é o modelo versionado).
+monitor/config.json
+monitor/*.log
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

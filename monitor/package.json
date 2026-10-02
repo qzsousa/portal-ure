@@ -1,0 +1,14 @@
+{
+  "name": "monitor-rede",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Serviço de ping (ICMP + porta TCP) dos IPs da rede privada, para a aba Monitoramento do Portal URE Leste 3",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test \"testes/*.test.mjs\""
+  }
+}
