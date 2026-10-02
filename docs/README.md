@@ -79,6 +79,35 @@ sistema rodando com dados reais.
 | 33 | Painel de chamados — avaliação no detalhe (perfil Gestor) | [`33-avaliacao-painel.png`](./screenshots/33-avaliacao-painel.png) |
 | 34 | Painel de chamados — agradecimento depois de avaliar | [`34-avaliacao-painel-enviada.png`](./screenshots/34-avaliacao-painel-enviada.png) |
 
+### Escola MÃE × escola FILHA no parque de equipamentos
+
+| # | Tela | Arquivo |
+|---|---|---|
+| 35 | Equipamentos — **escola FILHA**: banner de compartilhamento, sem "Adicionar equipamento" e sem Editar/Remover | [`35-equipamentos-escola-filha-somente-leitura.png`](./screenshots/35-equipamentos-escola-filha-somente-leitura.png) |
+| 36 | Equipamentos — **escola MÃE** do mesmo grupo: sem banner, com "Adicionar equipamento" e Editar/Remover | [`36-equipamentos-escola-mae-com-edicao.png`](./screenshots/36-equipamentos-escola-mae-com-edicao.png) |
+| 37 | Login usado no teste dos perfis MÃE/FILHA | [`37-login-teste.png`](./screenshots/37-login-teste.png) |
+
+> **Sobre os prints 35 e 36.** Capturados com o portal local e **dois usuários
+> de teste do mesmo grupo de escolas irmãs** (`E.E. CESAR DONATO CALABREZ /
+> LEILA DINIZ`), ambos com perfil Gestor: um cadastrado na **MÃE** e outro na
+> **FILHA**. Os 365 equipamentos são reais e são o mesmo conjunto nas duas
+> telas — o que muda é apenas o que cada perfil pode fazer com eles.
+>
+> - A **FILHA** é somente leitura: o aviso azul informa com quem o parque é
+>   compartilhado, o botão "Adicionar equipamento" não existe e o menu da
+>   linha traz apenas "Ver detalhes e histórico".
+> - A **MÃE** administra o painel: os mesmos equipamentos, com "Adicionar
+>   equipamento", "Editar" e "Remover".
+>
+> A regra é aplicada em duas camadas — o portal esconde os botões e o SCE recusa
+> a escrita na API — descrita em
+> [Autenticação e permissões](./04-autenticacao-e-permissoes.md).
+>
+> Ressalva: por serem telas de página inteira, os prints mostram a coluna
+> **Ações fechada**. A diferença entre os itens do menu (só "Ver detalhes" na
+> FILHA; "Editar" e "Remover" na MÃE) foi conferida no DOM, mas não aparece
+> nas imagens.
+
 > **Sobre os prints.** Todos foram capturados do portal rodando localmente
 > (`localhost:5173`) contra o banco de desenvolvimento, com um usuário
 > **Administrador**. Três ressalvas:

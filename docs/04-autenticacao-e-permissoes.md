@@ -105,7 +105,7 @@ No portal isso aparece de três formas:
 
 1. **Botão "Adicionar equipamento" some.**
 2. **"Editar" e "Remover" somem** do menu de ações da linha.
-3. **Banner amarelo na tela** (`EquipamentosView`):
+3. **Banner azul na tela** (`EquipamentosView`, com `--blue-soft`):
 
    > Equipamentos compartilhados com **{irma}** — sua unidade tem acesso
    > **somente de visualização**. Para cadastrar, alterar ou remover, fale com a
@@ -114,6 +114,11 @@ No portal isso aparece de três formas:
 O bloqueio é **duplo**: a interface esconde o botão **e** o SCE rejeita a
 escrita (devolvendo `success: false` com a mensagem de somente-leitura). Se
 alguém chamar a API direto, não consegue escrever.
+
+Na prática, as duas metades da regra lado a lado: a escola **FILHA** em
+[`35-equipamentos-escola-filha-somente-leitura.png`](./screenshots/35-equipamentos-escola-filha-somente-leitura.png)
+e a **MÃE** do mesmo grupo em
+[`36-equipamentos-escola-mae-com-edicao.png`](./screenshots/36-equipamentos-escola-mae-com-edicao.png).
 
 > ⚠️ **Importante:** a regra de FILHA vale **só para equipamentos**. Em
 > *Chamados*, Gestor e Visualizador têm exatamente o mesmo comportamento
