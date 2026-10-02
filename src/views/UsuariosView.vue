@@ -45,9 +45,24 @@ function podeEditarAlvo(u: User): boolean {
 
 const estado = reactive({ loading: true, erro: '', items: [] as User[], total: 0, page: 1 })
 const PAGE_SIZE = 10
-const filtros = reactive({ search: '', status: '' })
+const filtros = reactive({ search: '', status: '', nivel: '' as Nivel | '', filial: '' })
 
 const escolas = ref<string[]>([])
+
+/** Todos os perfis — é filtro de leitura, serve qualquer um que exista na lista. */
+const PERFIS_FILTRO: Array<{ valor: Nivel; rotulo: string }> = [
+  { valor: 'ADMIN', rotulo: 'Administrador' },
+  { valor: 'TECNICO', rotulo: 'Técnico' },
+  { valor: 'GESTOR', rotulo: 'Gestor' },
+  { valor: 'VISUALIZADOR', rotulo: 'Visualizador' },
+]
+
+/** Só o Admin filtra por unidade: o Gestor já vê apenas a própria escola. */
+const podeFiltrarUnidade = computed(() => isAdmin.value)
+
+const temFiltroAtivo = computed(
+  () => !!(filtros.search || filtros.status || filtros.nivel || filtros.filial),
+)
 
 async function carregar() {
   estado.loading = true
@@ -65,6 +80,14 @@ async function carregar() {
 function aplicarFiltros() {
   estado.page = 1
   void carregar()
+}
+
+function limparFiltros() {
+  filtros.search = ''
+  filtros.status = ''
+  filtros.nivel = ''
+  filtros.filial = ''
+  aplicarFiltros()
 }
 
 /* ---------- Criar / Editar ---------- */
@@ -228,12 +251,39 @@ onMounted(async () => {
           @keyup.enter="aplicarFiltros"
         />
       </div>
+      <select v-model="filtros.nivel" class="select-input slim" @change="aplicarFiltros">
+        <option value="">Perfil: Todos</option>
+        <option v-for="p in PERFIS_FILTRO" :key="p.valor" :value="p.valor">{{ p.rotulo }}</option>
+      </select>
+
+      <select
+        v-if="podeFiltrarUnidade"
+        v-model="filtros.filial"
+        class="select-input slim unidade-select"
+        @change="aplicarFiltros"
+      >
+        <option value="">Unidade: Todas</option>
+        <option v-for="e in escolas" :key="e" :value="e">{{ e }}</option>
+      </select>
+
       <select v-model="filtros.status" class="select-input slim" @change="aplicarFiltros">
         <option value="">Status: Todos</option>
         <option value="ATIVO">Ativo</option>
         <option value="INATIVO">Inativo</option>
       </select>
-      <button class="btn btn-primary" type="button" @click="abrirCriar">
+
+      <button
+        v-if="temFiltroAtivo"
+        class="btn btn-outline btn-limpar"
+        type="button"
+        title="Limpar filtros"
+        @click="limparFiltros"
+      >
+        <X :size="15" />
+        Limpar
+      </button>
+
+      <button class="btn btn-primary btn-novo" type="button" @click="abrirCriar">
         <UserPlus :size="16" />
         Novo usuário
       </button>
@@ -454,6 +504,36 @@ onMounted(async () => {
 .select-input.slim {
   width: auto;
   min-width: 140px;
+}
+
+/* Nome de unidade é longo: o select precisa de mais largura que os demais. */
+.unidade-select {
+  min-width: 230px;
+  max-width: 290px;
+}
+
+.btn-limpar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.btn-limpar:hover {
+  color: var(--text-primary);
+}
+
+/* O botão "Novo usuário" fica encostado à direita da toolbar. */
+.btn-novo {
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .btn-novo {
+    margin-left: 0;
+  }
 }
 
 .erro {

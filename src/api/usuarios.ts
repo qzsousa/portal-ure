@@ -7,6 +7,8 @@ import type { Paginado } from './chamados'
 export interface FiltrosUsuario {
   search?: string
   nivel?: Nivel | ''
+  /** Unidade escolar. No backend, casa por `contains`: o técnico tem várias unidades na mesma linha. */
+  filial?: string
   status?: string
   page?: number
   limit?: number
