@@ -89,6 +89,45 @@ export async function listarCatalogoCompleto(): Promise<ItemLista[]> {
   return unwrap(sceApi.get<SceResponse<ItemLista[]>>('/catalogo-equipamentos'))
 }
 
+/** Especificações técnicas devolvidas pelo SCE para um modelo. */
+export interface EspecificacoesModelo {
+  sistemaOperacional: string
+  processador: string
+  memoriaRAM: string
+  armazenamento: string
+  tamanhoTela: string
+}
+
+/**
+ * Especificações do modelo, lidas do equipamento mais recente com aquele
+ * modelo. O SCE responde em snake_case (query crua no Supabase) e com
+ * `null` quando o modelo ainda não tem nenhum equipamento — por isso a
+ * normalização para camelCase e para string happens aqui.
+ */
+export async function buscarEspecificacoesModelo(modelo: string): Promise<EspecificacoesModelo | null> {
+  const bruto = await unwrap(
+    sceApi.get<SceResponse<Record<string, unknown> | null>>('/especificacoes-modelo', {
+      params: { modelo },
+    }),
+  )
+  if (!bruto) return null
+  const txt = (...chaves: string[]) => {
+    for (const c of chaves) {
+      const v = bruto[c]
+      if (v !== null && v !== undefined && String(v).trim() !== '') return String(v).trim()
+    }
+    return ''
+  }
+  const spec: EspecificacoesModelo = {
+    sistemaOperacional: txt('sistemaOperacional', 'sistema_operacional'),
+    processador: txt('processador'),
+    memoriaRAM: txt('memoriaRAM', 'memoria_ram'),
+    armazenamento: txt('armazenamento'),
+    tamanhoTela: txt('tamanhoTela', 'tamanho_tela'),
+  }
+  return Object.values(spec).some((v) => v !== '') ? spec : null
+}
+
 export interface HistoricoItem {
   campo: string
   valor_antigo: string
@@ -143,10 +182,16 @@ export interface EquipamentoPayload {
   justificativaNumeroSerie?: string
   status?: string
   statusManutencao?: string
+  vinculadoBlueMonitor?: string
   numeroChamadoManutencao?: string
   descricaoQuebrado?: string
   justificativaVerificacao?: string
   boletimOcorrencia?: string
+  sistemaOperacional?: string
+  processador?: string
+  memoriaRAM?: string
+  armazenamento?: string
+  tamanhoTela?: string
   responsavelAtual?: string
   observacoes?: string
   _anexoBoletim?: AnexoBoletim
@@ -159,6 +204,7 @@ export async function criarEquipamento(payload: EquipamentoPayload): Promise<{ i
 export async function atualizarEquipamento(id: string, campos: Partial<EquipamentoPayload>): Promise<void> {
   await unwrap(sceApi.post<SceResponse<null>>('/update-equipamento', { id, ...campos }))
 }
+
 
 export async function removerEquipamento(id: string): Promise<void> {
   await unwrap(sceApi.post<SceResponse<unknown>>('/remover-equipamento', { id }))

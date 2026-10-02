@@ -133,10 +133,23 @@ export interface Equipamento {
   numeroSerie?: string | null
   status: string
   statusManutencao?: string | null
+  vinculadoBlueMonitor?: string | null
   numeroChamadoManutencao?: string | null
   descricaoQuebrado?: string | null
+  justificativaVerificacao?: string | null
+  boletimOcorrencia?: string | null
+  /** Caminho do anexo do B.O. no storage do SCE (ex.: `boletins/<uuid>-anexo.pdf`). */
+  boletimOcorrenciaAnexoUrl?: string | null
+  /** Especificações técnicas do equipamento. */
+  sistemaOperacional?: string | null
+  processador?: string | null
+  memoriaRAM?: string | null
+  armazenamento?: string | null
+  tamanhoTela?: string | null
   responsavelAtual?: string | null
   observacoes?: string | null
+  justificativaPatrimonio?: string | null
+  justificativaNumeroSerie?: string | null
   dataCadastro?: string
   dataUltimaAtualizacao?: string
 }
