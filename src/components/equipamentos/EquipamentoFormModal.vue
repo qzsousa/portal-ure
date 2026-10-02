@@ -20,6 +20,7 @@ import {
   criarEquipamento,
   listarCatalogoCompleto,
   listarUnidadesResumo,
+  removerAnexoBoletim,
   type EquipamentoPayload,
   type ItemLista,
 } from '@/api/sce'
@@ -88,6 +89,12 @@ const erroLocal = ref('')
 const anexoArquivo = ref<File | null>(null)
 /** Caminho do anexo já gravado no SCE (modo editar) — dispensa novo upload. */
 const anexoJaSalvo = ref<string>('')
+/**
+ * Caminho cujo arquivo o usuário mandou apagar. Distingue "descartou o
+ * anexo" de "trocou por outro": no segundo caso quem apaga o arquivo antigo é
+ * o próprio `update-equipamento`, e aqui não há o que fazer.
+ */
+const anexoDescartado = ref<string>('')
 /** Input de arquivo real, escondido — o botão é o que o usuário aciona. */
 const inputAnexo = ref<HTMLInputElement | null>(null)
 /** Erro de validação do arquivo, mostrado junto ao campo. */
@@ -211,10 +218,18 @@ function abrirSeletorAnexo() {
   inputAnexo.value?.click()
 }
 
-/** Descarta o anexo. O arquivo no storage sai na proxima edicao. */
+/**
+ * Descarta o anexo.
+ *
+ * Guardar o caminho em `anexoDescartado` faz o salvamento apagar o arquivo no
+ * storage. Enquanto isso, o formulário exige um novo envio — o status
+ * "Extraviado" não pode ficar sem anexo.
+ */
 function removerAnexo() {
+  const caminho = anexoJaSalvo.value
   limparAnexo()
   anexoJaSalvo.value = ''
+  if (caminho) anexoDescartado.value = caminho
 }
 
 /** Valida o arquivo escolhido e guarda o `File` (base64 só no envio). */
@@ -246,7 +261,7 @@ function onArquivoEscolhido(e: Event) {
   // Trocar de arquivo substitui o B.O. já existente no banco: quem apaga o
   // arquivo antigo é o `update-equipamento`, não esta tela.
   anexoJaSalvo.value = ''
-
+  anexoDescartado.value = ''
 }
 
 /** Lê o arquivo como base64 puro (sem o prefixo `data:`). */
@@ -274,7 +289,7 @@ function preencher(item: Equipamento | null) {
   anexoArquivo.value = null
   nomeAnexo.value = ''
   anexoJaSalvo.value = ''
-
+  anexoDescartado.value = ''
   custom.categoria = ''
   custom.marca = ''
   custom.modelo = ''
@@ -328,6 +343,9 @@ watch(
     if (novo !== 'Extraviado' && antigo === 'Extraviado') {
       form.boletimOcorrencia = ''
       limparAnexo()
+      // Só sai do "Extraviado" com o arquivo marcado: um equipamento já
+      // gravado como tal precisa ter o boletim removido de verdade no storage.
+      if (anexoJaSalvo.value) anexoDescartado.value = anexoJaSalvo.value
       anexoJaSalvo.value = ''
     }
   },
@@ -432,12 +450,21 @@ async function salvar() {
       }
       // Anexo novo é uma mudança por si só (o SCE troca o arquivo no storage).
       if (payload._anexoBoletim) campos._anexoBoletim = payload._anexoBoletim
-      if (Object.keys(campos).length === 0) {
+      // Descartar o anexo também conta como alteração, mesmo sem outro campo.
+      const descartaAnexo = Boolean(anexoDescartado.value)
+      if (Object.keys(campos).length === 0 && !descartaAnexo) {
         ui.info('Nenhuma alteração para salvar.')
         emit('fechar')
         return
       }
-      await atualizarEquipamento(it.id, campos as Partial<EquipamentoPayload>)
+      if (Object.keys(campos).length > 0) {
+        await atualizarEquipamento(it.id, campos as Partial<EquipamentoPayload>)
+      }
+      // Depois do update: é a troca de status que libera a remoção (o SCE
+      // recusa apagar o boletim de um equipamento ainda "Extraviado").
+      if (descartaAnexo) {
+        await removerAnexoBoletim(it.id, anexoDescartado.value)
+      }
       ui.success('Equipamento atualizado.')
     } else {
       await criarEquipamento(payload)

@@ -205,6 +205,24 @@ export async function atualizarEquipamento(id: string, campos: Partial<Equipamen
   await unwrap(sceApi.post<SceResponse<null>>('/update-equipamento', { id, ...campos }))
 }
 
+/**
+ * Remove o anexo do Boletim de Ocorrência (apaga o arquivo do storage).
+ *
+ * `caminhoEsperado` é o caminho que o formulário tinha carregado: se outro
+ * upload já tiver substituído o anexo enquanto o modal estava aberto, o SCE
+ * ignora o pedido em vez de apagar o arquivo novo.
+ */
+export async function removerAnexoBoletim(
+  id: string,
+  caminhoEsperado?: string,
+): Promise<{ removido: boolean }> {
+  return unwrap(
+    sceApi.post<SceResponse<{ removido: boolean }>>('/remover-anexo-boletim', {
+      id,
+      caminhoEsperado: caminhoEsperado || undefined,
+    }),
+  )
+}
 
 export async function removerEquipamento(id: string): Promise<void> {
   await unwrap(sceApi.post<SceResponse<unknown>>('/remover-equipamento', { id }))
