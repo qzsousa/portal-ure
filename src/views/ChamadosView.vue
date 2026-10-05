@@ -60,6 +60,123 @@ const ui = useUiStore()
 const route = useRoute()
 const router = useRouter()
 
+/**
+ * E-mails de contato por escola (individual).
+ * Escolas que dividem prédio aparecem separadas no mapa —
+ * a resolução faz split por "/" e retorna os dois e-mails.
+ */
+const EMAILS_POR_ESCOLA: Record<string, string> = {
+  'E.E. ADHEMAR ANTONIO PRADO': 'e003244a@educacao.sp.gov.br',
+  'E.E. ALCIDES BOSCOLO': 'e003177a@educacao.sp.gov.br',
+  'E.E. ANDRÉ NUNES JUNIOR': 'e003311a@educacao.sp.gov.br',
+  'E.E. ANÍSIO TEIXEIRA': 'e037047a@educacao.sp.gov.br',
+  'E.E. ANTONIETA DE SOUZA ALCÂNTARA': 'e902615a@educacao.sp.gov.br',
+  'E.E. ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM - TOM JOBIM': 'e352573a@educacao.sp.gov.br',
+  'E.E. AQUILINO RIBEIRO': 'e904302a@educacao.sp.gov.br',
+  'E.E. BARRO BRANCO II': 'e926048a@educacao.sp.gov.br',
+  'E.E. BELIZE': 'e284324a@educacao.sp.gov.br',
+  'E.E. BENJAMIN SAMUEL BLOOM': 'e011788a@educacao.sp.gov.br',
+  'E.E. BERNADIM RIBEIRO': 'e906189a@educacao.sp.gov.br',
+  'E.E. BRENO ROSSI, MAESTRO': 'e916730a@educacao.sp.gov.br',
+  'E.E. CÂNDIDO PROCÓPIO F. CAMARGO': 'e904922a@educacao.sp.gov.br',
+  'E.E. CARLOS HENRIQUE LIBERALLI': 'e039251a@educacao.sp.gov.br',
+  'E.E. CARMELINDA M. PEREIRA': 'e909166a@educacao.sp.gov.br',
+  'E.E. CESAR DONATO CALABREZ': 'e902627a@educacao.sp.gov.br',
+  'E.E. CHARLOTTE MARIA SHAW MASON': 'e011791a@educacao.sp.gov.br',
+  'E.E. CHIQUINHA GONZAGA': 'e011795a@educacao.sp.gov.br',
+  'E.E. CLAUDIA DUTRA VIANA': 'e438112a@educacao.sp.gov.br',
+  'E.E. COHAB CARRÃOZINHO': 'e921464a@educacao.sp.gov.br',
+  'E.E. COHAB ITAQUERA IV': 'e916766a@educacao.sp.gov.br',
+  'E.E. DÉCIO FERRAZ ALVIM': 'e003128a@educacao.sp.gov.br',
+  'E.E. DJANIRA': 'e011787a@educacao.sp.gov.br',
+  'E.E. ERNESTINA DEL B. TRAMA': 'e037084a@educacao.sp.gov.br',
+  'E.E. ESTHER FIGUEIREDO FERRAZ': 'e925226a@educacao.sp.gov.br',
+  'E.E. FABIO AGAZZI': 'e907029a@educacao.sp.gov.br',
+  'E.E. FADLO HAIDAR': 'e044337a@educacao.sp.gov.br',
+  'E.E. FERNANDO MAURO P. ROCHA, DEPUTADO': 'e902724a@educacao.sp.gov.br',
+  'E.E. FERNANDO PESSOA': 'e904284a@educacao.sp.gov.br',
+  'E.E. FLORIANO PEIXOTO': 'e011786a@educacao.sp.gov.br',
+  'E.E. FRANCISCO DE ASSIS P. CORRÊA': 'e043746a@educacao.sp.gov.br',
+  'E.E. FREDERICO MARIANO': 'e048707a@educacao.sp.gov.br',
+  'E.E. GERALDINO DOS SANTOS, DEPUTADO': 'e910831a@educacao.sp.gov.br',
+  'E.E. GUERRA JUNQUEIRO': 'e904314a@educacao.sp.gov.br',
+  'E.E. HAYDEÉ HIDALGO': 'e922146a@educacao.sp.gov.br',
+  'E.E. HERBERT JOSÉ DE SOUZA - BETINHO': 'e011798a@educacao.sp.gov.br',
+  'E.E. HUMBERTO BAPTISTELLI': 'e447663a@educacao.sp.gov.br',
+  'E.E. HUMBERTO DANTAS': 'e037059a@educacao.sp.gov.br',
+  'E.E. INDIANA ZUYCHER S. DE JESUS': 'e048677a@educacao.sp.gov.br',
+  'E.E. ISAAC SCHIRAIBER': 'e909117a@educacao.sp.gov.br',
+  'E.E. JARDIM DOM ANGÉLICO': 'e267971a@educacao.sp.gov.br',
+  'E.E. JARDIM IGUATEMI': 'e923266a@educacao.sp.gov.br',
+  'E.E. JARDIM LIMOEIRO III': 'e925412a@educacao.sp.gov.br',
+  'E.E. JARDIM PEDRA BRANCA': 'e433482a@educacao.sp.gov.br',
+  'E.E. JARDIM WILMA FLOR': 'e922900a@educacao.sp.gov.br',
+  'E.E. JOÃO CASTELLANO': 'e902718a@educacao.sp.gov.br',
+  'E.E. JOAQUIM SILVÉRIO G. DOS REIS': 'e048665a@educacao.sp.gov.br',
+  'E.E. JORGE LUIS BORGES': 'e907017a@educacao.sp.gov.br',
+  'E.E. JOSUÉ DE CASTRO': 'e011797a@educacao.sp.gov.br',
+  'E.E. JUAN CARLOS ONETTI': 'e412173a@educacao.sp.gov.br',
+  'E.E. LEILA DINIZ': 'e011792a@educacao.sp.gov.br',
+  'E.E. LEÔNIDAS DA SILVA': 'e011799a@educacao.sp.gov.br',
+  'E.E. LIMA BARRETO': 'e011796a@educacao.sp.gov.br',
+  'E.E. LUIS VAZ DE CAMÕES': 'e902883a@educacao.sp.gov.br',
+  'E.E. LUIZ ROSANOVA': 'e003141a@educacao.sp.gov.br',
+  'E.E. MARCOS ANTONIO COSTA': 'e923916a@educacao.sp.gov.br',
+  'E.E. MARIA ANTONIETA FERRAZ BIBLIOTECARIA': 'e904582a@educacao.sp.gov.br',
+  'E.E. MARIA DE LOURDES A. A. PACHECO': 'e906980a@educacao.sp.gov.br',
+  'E.E. MARIA TEREZA SIMÕES DE ALMEIDA PROFESSORA': 'e011793a@educacao.sp.gov.br',
+  'E.E. MARIUMA BUAZAR MAUAD': 'e904296a@educacao.sp.gov.br',
+  'E.E. MOACYR AMARAL DOS SANTOS': 'e048653a@educacao.sp.gov.br',
+  'E.E. MOZART TAVARES DE LIMA': 'e036961a@educacao.sp.gov.br',
+  'E.E. OSWALDO GAGLIARDI': 'e908368a@educacao.sp.gov.br',
+  'E.E. PATRÍCIA GALVÃO - PAGU': 'e011789a@educacao.sp.gov.br',
+  'E.E. PAULO ROLIM ROSA': 'e922912a@educacao.sp.gov.br',
+  'E.E. PAULO SARASATE GOVERNADOR': 'e036812a@educacao.sp.gov.br',
+  'E.E. PEDRO TAQUES': 'e003256a@educacao.sp.gov.br',
+  'E.E. RECANTO VERDE SOL': 'e267983a@educacao.sp.gov.br',
+  'E.E. RITA PINTO DE ARAUJO': 'e003323a@educacao.sp.gov.br',
+  'E.E. ROCCA DORDALL': 'e037060a@educacao.sp.gov.br',
+  'E.E. ROQUE THEOPHILO': 'e268276a@educacao.sp.gov.br',
+  'E.E. ROSA PARKS': 'e011790a@educacao.sp.gov.br',
+  'E.E. RUY DE MELLO JUNQUEIRA': 'e920277a@educacao.sp.gov.br',
+  'E.E. SALIM FARAH MALUF': 'e044325a@educacao.sp.gov.br',
+  'E.E. SALVADOR ALLENDE GOSSENS': 'e906967a@educacao.sp.gov.br',
+  'E.E. SATURNINO PEREIRA': 'e909185a@educacao.sp.gov.br',
+  'E.E. SEBASTIÃO FARIAS ZIMBRES': 'e003268a@educacao.sp.gov.br',
+  'E.E. SERGIO ESTANISTLAU DE CAMARGO': 'e914712a@educacao.sp.gov.br',
+  'E.E. SERGIO ROCHA KIEHL': 'e916785a@educacao.sp.gov.br',
+  'E.E. SILVANA EVANGELISTA': 'e923278a@educacao.sp.gov.br',
+  'E.E. SIMÃO MATHIAS': 'e916742a@educacao.sp.gov.br',
+  'E.E. SUMIE IWATA': 'e909129a@educacao.sp.gov.br',
+  'E.E. VILA BELA': 'e923047a@educacao.sp.gov.br',
+  'E.E. YERVANT KISSAJIKIAN': 'e906207a@educacao.sp.gov.br',
+  'E.E. ZÍPORA RUBISTEIN': 'e914721a@educacao.sp.gov.br',
+}
+
+/**
+ * Retorna os e-mails das escolas contidas no campo `unidade`.
+ * O campo pode vir como "E.E. ESCOLA A / E.E. ESCOLA B" — fazemos split por "/"
+ * e normalizamos o nome para buscar no mapa.
+ */
+function emailsDaUnidade(unidade: string): string[] {
+  if (!unidade) return []
+  const partes = unidade.split('/').map(p => p.trim())
+  const emails: string[] = []
+  for (const parte of partes) {
+    const email = EMAILS_POR_ESCOLA[parte]
+    if (email) emails.push(`${parte}: ${email}`)
+  }
+  return emails
+}
+
+/**
+ * E-mails formatados para exibição no modal do chamado.
+ */
+const emailsUnidadeFormatados = computed(() => {
+  if (!detalhe.value?.unidade) return []
+  return emailsDaUnidade(detalhe.value.unidade)
+})
+
 const stats = ref<{ total: number; abertos: number; andamento: number; comunicado: number; resolvidos: number } | null>(null)
 
 const estado = reactive({
@@ -847,6 +964,7 @@ useAutoRefresh(async () => {
       <div v-if="detalhe" class="detalhe">
         <dl class="detalhe-grid">
           <div><dt>Unidade</dt><dd>{{ detalhe.unidade }}</dd></div>
+          <div class="full"><dt>E-mails da escola</dt><dd><template v-if="emailsUnidadeFormatados.length"><span v-for="(e, i) in emailsUnidadeFormatados" :key="i" class="email-item">{{ e }}</span></template><span v-else>—</span></dd></div>
           <div><dt>Solicitante</dt><dd>{{ detalhe.solicitante }}</dd></div>
           <div><dt>Cargo / Função</dt><dd>{{ detalhe.funcao || '—' }}</dd></div>
           <div><dt>E-mail do solicitante</dt><dd class="quebra-email">{{ detalhe.email || '—' }}</dd></div>
@@ -1486,6 +1604,26 @@ tr.selecionado td {
 
 .quebra-email {
   word-break: break-all;
+}
+
+.emails-escola {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.email-item {
+  font-family: 'Courier New', monospace;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  background: var(--surface-muted);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.full {
+  grid-column: 1 / -1;
 }
 
 .descricao-box h4,
