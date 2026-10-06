@@ -194,9 +194,22 @@ async function copiarTexto(texto: string) {
 }
 
 /**
- * Verifica se o chamado é da categoria PortalNet.
+ * true quando o chamado é da categoria PortalNet.
+ *
+ * Usa `chaveDaCategoria` em vez de comparar `categoriaChave` direto porque
+ * o helper normaliza para MAIÚSCULAS (a comparação literal com 'PortalNet'
+ * nunca casava) e ainda cai no texto de `tipo` quando a chave não veio gravada,
+ * que é o caso dos chamados abertos antes da criação das chaves.
  */
-const ehPortalNet = computed(() => detalhe.value?.categoriaChave === 'PortalNet')
+const ehPortalNet = computed(() => {
+  const ch = detalhe.value
+  if (!ch) return false
+  if (chaveDaCategoria(ch) === 'PORTALNET') return true
+  /* Chamado antigo: sem `categoriaChave`, `chaveDaCategoria` devolve a categoria
+   * genérica ("SISTEMAS") a partir do `tipo` ("Sistema - PortalNet"). Nesse caso
+   * só o texto do `tipo` diz que o sistema é o PortalNet. */
+  return /portal\s*net/i.test(ch.tipo || '')
+})
 
 /**
  * Parseia a descrição do PortalNet, que pode chegar em dois formatos:
