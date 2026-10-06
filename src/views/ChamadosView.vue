@@ -8,9 +8,11 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  Copy,
   Heart,
   Layers,
   Loader2,
+  Mail,
   Paperclip,
   School,
   Search,
@@ -1007,7 +1009,21 @@ useAutoRefresh(async () => {
       <div v-if="detalhe" class="detalhe">
         <dl class="detalhe-grid">
           <div><dt>Unidade</dt><dd>{{ detalhe.unidade }}</dd></div>
-          <div class="full"><dt>E-mails da escola</dt><dd><template v-if="emailsUnidadeFormatados.length"><div class="emails-escola" v-for="(e, i) in emailsUnidadeFormatados" :key="i"><span class="email-item">{{ e.email }}</span><button class="btn-copy" type="button" title="Copiar e-mail" @click="copiarTexto(e.email)"><Copy :size="14" /></button></div></template><span v-else>—</span></dd></div>
+          <div class="full">
+            <dt>E-mails da escola</dt>
+            <dd>
+              <div v-if="emailsUnidadeFormatados.length" class="emails-escola">
+                <div v-for="(e, i) in emailsUnidadeFormatados" :key="i" class="email-item">
+                  <Mail :size="14" class="email-icone" />
+                  <span class="email-texto">{{ e.email }}</span>
+                  <button class="btn-copy" type="button" title="Copiar e-mail" @click="copiarTexto(e.email)">
+                    <Copy :size="14" />
+                  </button>
+                </div>
+              </div>
+              <span v-else>—</span>
+            </dd>
+          </div>
           <div><dt>Solicitante</dt><dd>{{ detalhe.solicitante }}</dd></div>
           <div><dt>Cargo / Função</dt><dd>{{ detalhe.funcao || '—' }}</dd></div>
           <div><dt>E-mail do solicitante</dt><dd class="quebra-email">{{ detalhe.email || '—' }}</dd></div>
@@ -1667,7 +1683,8 @@ tr.selecionado td {
 .emails-escola {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .email-item {
@@ -1676,6 +1693,17 @@ tr.selecionado td {
   display: flex;
   align-items: center;
   gap: 8px;
+  max-width: 100%;
+}
+
+.email-icone {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.email-texto {
+  min-width: 0;
+  word-break: break-all;
 }
 
 .btn-copy {
