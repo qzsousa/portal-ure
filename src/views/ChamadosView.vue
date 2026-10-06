@@ -199,27 +199,49 @@ async function copiarTexto(texto: string) {
 const ehPortalNet = computed(() => detalhe.value?.categoriaChave === 'PortalNet')
 
 /**
- * Parseia a descrição do PortalNet no formato:
- * Sistema: PortalNet
- * RG: 352177937
- * Nome: EXEMPLO DA SILVA
- * Atribuição: EXEMPLO
- * Descrição adicional: EXEMPLO EXEMPLO EXEMPLO
+ * Parseia a descrição do PortalNet, que pode chegar em dois formatos:
+ * - por linha: "Sistema: PortalNet\nRG: 352177937\nNome: EXEMPLO DA SILVA"
+ * - inline, separados por pipe: "Sistema: PortalNet | RG: 25233601x | Nome: ... "
+ *
+ * No formato inline o valor também pode conter ":" (ex.: horário ou URL),
+ * então só a primeira occurrence é usada como separador chave/valor.
  */
 const portalNetCampos = computed(() => {
   if (!ehPortalNet.value || !detalhe.value?.descricao) return null
-  const texto = detalhe.value.descricao
+  const partes = detalhe.value.descricao
+    .split(/\r?\n|\s*\|\s*/)
+    .map(p => p.trim())
+    .filter(Boolean)
   const campos: Record<string, string> = {}
-  const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean)
-  for (const linha of linhas) {
-    const idx = linha.indexOf(':')
+  for (const parte of partes) {
+    const idx = parte.indexOf(':')
     if (idx > 0) {
-      const chave = linha.slice(0, idx).trim()
-      const valor = linha.slice(idx + 1).trim()
+      const chave = parte.slice(0, idx).trim()
+      const valor = parte.slice(idx + 1).trim()
       if (chave && valor) campos[chave] = valor
     }
   }
   return Object.keys(campos).length ? campos : null
+})
+
+/** Campos do PortalNet que gain botão de copiar (comparação sem diferenciar maiúsculas). */
+const CAMPOS_COPIAVEIS = ['rg', 'cie', 'nome']
+
+function podeCopiarPortalNet(chave: string) {
+  return CAMPOS_COPIAVEIS.includes(chave.trim().toLowerCase())
+}
+
+/**
+ * Descrição dos chamados sem estrutura PortalNet: quebra linhas e pipes para
+ * que cada trecho vire um bloco, em vez de tudo grudado com " | " no meio.
+ */
+const descricaoLinhas = computed(() => {
+  const texto = detalhe.value?.descricao
+  if (!texto) return []
+  return texto
+    .split(/\r?\n|\s*\|\s*/)
+    .map(l => l.trim())
+    .filter(Boolean)
 })
 
 const stats = ref<{ total: number; abertos: number; andamento: number; comunicado: number; resolvidos: number } | null>(null)
@@ -1041,15 +1063,22 @@ useAutoRefresh(async () => {
                 <div class="portal-campo-label">{{ chave }}</div>
                 <div class="portal-campo-valor">
                   <span class="portal-campo-texto">{{ valor }}</span>
-                  <template v-if="['RG', 'CIE', 'Nome'].includes(chave)">
-                    <button class="btn-copy" type="button" :title="`Copiar ${chave}`" @click="copiarTexto(valor)">
-                      <Copy :size="14" />
-                    </button>
-                  </template>
+                  <button
+                    v-if="podeCopiarPortalNet(chave)"
+                    class="btn-copy"
+                    type="button"
+                    :title="`Copiar ${chave}`"
+                    @click="copiarTexto(valor)"
+                  >
+                    <Copy :size="14" />
+                  </button>
                 </div>
               </div>
             </div>
           </template>
+          <div v-else-if="descricaoLinhas.length" class="descricao-linhas">
+            <p v-for="(linha, i) in descricaoLinhas" :key="i">{{ linha }}</p>
+          </div>
           <p v-else>{{ detalhe.descricao }}</p>
         </div>
 
@@ -1782,6 +1811,13 @@ tr.selecionado td {
   font-size: 13.5px;
   color: var(--text-secondary);
   white-space: pre-wrap;
+}
+
+/* Descrição comum: cada trecho (separado por \n ou |) vira uma linha. */
+.descricao-linhas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 /* ---------- Chips de filtro rápido ---------- */
