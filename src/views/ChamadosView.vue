@@ -157,24 +157,67 @@ const EMAILS_POR_ESCOLA: Record<string, string> = {
  * Retorna os e-mails das escolas contidas no campo `unidade`.
  * O campo pode vir como "E.E. ESCOLA A / E.E. ESCOLA B" — fazemos split por "/"
  * e normalizamos o nome para buscar no mapa.
+ * Retorna array de objetos { escola, email }.
  */
-function emailsDaUnidade(unidade: string): string[] {
+function emailsDaUnidade(unidade: string): Array<{ escola: string; email: string }> {
   if (!unidade) return []
   const partes = unidade.split('/').map(p => p.trim())
-  const emails: string[] = []
+  const emails: Array<{ escola: string; email: string }> = []
   for (const parte of partes) {
     const email = EMAILS_POR_ESCOLA[parte]
-    if (email) emails.push(`${parte}: ${email}`)
+    if (email) emails.push({ escola: parte, email })
   }
   return emails
 }
 
 /**
  * E-mails formatados para exibição no modal do chamado.
+ * Retorna array de objetos { escola, email }.
  */
 const emailsUnidadeFormatados = computed(() => {
   if (!detalhe.value?.unidade) return []
   return emailsDaUnidade(detalhe.value.unidade)
+})
+
+/**
+ * Copia texto para a área de transferência.
+ */
+async function copiarTexto(texto: string) {
+  try {
+    await navigator.clipboard.writeText(texto)
+    ui.success('Copiado!')
+  } catch {
+    ui.error('Falha ao copiar')
+  }
+}
+
+/**
+ * Verifica se o chamado é da categoria PortalNet.
+ */
+const ehPortalNet = computed(() => detalhe.value?.categoriaChave === 'PortalNet')
+
+/**
+ * Parseia a descrição do PortalNet no formato:
+ * Sistema: PortalNet
+ * RG: 352177937
+ * Nome: EXEMPLO DA SILVA
+ * Atribuição: EXEMPLO
+ * Descrição adicional: EXEMPLO EXEMPLO EXEMPLO
+ */
+const portalNetCampos = computed(() => {
+  if (!ehPortalNet.value || !detalhe.value?.descricao) return null
+  const texto = detalhe.value.descricao
+  const campos: Record<string, string> = {}
+  const linhas = texto.split('\n').map(l => l.trim()).filter(Boolean)
+  for (const linha of linhas) {
+    const idx = linha.indexOf(':')
+    if (idx > 0) {
+      const chave = linha.slice(0, idx).trim()
+      const valor = linha.slice(idx + 1).trim()
+      if (chave && valor) campos[chave] = valor
+    }
+  }
+  return Object.keys(campos).length ? campos : null
 })
 
 const stats = ref<{ total: number; abertos: number; andamento: number; comunicado: number; resolvidos: number } | null>(null)
@@ -964,7 +1007,7 @@ useAutoRefresh(async () => {
       <div v-if="detalhe" class="detalhe">
         <dl class="detalhe-grid">
           <div><dt>Unidade</dt><dd>{{ detalhe.unidade }}</dd></div>
-          <div class="full"><dt>E-mails da escola</dt><dd><template v-if="emailsUnidadeFormatados.length"><span v-for="(e, i) in emailsUnidadeFormatados" :key="i" class="email-item">{{ e }}</span></template><span v-else>—</span></dd></div>
+          <div class="full"><dt>E-mails da escola</dt><dd><template v-if="emailsUnidadeFormatados.length"><div class="emails-escola" v-for="(e, i) in emailsUnidadeFormatados" :key="i"><span class="email-item">{{ e.email }}</span><button class="btn-copy" type="button" title="Copiar e-mail" @click="copiarTexto(e.email)"><Copy :size="14" /></button></div></template><span v-else>—</span></dd></div>
           <div><dt>Solicitante</dt><dd>{{ detalhe.solicitante }}</dd></div>
           <div><dt>Cargo / Função</dt><dd>{{ detalhe.funcao || '—' }}</dd></div>
           <div><dt>E-mail do solicitante</dt><dd class="quebra-email">{{ detalhe.email || '—' }}</dd></div>
@@ -976,7 +1019,22 @@ useAutoRefresh(async () => {
 
         <div class="descricao-box">
           <h4>Descrição</h4>
-          <p>{{ detalhe.descricao }}</p>
+          <template v-if="portalNetCampos">
+            <div class="portal-net-campos">
+              <div class="portal-campo" v-for="(valor, chave) in portalNetCampos" :key="chave">
+                <div class="portal-campo-label">{{ chave }}</div>
+                <div class="portal-campo-valor">
+                  <span class="portal-campo-texto">{{ valor }}</span>
+                  <template v-if="['RG', 'CIE', 'Nome'].includes(chave)">
+                    <button class="btn-copy" type="button" :title="`Copiar ${chave}`" @click="copiarTexto(valor)">
+                      <Copy :size="14" />
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+          <p v-else>{{ detalhe.descricao }}</p>
         </div>
 
         <div v-if="detalhe.historico" class="descricao-box">
@@ -1622,8 +1680,70 @@ tr.selecionado td {
   border: 1px solid var(--border);
 }
 
-.full {
-  grid-column: 1 / -1;
+.emails-escola .email-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: var(--surface-muted);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.btn-copy:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-copy:active {
+  transform: scale(0.95);
+}
+
+/* PortalNet campos */
+.portal-net-campos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.portal-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.portal-campo-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.portal-campo-valor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.portal-campo-texto {
+  font-family: 'Courier New', monospace;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  word-break: break-all;
+  flex: 1;
 }
 
 .descricao-box h4,
