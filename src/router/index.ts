@@ -73,6 +73,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Equipamentos', breadcrumb: 'Equipamentos' },
       },
       {
+        path: 'rede',
+        name: 'rede',
+        component: () => import('@/views/MonitorRedeView.vue'),
+        meta: {
+          title: 'Monitoramento de Rede',
+          breadcrumb: 'Monitoramento de Rede',
+          /*
+           * Espelha o `NIVEIS_PERMITIDOS` do serviço (padrão: ADMIN, TECNICO).
+           *
+           * Filtrar aqui não é conveniência: o serviço devolve 403 para os demais
+           * perfis. Sem este `roles`, um gestor veria a aba, abriria a tela e
+           * receberia um erro de servidor — que parece falha de infraestrutura
+           * onde, na verdade, é falta de permissão.
+           */
+          roles: ['ADMIN', 'TECNICO'] as Nivel[],
+        },
+      },
+      {
         path: 'manutencao',
         name: 'manutencao',
         component: () => import('@/views/ManutencaoView.vue'),

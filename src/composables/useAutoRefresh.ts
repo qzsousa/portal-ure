@@ -6,6 +6,17 @@ export const AUTO_REFRESH_MS = {
   rapido: 30_000,
   /** Telas analíticas/secundárias (painel, manutenção, feedback, dirigente). */
   normal: 60_000,
+  /**
+   * Monitoramento de rede.
+   *
+   * Igual a `rapido` de propósito: tem de acompanhar o ciclo do serviço de
+   * ping (30 s por padrão). Se a tela consultasse mais rápido, receberia a
+   * MESMA resposta — o serviço só lê o cache, não varre a cada pedido — e o
+   * intervalo ficaria sendo uma escolha do `INTERVALO_SEGUNDOS` do serviço, não
+   * da tela. Se consultasse mais devagar, cairia para 60 s e o painel mentiria
+   * sobre a idade do dado logo depois de uma queda.
+   */
+  monitor: 30_000,
 } as const
 
 /**

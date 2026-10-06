@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
+  Activity,
   BarChart3,
   BookOpen,
   Headset,
@@ -33,6 +34,7 @@ const { menuAberto, fechar } = useSidebar()
 const items: MenuItem[] = [
   { to: '/painel', label: 'Painel', icon: LayoutDashboard },
   { to: '/equipamentos', label: 'Equipamentos', icon: Monitor },
+  { to: '/rede', label: 'Rede', icon: Activity, matrizOnly: true },
   { to: '/manutencao', label: 'Manutenção', icon: Wrench },
   { to: '/chamados', label: 'Chamados', icon: Headset },
   { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen },

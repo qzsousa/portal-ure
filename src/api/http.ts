@@ -9,10 +9,24 @@ import { useErrorLogStore } from '@/stores/errorLog'
  *   automático com fila (mesma estratégia do frontend original).
  * - `sceApi`: backend do SCE (equipamentos). Envia o MESMO access token
  *   JWT do chamados — o SCE o valida via SSO (SSO_SECRET compartilhado).
+ * - `monitorApi`: serviço de monitoramento de rede, que NÃO está na nuvem —
+ *   roda na máquina dentro da rede privada (o navegador não envia ICMP).
+ *   Valida o mesmo token, então também usa o SSO.
  */
 
 export const CHAMADOS_BASE = import.meta.env.VITE_API_CHAMADOS_URL || 'http://localhost:10000/api'
 export const SCE_BASE = import.meta.env.VITE_API_SCE_URL || 'http://localhost:3000/api'
+
+/**
+ * Base do serviço de monitoramento, SEM o sufixo `/api`.
+ *
+ * Ao contrário dos outros dois, aqui a base é a RAIZ: as rotas já são
+ * `/api/hosts`, `/api/resumo` etc. Aceitar a variável com ou sem `/api` evita
+ * que alguém configure um `.../api` e a tela passe a pedir `/api/api/hosts` —
+ * um 404 que só aparece em produção, com a URL escrita à mão.
+ */
+const MONITOR_BASE_RAW = import.meta.env.VITE_API_MONITOR_URL || 'http://localhost:4000'
+export const MONITOR_BASE = MONITOR_BASE_RAW.replace(/\/+$/, '').replace(/\/api$/, '')
 
 type TokenProvider = () => string | null
 type RefreshHandler = () => Promise<string | null>
@@ -52,7 +66,15 @@ function processQueue(token: string | null, error: Error | null) {
   failedQueue = []
 }
 
-function createRefreshInterceptor(client: AxiosInstance) {
+/**
+ * `aoExpirar` permite que um cliente NÃO derrube a sessão do portal.
+ *
+ * Padrão é o `onUnauthorized` global — o comportamento certo para o backends do
+ * portal. O serviço de monitoramento passa um no-op, porque lá um 401 costuma
+ * ser configuração (segredo divergente), não sessão expirada, e expulsar o
+ * usuário por causa disso seria trocar um aviso por um problema maior.
+ */
+function createRefreshInterceptor(client: AxiosInstance, aoExpirar: UnauthorizedHandler = onUnauthorized) {
   return async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined
 
@@ -84,7 +106,7 @@ function createRefreshInterceptor(client: AxiosInstance) {
       } catch (err) {
         processQueue(null, err as Error)
         const status = (err as AxiosError).response?.status
-        if (status === 401 || status === 403) onUnauthorized()
+        if (status === 401 || status === 403) aoExpirar()
         return Promise.reject(err)
       } finally {
         isRefreshing = false
@@ -143,6 +165,15 @@ export const sceApi = axios.create({
   timeout: 30000,
 })
 
+export const monitorApi = axios.create({
+  baseURL: MONITOR_BASE,
+  headers: { 'Content-Type': 'application/json' },
+  // Menor que os outros: a tela consulta a cada 30 s e o serviço responde
+  // lendo um cache, não varrendo. Estourar 30 s segurando a conexão só
+  // acumularia requisições do ciclo seguinte atrás de uma que não volta.
+  timeout: 15000,
+})
+
 chamadosApi.interceptors.request.use(attachAuthHeader)
 chamadosApi.interceptors.response.use((r) => r, createRefreshInterceptor(chamadosApi))
 chamadosApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('Chamados'))
@@ -150,3 +181,21 @@ chamadosApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('C
 sceApi.interceptors.request.use(attachAuthHeader)
 sceApi.interceptors.response.use((r) => r, createRefreshInterceptor(sceApi))
 sceApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('SCE'))
+
+monitorApi.interceptors.request.use(attachAuthHeader)
+/*
+ * `onUnauthorized: () => {}` — de propósito, e é a diferença mais importante
+ * deste bloco.
+ *
+ * Um 401 aqui quase nunca é sessão expirada: a causa comum é o `SSO_SECRET` do
+ * serviço de monitoramento estar diferente do backend de chamados, o que faz
+ * TODO token ser recusado. Se este cliente chamasse o `onUnauthorized` do
+ * portal, o usuário seria despejado da sessão por um problema de
+ * configuração de infraestrutura — e perderia o acesso a tudo por causa de uma
+ * aba. Aqui o 401 vira um erro de tela, que é o que a tela sabe explicar.
+ */
+monitorApi.interceptors.response.use(
+  (r) => r,
+  createRefreshInterceptor(monitorApi, () => {}),
+)
+monitorApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('Monitor'))
