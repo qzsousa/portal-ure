@@ -1667,20 +1667,12 @@ tr.selecionado td {
 .emails-escola {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .email-item {
-  font-family: 'Courier New', monospace;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  padding: 4px 8px;
-  background: var(--surface-muted);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-}
-
-.emails-escola .email-item {
+  font-size: 13.5px;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1690,20 +1682,22 @@ tr.selecionado td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: var(--surface-muted);
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  background: var(--surface);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  padding: 0;
 }
 
 .btn-copy:hover {
-  background: var(--primary);
+  background: var(--blue);
   color: white;
+  border-color: var(--blue);
 }
 
 .btn-copy:active {
@@ -1739,11 +1733,14 @@ tr.selecionado td {
 }
 
 .portal-campo-texto {
-  font-family: 'Courier New', monospace;
   font-size: 13.5px;
   color: var(--text-primary);
   word-break: break-all;
   flex: 1;
+}
+
+.portal-campo .btn-copy {
+  margin-left: 4px;
 }
 
 .descricao-box h4,

@@ -8,6 +8,100 @@ import { listarPainelUnidades, ROTULO_INVENTARIO, type UnidadePainel } from '@/a
 import { listarUnidadesResumo, type UnidadeResumo } from '@/api/sce'
 import { casarNomeEscola } from '@/utils/escola'
 
+/** Mapeamento de nome da escola (formato catálogo) para código CIE. */
+const CIE_MAP: Record<string, string> = {
+  'E.E. ADHEMAR ANTONIO PRADO': '003244',
+  'E.E. ALCIDES BOSCOLO': '003177',
+  'E.E. ANDRÉ NUNES JUNIOR': '003311',
+  'E.E. ANÍSIO TEIXEIRA': '037047',
+  'E.E. ANTONIETA DE SOUZA ALCÂNTARA': '902615',
+  'E.E. ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM - TOM JOBIM': '352573',
+  'E.E. AQUILINO RIBEIRO': '904302',
+  'E.E. BARRO BRANCO II': '926048',
+  'E.E. BELIZE': '284324',
+  'E.E. BENJAMIN SAMUEL BLOOM': '011788',
+  'E.E. BERNADIM RIBEIRO': '906189',
+  'E.E. BRENO ROSSI, MAESTRO': '916730',
+  'E.E. CÂNDIDO PROCÓPIO F. CAMARGO': '904922',
+  'E.E. CARLOS HENRIQUE LIBERALLI': '039251',
+  'E.E. CARMELINDA M. PEREIRA': '909166',
+  'E.E. CESAR DONATO CALABREZ': '902627',
+  'E.E. CHARLOTTE MARIA SHAW MASON': '011791',
+  'E.E. CHIQUINHA GONZAGA': '011795',
+  'E.E. CLAUDIA DUTRA VIANA': '438112',
+  'E.E. COHAB CARRÃOZINHO': '921464',
+  'E.E. COHAB ITAQUERA IV': '916766',
+  'E.E. DÉCIO FERRAZ ALVIM': '003128',
+  'E.E. DJANIRA': '011787',
+  'E.E. ERNESTINA DEL B. TRAMA': '037084',
+  'E.E. ESTHER FIGUEIREDO FERRAZ': '925226',
+  'E.E. FABIO AGAZZI': '907029',
+  'E.E. FADLO HAIDAR': '044337',
+  'E.E. FERNANDO MAURO P. ROCHA, DEPUTADO': '902724',
+  'E.E. FERNANDO PESSOA': '904284',
+  'E.E. FLORIANO PEIXOTO': '011786',
+  'E.E. FRANCISCO DE ASSIS P. CORRÊA': '043746',
+  'E.E. FREDERICO MARIANO': '048707',
+  'E.E. GERALDINO DOS SANTOS, DEPUTADO': '910831',
+  'E.E. GUERRA JUNQUEIRO': '904314',
+  'E.E. HAYDEÉ HIDALGO': '922146',
+  'E.E. HERBERT JOSÉ DE SOUZA - BETINHO': '011798',
+  'E.E. HUMBERTO BAPTISTELLI': '447663',
+  'E.E. HUMBERTO DANTAS': '037059',
+  'E.E. INDIANA ZUYCHER S. DE JESUS': '048677',
+  'E.E. ISAAC SCHIRAIBER': '909117',
+  'E.E. JARDIM DOM ANGÉLICO': '267971',
+  'E.E. JARDIM IGUATEMI': '923266',
+  'E.E. JARDIM LIMOEIRO III': '925412',
+  'E.E. JARDIM PEDRA BRANCA': '433482',
+  'E.E. JARDIM WILMA FLOR': '922900',
+  'E.E. JOÃO CASTELLANO': '902718',
+  'E.E. JOAQUIM SILVÉRIO G. DOS REIS': '048665',
+  'E.E. JORGE LUIS BORGES': '907017',
+  'E.E. JOSUÉ DE CASTRO': '011797',
+  'E.E. JUAN CARLOS ONETTI': '412173',
+  'E.E. LEILA DINIZ': '011792',
+  'E.E. LEÔNIDAS DA SILVA': '011799',
+  'E.E. LIMA BARRETO': '011796',
+  'E.E. LUIS VAZ DE CAMÕES': '902883',
+  'E.E. LUIZ ROSANOVA': '003141',
+  'E.E. MARCOS ANTONIO COSTA': '923916',
+  'E.E. MARIA ANTONIETA FERRAZ BIBLIOTECARIA': '904582',
+  'E.E. MARIA DE LOURDES A. A. PACHECO': '906980',
+  'E.E. MARIA TEREZA SIMÕES DE ALMEIDA PROFESSORA': '011793',
+  'E.E. MARIUMA BUAZAR MAUAD': '904296',
+  'E.E. MOACYR AMARAL DOS SANTOS': '048653',
+  'E.E. MOZART TAVARES DE LIMA': '036961',
+  'E.E. OSWALDO GAGLIARDI': '908368',
+  'E.E. PATRÍCIA GALVÃO - PAGU': '011789',
+  'E.E. PAULO ROLIM ROSA': '922912',
+  'E.E. PAULO SARASATE GOVERNADOR': '036812',
+  'E.E. PEDRO TAQUES': '003256',
+  'E.E. RECANTO VERDE SOL': '267983',
+  'E.E. RITA PINTO DE ARAUJO': '003323',
+  'E.E. ROCCA DORDALL': '037060',
+  'E.E. ROQUE THEOPHILO': '268276',
+  'E.E. ROSA PARKS': '011790',
+  'E.E. RUY DE MELLO JUNQUEIRA': '920277',
+  'E.E. SALIM FARAH MALUF': '044325',
+  'E.E. SALVADOR ALLENDE GOSSENS': '906967',
+  'E.E. SATURNINO PEREIRA': '909185',
+  'E.E. SEBASTIÃO FARIAS ZIMBRES': '003268',
+  'E.E. SERGIO ESTANISTLAU DE CAMARGO': '914712',
+  'E.E. SERGIO ROCHA KIEHL': '916785',
+  'E.E. SILVANA EVANGELISTA': '923278',
+  'E.E. SIMÃO MATHIAS': '916742',
+  'E.E. SUMIE IWATA': '909129',
+  'E.E. VILA BELA': '923047',
+  'E.E. YERVANT KISSAJIKIAN': '906207',
+  'E.E. ZÍPORA RUBISTEIN': '914721',
+}
+
+/** Retorna o CIE da escola pelo nome canônico; vazio se não encontrado. */
+function cieDaEscola(nome: string): string {
+  return CIE_MAP[nome] || ''
+}
+
 const PAGE_SIZE = 10
 
 interface UnidadeLinha extends UnidadePainel {
@@ -154,12 +248,12 @@ function rotuloInventario(status: string): string {
 /** Exporta o recorte filtrado em CSV (separador ";" — abre direto no Excel pt-BR). */
 function exportarCsv() {
   const cabecalho = [
-    'Unidade Escolar', 'Grupo oficial', 'Escola irmã', 'Técnico', 'Inventário',
+    'Unidade Escolar', 'Grupo oficial', 'Escola irmã', 'CIE', 'Técnico', 'Inventário',
     'Cadastrou equipamentos', 'Total equip.', 'Disponíveis', 'Manutenção', 'Quebrados', 'Extraviados',
     'Usuários ativos', 'Chamados (total)', 'Chamados abertos',
   ]
   const linhas = filtradas.value.map((u) => [
-    u.nome, u.grupo, u.irma || '', u.tecnico, rotuloInventario(u.inventarioStatus),
+    u.nome, u.grupo, u.irma || '', cieDaEscola(u.nome), u.tecnico, rotuloInventario(u.inventarioStatus),
     u.equip.total > 0 ? 'Sim' : 'Não',
     u.equip.total, u.equip.disponiveis, u.equip.manutencao, u.equip.quebrados, u.equip.extraviados,
     u.usuariosAtivos, u.chamadosTotal, u.chamadosAbertos,
@@ -277,6 +371,7 @@ onMounted(() => {
             <tr>
               <th>Código</th>
               <th>Unidade Escolar</th>
+              <th>CIE</th>
               <th>Técnico</th>
               <th>Inventário</th>
               <th>Cadastrou equip.?</th>
@@ -303,6 +398,7 @@ onMounted(() => {
                 {{ u.nome }}
                 <div v-if="u.irma" class="unidade-irma">divide o prédio com {{ u.irma }}</div>
               </td>
+              <td class="nowrap">{{ cieDaEscola(u.nome) }}</td>
               <td>{{ u.tecnico || '—' }}</td>
               <td><StatusPill :status="rotuloInventario(u.inventarioStatus)" /></td>
               <td>
