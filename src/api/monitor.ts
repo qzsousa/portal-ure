@@ -19,8 +19,29 @@ export interface MonitorHost {
   ip: string
   /** Id do grupo (faixa) ao qual o endereço pertence. */
   faixa: string
-  /** Rótulo do grupo, já resolvido pelo serviço. */
+  /**
+   * Rótulo exibido na coluna "Grupo".
+   *
+   * Para rede genérica (CIDR/intervalo) é o nome da faixa. Para lista com
+   * `{ip, equip, rede}` — o caso dos DVRs das escolas — é o NOME DO
+   * EQUIPAMENTO, porque repetir o nome da escola seis vezes não diz nada.
+   */
   rotulo: string
+  /**
+   * Equipamento monitorado (`VIDEO-DVR1`), quando declarado.
+   *
+   * `null` em rede genérica. É o que permite ao painel agrupar por escola e
+   * dizer QUAL dos DVRs caiu, em vez de apontar seis endereços da mesma escola.
+   */
+  equip: string | null
+  /**
+   * Rede lógica do endereço: `ADM` (administrativa/gerencial) ou `PED`
+   * (pedagógica/gravação).
+   *
+   * Não é cosmetico: as duas caem por motivos diferentes e quem resolve cada
+   * uma é gente diferente. `null` quando a configuração não declara rede.
+   */
+  rede: string | null
   /** Portas TCP sondadas quando o ICMP não responde. */
   portas: number[]
   status: MonitorStatus
@@ -46,6 +67,23 @@ export interface MonitorFaixa {
   online: number
   offline: number
   desconhecido: number
+  /**
+   * 1 quando o grupo tem ALGUM equipamento fora do ar, 0 caso contrário.
+   *
+   * Sem este campo a tela contaria "6 endereços fora" para uma única escola com
+   * a rede caída, e quem lê concluiria que há seis defeitos. Uma /24 que cai leva
+   * os três endereços da escola junto — é uma ocorrência só.
+   */
+  gruposComProblema: number
+}
+
+/** Mesma quebra por rede, alimentada pelo campo `rede` de cada endereço. */
+export interface MonitorRede {
+  id: string
+  total: number
+  online: number
+  offline: number
+  desconhecido: number
 }
 
 export interface MonitorResumo {
@@ -61,6 +99,8 @@ export interface MonitorResumo {
   latenciaMediaMs: number | null
   latenciaMaximaMs: number | null
   porFaixa: MonitorFaixa[]
+  /** Quebra ADM/PED. Vazio quando a configuração não declara rede. */
+  porRede: MonitorRede[]
   emAndamento: boolean
   ultimaVarreduraEm: number | null
   proximaVarreduraEm: number | null

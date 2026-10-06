@@ -120,6 +120,106 @@ test('endereço repetido em duas faixas vira aviso e é monitorado uma vez só',
   assert.match(avisos[0], /declarado em "a" e em "b"/)
 })
 
+/* ---------------- DVR: ips com equipamento e rede ---------------- */
+
+test('ips como texto herdam o rótulo da faixa e não têm equipamento nem rede', () => {
+  const caminho = escreverConfig({ faixas: [{ id: 'lab', rotulo: 'Laboratório', ips: ['10.0.0.1'] }] })
+  const [host] = carregarConfig(caminho).hosts
+  assert.equal(host.rotulo, 'Laboratório')
+  assert.equal(host.equip, null)
+  assert.equal(host.rede, null)
+})
+
+test('ips como objeto carregam equipamento e rede por endereço', () => {
+  // O formato que `gerar-config.mjs` produz: uma escola, seis DVRs, e cada um
+  // sabendo qual equipamento é e em qual rede está.
+  const caminho = escreverConfig({
+    portasPadrao: [554],
+    faixas: [
+      {
+        id: 'ee-alfa',
+        rotulo: 'E.E. ALFA',
+        ips: [
+          { ip: '10.109.105.194', equip: 'VIDEO-DVR1', rede: 'ADM' },
+          { ip: '10.109.105.195', equip: 'VIDEO-DVR2', rede: 'ADM' },
+          { ip: '10.116.247.20', equip: 'VIDEO-DVR1', rede: 'PED' },
+        ],
+      },
+    ],
+  })
+  const { hosts } = carregarConfig(caminho)
+  assert.equal(hosts.length, 3)
+  assert.deepEqual(hosts[0], {
+    ip: '10.109.105.194',
+    faixa: 'ee-alfa',
+    rotulo: 'VIDEO-DVR1',
+    equip: 'VIDEO-DVR1',
+    rede: 'ADM',
+    portas: [554],
+  })
+  assert.equal(hosts[1].equip, 'VIDEO-DVR2')
+  assert.equal(hosts[2].rede, 'PED')
+})
+
+test('"rotulo" dentro do objeto é aceito como apelido de "equip"', () => {
+  const caminho = escreverConfig({
+    faixas: [{ id: 'e', rotulo: 'Escola', ips: [{ ip: '10.0.0.1', rotulo: 'DVR-01', rede: 'ADM' }] }],
+  })
+  const [host] = carregarConfig(caminho).hosts
+  assert.equal(host.equip, 'DVR-01')
+  assert.equal(host.rotulo, 'DVR-01')
+})
+
+test('metadados em branco caem para null em vez de virar string vazia', () => {
+  const caminho = escreverConfig({
+    faixas: [{ id: 'e', rotulo: 'Escola', ips: [{ ip: '10.0.0.1', equip: '   ', rede: '' }] }],
+  })
+  const [host] = carregarConfig(caminho).hosts
+  assert.equal(host.equip, null)
+  assert.equal(host.rede, null)
+  // Sem equipamento, o rótulo volta a ser o da faixa: a escola ainda aparece.
+  assert.equal(host.rotulo, 'Escola')
+})
+
+test('as duas formas de "ips" convivem na mesma faixa', () => {
+  const caminho = escreverConfig({
+    faixas: [{ id: 'e', rotulo: 'Escola', ips: ['10.0.0.1', { ip: '10.0.0.2', equip: 'DVR', rede: 'ADM' }] }],
+  })
+  const hosts = carregarConfig(caminho).hosts
+  assert.equal(hosts.length, 2)
+  assert.equal(hosts[0].equip, null)
+  assert.equal(hosts[1].equip, 'DVR')
+})
+
+test('item de "ips" que não é texto nem objeto é recusado dizendo o formato', () => {
+  const caminho = escreverConfig({ faixas: [{ id: 'e', rotulo: 'Escola', ips: [123] }] })
+  assert.throws(() => carregarConfig(caminho), /precisa ser texto ou \{ip, equip, rede\}/)
+})
+
+test('metadados preservam o aviso de endereço repetido', () => {
+  // A checagem de duplicidade não pode ser contornada pelo formato novo.
+  const caminho = escreverConfig({
+    faixas: [
+      { id: 'a', ips: ['10.0.0.1'] },
+      { id: 'b', ips: [{ ip: '10.0.0.1', equip: 'DVR', rede: 'ADM' }] },
+    ],
+  })
+  const { hosts, avisos } = carregarConfig(caminho)
+  assert.equal(hosts.length, 1)
+  assert.equal(hosts[0].equip, null, 'o primeiro declarado vence')
+  assert.equal(avisos.length, 1)
+  assert.match(avisos[0], /10\.0\.0\.1 declarado em "a" e em "b"/)
+})
+
+test('cidr continua aceito e não ganha equipamento nem rede', () => {
+  const caminho = escreverConfig({ faixas: [{ id: 'lab', rotulo: 'Lab', cidr: '10.0.0.0/30' }] })
+  const hosts = carregarConfig(caminho).hosts
+  assert.equal(hosts.length, 2)
+  assert.equal(hosts[0].equip, null)
+  assert.equal(hosts[0].rede, null)
+  assert.equal(hosts[0].rotulo, 'Lab')
+})
+
 test('erros são juntados numa única exceção (não um por reinício)', () => {
   const caminho = escreverConfig({
     faixas: [

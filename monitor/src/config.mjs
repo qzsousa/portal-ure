@@ -253,16 +253,49 @@ export function carregarConfig(caminho, env = process.env) {
     }
 
     const ipsSoltos = Array.isArray(faixa.ips) ? faixa.ips : []
-    for (const ip of ipsSoltos) {
+    /*
+     * `ips` aceita duas formas porque elas resolvem problemas diferentes:
+     * - `"10.20.5.7"` (texto) — rede genérica, o endereço herda o rótulo da
+     *   faixa. É o formato antigo e continua valendo.
+     * - `{ip, equip, rede}` — endereço com identidade própria. É o que permite
+     *   dizer "VIDEO-DVR2, rede ADM" em vez de repetir o nome do grupo seis
+     *   vezes na tela.
+     *
+     * Os metadados viajam junto do intervalo, e não num mapa separado: é o que
+     * permite anexá-los ao endereço na hora do `hosts.push`, sem precisar
+     * casar o IP com a lista depois — e um mapa por IP reintroduziria o
+     * endereço repetido em silêncio que o `vistos` existe para impedir.
+     */
+    /** @type {Array<{inicio: number, fim: number, equip: string|null, rede: string|null}>} */
+    const intervalosDetalhados = []
+
+    for (const bruto of ipsSoltos) {
+      const item =
+        bruto && typeof bruto === 'object' && !Array.isArray(bruto)
+          ? { ip: bruto.ip, equip: bruto.equip ?? bruto.rotulo ?? null, rede: bruto.rede ?? null }
+          : { ip: bruto, equip: null, rede: null }
+
+      if (typeof item.ip !== 'string') {
+        erros.push(
+          `${onde}.ips: endereço precisa ser texto ou {ip, equip, rede} (recebido: ${JSON.stringify(bruto)})`,
+        )
+        continue
+      }
+
       try {
-        const n = ipParaNumero(ip)
-        intervalos.push([n, n])
+        const n = ipParaNumero(item.ip)
+        intervalosDetalhados.push({
+          inicio: n,
+          fim: n,
+          equip: item.equip === null ? null : String(item.equip).trim() || null,
+          rede: item.rede === null ? null : String(item.rede).trim() || null,
+        })
       } catch (erro) {
         erros.push(`${onde}.ips: ${erro.message}`)
       }
     }
 
-    if (intervalos.length === 0) {
+    if (intervalos.length === 0 && intervalosDetalhados.length === 0) {
       // Só cobra a fonte de endereços se ela não foi preenchida. Se veio
       // preenchida e foi REJEITADA acima, a mensagem "precisa de cidr…" seria
       // um eco do erro verdadeiro: corrigir o eco não faria o serviço subir, e
@@ -274,7 +307,18 @@ export function carregarConfig(caminho, env = process.env) {
 
     faixas.push({ id, rotulo, descricao: faixa.cidr || (ipsSoltos.length ? `${ipsSoltos.length} endereço(s)` : faixa.inicio) })
 
-    for (const [inicio, fim] of intervalos) {
+    /*
+     * Os dois caminhos convergem aqui: o de rede (cidr/intervalo) entra com os
+     * metadados nulos e herda o rótulo da faixa; o de lista entra com o que
+     * foi declarado por endereço. Um único laço evita dois caminhos de push
+     * que divergiriam no primeiro bug de um só.
+     */
+    const aExpandir = [
+      ...intervalos.map(([inicio, fim]) => ({ inicio, fim, equip: null, rede: null })),
+      ...intervalosDetalhados,
+    ]
+
+    for (const { inicio, fim, equip, rede } of aExpandir) {
       for (let n = inicio; n <= fim; n += 1) {
         const ip = numeroParaIp(n)
         const anterior = vistos.get(ip)
@@ -285,7 +329,7 @@ export function carregarConfig(caminho, env = process.env) {
           continue
         }
         vistos.set(ip, id)
-        hosts.push({ ip, faixa: id, rotulo, portas })
+        hosts.push({ ip, faixa: id, rotulo: equip || rotulo, equip, rede, portas })
         if (hosts.length > limiteHosts) {
           erros.push(`a configuração gera mais de ${limiteHosts} endereços — reveja as faixas`)
           break

@@ -118,6 +118,8 @@ export class MonitorRede {
         ip: host.ip,
         faixa: host.faixa,
         rotulo: host.rotulo,
+        equip: host.equip ?? null,
+        rede: host.rede ?? null,
         portas: host.portas,
         status: 'desconhecido',
         metodo: null,
@@ -228,8 +230,41 @@ export class MonitorRede {
     for (const registro of this.estado.values()) hosts.push(registro)
 
     const porFaixa = new Map(
-      this.faixas.map((f) => [f.id, { id: f.id, rotulo: f.rotulo, total: 0, online: 0, offline: 0, desconhecido: 0 }]),
+      this.faixas.map((f) => [
+        f.id,
+        {
+          id: f.id,
+          rotulo: f.rotulo,
+          total: 0,
+          online: 0,
+          offline: 0,
+          desconhecido: 0,
+          /*
+           * Preenchido DEPOIS do laço, com `offline > 0 ? 1 : 0`.
+           *
+           * Contar aqui dentro do laço daria um número por endereço, não por
+           * escola — e é justamente essa a confusão que o campo existe para
+           * desfazer: 6 endereços fora do ar na mesma escola são UMA ocorrência,
+           * quase sempre um equipamento ou um enlace que caiu, não seis defeitos.
+           */
+          gruposComProblema: 0,
+        },
+      ]),
     )
+
+    /*
+     * Quebra por rede (ADM/PED).
+     *
+     * Existe para responder "a rede administrativa ou a pedagógica está com
+     * problema?". São atribuições diferentes: a ADM é o acesso gerencial, a PED
+     * é gravação e projeção. Um painel que só diz "12 fora do ar" não separa
+     * "12 escolas sem acesso" de "12 escolas sem gravação" — que são urgências
+     * diferentes, com quem resolve cada uma.
+     *
+     * Só entram as redes declaradas: um endereço sem `rede` não é inventado
+     * aqui, senão o painel mostraria uma terceira coluna sem significado.
+     */
+    const porRede = new Map()
 
     let online = 0
     let offline = 0
@@ -246,6 +281,18 @@ export class MonitorRede {
         if (h.status === 'online') faixa.online += 1
         else if (h.status === 'offline') faixa.offline += 1
         else faixa.desconhecido += 1
+      }
+
+      if (h.rede) {
+        let rede = porRede.get(h.rede)
+        if (!rede) {
+          rede = { id: h.rede, total: 0, online: 0, offline: 0, desconhecido: 0 }
+          porRede.set(h.rede, rede)
+        }
+        rede.total += 1
+        if (h.status === 'online') rede.online += 1
+        else if (h.status === 'offline') rede.offline += 1
+        else rede.desconhecido += 1
       }
 
       if (h.status === 'online') {
@@ -266,6 +313,10 @@ export class MonitorRede {
       }
     }
 
+    for (const faixa of porFaixa.values()) {
+      faixa.gruposComProblema = faixa.offline > 0 ? 1 : 0
+    }
+
     const total = hosts.length
     const respondidos = online + offline
 
@@ -279,6 +330,7 @@ export class MonitorRede {
       latenciaMediaMs: comLatencia > 0 ? Number((somaLatencia / comLatencia).toFixed(1)) : null,
       latenciaMaximaMs: comLatencia > 0 ? maxLatencia : null,
       porFaixa: [...porFaixa.values()],
+      porRede: [...porRede.values()],
       emAndamento: this.emAndamento,
       ultimaVarreduraEm: this.ultimaVarreduraEm,
       proximaVarreduraEm: this.proximaVarreduraEm,
@@ -297,6 +349,8 @@ export class MonitorRede {
       ip: r.ip,
       faixa: r.faixa,
       rotulo: r.rotulo,
+      equip: r.equip,
+      rede: r.rede,
       portas: r.portas,
       status: r.status,
       metodo: r.metodo,
