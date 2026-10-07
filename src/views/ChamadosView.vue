@@ -81,7 +81,7 @@ const EMAILS_POR_ESCOLA: Record<string, string> = {
   'E.E. BARRO BRANCO II': 'e926048a@educacao.sp.gov.br',
   'E.E. BELIZE': 'e284324a@educacao.sp.gov.br',
   'E.E. BENJAMIN SAMUEL BLOOM': 'e011788a@educacao.sp.gov.br',
-  'E.E. BERNADIM RIBEIRO': 'e906189a@educacao.sp.gov.br',
+  'E.E. BERNARDIM RIBEIRO': 'e906189a@educacao.sp.gov.br',
   'E.E. BRENO ROSSI, MAESTRO': 'e916730a@educacao.sp.gov.br',
   'E.E. CÂNDIDO PROCÓPIO F. CAMARGO': 'e904922a@educacao.sp.gov.br',
   'E.E. CARLOS HENRIQUE LIBERALLI': 'e039251a@educacao.sp.gov.br',
