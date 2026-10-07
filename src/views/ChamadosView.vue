@@ -245,6 +245,23 @@ const portalNetCampos = computed(() => {
   return Object.keys(campos).length ? campos : null
 })
 
+/**
+ * Trechos da descrição que NÃO são "chave: valor": é aí que cai a descrição
+ * adicional digitada livremente no formulário. Antes era descartada aqui — o
+ * modal mostrava só os campos do PortalNet e o texto sumia.
+ */
+const portalNetExtras = computed(() => {
+  if (!ehPortalNet.value || !detalhe.value?.descricao) return []
+  return detalhe.value.descricao
+    .split(/\r?\n|\s*\|\s*/)
+    .map(p => p.trim())
+    .filter(Boolean)
+    .filter((parte) => {
+      const idx = parte.indexOf(':')
+      return !(idx > 0 && parte.slice(0, idx).trim() && parte.slice(idx + 1).trim())
+    })
+})
+
 /** Campos do PortalNet que gain botão de copiar (comparação sem diferenciar maiúsculas). */
 const CAMPOS_COPIAVEIS = ['rg', 'cie', 'nome']
 
@@ -1219,6 +1236,9 @@ useAutoRefresh(async () => {
                 </div>
               </div>
             </div>
+            <div v-if="portalNetExtras.length" class="descricao-linhas descricao-extra">
+              <p v-for="(trecho, i) in portalNetExtras" :key="i">{{ trecho }}</p>
+            </div>
           </template>
           <div v-else-if="descricaoLinhas.length" class="descricao-linhas">
             <p v-for="(linha, i) in descricaoLinhas" :key="i">{{ linha }}</p>
@@ -1982,6 +2002,13 @@ tr.selecionado td {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* Trecho livre que sobrou do parse PortalNet (descrição adicional). */
+.descricao-extra {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-strong);
 }
 
 /* ---------- Chips de filtro rápido ---------- */
