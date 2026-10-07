@@ -349,14 +349,29 @@ function ehDoTecnico(c: Chamado): boolean {
  * partir de `detalhe`. São duas coisas diferentes — aqui o chamado é um item da
  * lista e o técnico precisa estar de celular, um toque e pronto; lá o técnico
  * pode registrar o serviço, anexar foto e descrever a conclusão.
+ *
+ * O que a BARRA DE AÇÃO do modal mostra está em `acaoDoMomento`, que usa
+ * `podeAceitar`/`podeRegistrar`. Aqui na linha é a mesma regra, com o mesmo
+ * cuidado: o que decide é o STATUS, não `aceitoEm`.
+ *
+ * `aceitoEm` é acumulado entre ciclos — contestada, a escola joga o chamado
+ * para ABERTO e o carimbo antigo continua gravado. Julgando por ele, um
+ * chamado contestado aparecia com "Concluir" (que o backend recusa com 409) e
+ * sem "Aceitar", que é justamente o que o técnico precisa fazer de novo.
  */
 function podeAceitarNaLinha(c: Chamado): boolean {
-  return ehDoTecnico(c) && !c.aceitoEm && ['ABERTO', 'ENCAMINHADO'].includes(c.status)
+  return ehDoTecnico(c) && AGUARDANDO_ACEITE.includes(c.status)
 }
 
-/** Já aceito e não concluído: mostra "Concluir chamado" na linha. */
+/**
+ * Já aceito neste ciclo e ainda não entregue à escola: mostra "Concluir".
+ *
+ * Espelha `STATUS_COM_TECNICO_ACEITO` do backend — um chamado em ABERTO (reaberto
+ * pela escola) ou RESOLVIDO não pode ser concluído, e o botão que não vai
+ * funcionar é pior do que o botão ausente.
+ */
 function podeConcluirNaLinha(c: Chamado): boolean {
-  return ehDoTecnico(c) && !!c.aceitoEm && !['RESOLVIDO', 'AGUARDANDO_CONFERENCIA'].includes(c.status)
+  return ehDoTecnico(c) && COM_TECNICO_ACEITO.includes(c.status) && c.status !== 'AGUARDANDO_CONFERENCIA'
 }
 
 /** Id do chamado com ação rápida em voo — trava o botão contra toque duplo. */
@@ -1185,18 +1200,31 @@ const acaoDoMomento = computed<{
   const c = detalhe.value
   if (!c) return null
 
-  // Escola: a bola está com ela para confirmar o serviço (ou reabrir).
+  /*
+   // Escola: a bola está com ela para confirmar o serviço (ou reabrir).
+   *
+   * O botão NÃO abre o formulário de aprovação: a conferência tem duas
+   * respostas possíveis e a escolha entre elas é da escola — contestar é um
+   * caminho normal, não uma exceção. Abrir direto em "Confirmar e encerrar"
+   * esconderia o botão de contestar, que é justamente o que o chamado precisa
+   * oferecer. Aqui a barra só leva a escola até a decisão, que fica logo abaixo
+   * dos registros.
+   */
   if (podeConferir.value) {
     return {
       titulo: 'Confira o atendimento',
       dica: `A equipe concluiu em ${c.concluidoEm ? formatDateTime(c.concluidoEm) : '—'}. Confira os registros abaixo e diga se ficou tudo certo.`,
-      rotulo: 'Conferir agora',
+      rotulo: 'Ver a decisão',
       classe: 'btn-verde',
       tom: 'purple',
       icone: ClipboardPen,
       acao: () => {
         secaoAberta.value = 'atendimento'
-        if (!conferenciaAberta.value) abrirConferencia('aprovado')
+        // Espera a seção abrir para rolar até os dois botões, senão o scroll
+        // acontece antes do conteúdo existir.
+        void nextTick(() => {
+          document.querySelector('.conferencia-botoes')?.scrollIntoView({ block: 'center' })
+        })
       },
     }
   }
@@ -1206,13 +1234,15 @@ const acaoDoMomento = computed<{
     return {
       titulo: 'A equipe precisa de um retorno',
       dica: 'Responda a pergunta para o atendimento continuar.',
-      rotulo: 'Responder',
+      rotulo: 'Ver a pergunta',
       classe: 'btn-verde',
       tom: 'purple',
       icone: MessageCircle,
       acao: () => {
-        secaoAberta.value = 'atendimento'
-        if (!responderAberto.value) responderAberto.value = true
+        secaoAberta.value = 'escola'
+        void nextTick(() => {
+          document.querySelector('.acao-pergunta')?.scrollIntoView({ block: 'center' })
+        })
       },
     }
   }

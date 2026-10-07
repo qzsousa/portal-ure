@@ -114,15 +114,21 @@ Se não houver técnico cadastrado para a unidade, nada quebra: o chamado segue
 
 ### 2. A fila do técnico — `ENCAMINHADO`
 
-O técnico abre o chamado e vê o botão **Aceitar chamado**. O caminho de aceite
-é o único que libera os próximos passos.
+O técnico abre o chamado e vê o botão **Aceitar chamado**, na barra de ação no
+topo do modal. O caminho de aceite é o único que libera os próximos passos.
 
 ![Chamado encaminhado aguardando aceite](screenshots/77-fluxo-15-detalhe-encaminhado-aceitar.png)
 
-Repare nos três cartões de marco no rodapé do modal: *Aceito*, *Concluído pelo
-técnico* e *Conferido pela escola* — todos vazios. Eles vão se preenchendo
-conforme o chamado avança, e é a resposta direta para as perguntas que sempre
-aparecem ("aceito quando?", "quem confirmou que terminou?").
+O modal tem quatro seções que abrem e fecham — *Chamado*, *Histórico*,
+*Atendimento* e *Ações da matriz* — e só uma fica aberta por vez. *Atendimento*
+nasce aberta, porque é onde o técnico trabalha e onde a escola confere; as
+outras nascem fechadas, com o contador no título mostrando que existe conteúdo
+lá dentro sem precisar abrir.
+
+Repare nos três cartões de marco no rodapé da seção aberta: *Aceito*,
+*Concluído pelo técnico* e *Conferido pela escola* — todos vazios. Eles vão se
+preenchendo conforme o chamado avança, e é a resposta direta para as perguntas
+que sempre aparecem ("aceito quando?", "quem confirmou que terminou?").
 
 ---
 
@@ -134,7 +140,7 @@ do servidor.
 
 ![Chamado em atendimento com registros](screenshots/78-fluxo-16-detalhe-andamento.png)
 
-A trilha no topo da caixa *Atendimento* mostra onde o chamado está:
+A trilha no topo da seção *Atendimento* mostra onde o chamado está:
 
 ```
 ✓ Aceito  →  ▌Registro▐  →  Concluído  →  Conferência
@@ -142,11 +148,16 @@ A trilha no topo da caixa *Atendimento* mostra onde o chamado está:
 ```
 
 Passo cumprido fica **verde**; o passo da vez fica **azul** e tem o botão em
-destaque embaixo.
+destaque na barra de ação do topo.
 
 Os anexos destes registros **não expiram** — ao contrário dos anexos da conversa
 (7 dias). Eles são a prova do serviço: a escola precisa conseguir conferir meses
 depois.
+
+O mesmo chamado com o registro na linha do tempo e os dois formulários de serviço
+(registrar e concluir) visíveis abaixo dos marcos:
+
+![Registro na linha do tempo e formulários de serviço](screenshots/78b-fluxo-16b-detalhe-andamento-registros.png)
 
 O formulário de registro, aberto:
 
@@ -156,12 +167,21 @@ E a conclusão, que exige o mesmo texto (é o que a escola vai ler):
 
 ![Concluindo o atendimento](screenshots/80-fluxo-18-detalhe-conclusao.png)
 
+> **Registrar e concluir são exclusivos.** Abrir um dos dois fecha o outro:
+> com o rascunho do registro ainda aberto, dava para mandar a conclusão por
+> cima dele. O botão da barra de ação abre o formulário de registro; o de
+> concluir fica logo abaixo, dentro da mesma seção.
+
 ---
 
 ### 4. A conferência da escola — `AGUARDANDO_CONFERENCIA`
 
 Esta é a etapa que **não existia** antes do fluxo novo. O técnico não encerra o
 chamado: ele entrega o serviço, e quem confirma é a unidade que abriu.
+
+A barra de ação do topo mostra "Confira o atendimento" e leva até a decisão, que
+fica no fim da seção *Atendimento*, logo abaixo dos registros do técnico — a
+escola decide olhando o que foi feito:
 
 ![Conferência do atendimento pela escola](screenshots/81-fluxo-19-detalhe-conferencia-escola.png)
 
@@ -171,6 +191,10 @@ A escola tem dois botões, e a escolha é irreversível no caminho feliz:
 |---|---|
 | **Ficou tudo certo** | → `RESOLVIDO`, grava quem e quando conferiu, avisa o técnico |
 | **Ficou faltando** | → volta para `ABERTO`, conta 1 reabertura, avisa admin + técnico |
+
+> O botão da barra **não** abre direto o formulário de aprovação: contestar é um
+> caminho normal, não uma exceção, e abrir "Confirmar e encerrar" esconderia o
+> botão de contestar. A barra só rola a tela até a escolha.
 
 A contestação exige o texto do que faltou (é ele que orienta o retrabalho); a
 foto é opcional:
@@ -187,8 +211,11 @@ timeline e o cartão "Conferido pela escola" preenchido:
 ![Chamado concluído e conferido](screenshots/83-fluxo-21-detalhe-resolvido.png)
 
 Quando a escola contesta, o chamado volta para `ABERTO` **preservando tudo**: o
-registro da tentativa anterior continua na timeline, marcado como "reaberto Nx",
-e o técnico precisa **aceitar de novo** para registrar e concluir outra vez.
+registro da tentativa anterior continua na linha do tempo, com a contestação
+marcada em vermelho e a etiqueta "reaberto 1x" ao lado do status. O técnico
+precisa **aceitar de novo** para registrar e concluir outra vez — e é por isso
+que a barra de ação volta a pedir o aceite, mesmo com o chamado já tendo sido
+aceitado antes:
 
 ![Chamado reaberto após contestação](screenshots/84-fluxo-22-detalhe-reaberto.png)
 
@@ -327,6 +354,8 @@ ido. Não havia conferência nenhuma nesse caminho.
 | Contador de reabertura | `Chamado.reaberturas` |
 | Notificações | `backend/src/services/notificacoes.ts` |
 | Trilha na tela | `src/views/ChamadosView.vue` |
+| Seções do modal (accordion) | `src/components/ui/BaseAccordion.vue` |
+| Ação do momento (uma só) | `src/views/ChamadosView.vue` → `acaoDoMomento` |
 | Rótulos e tipos do frontend | `src/api/chamados.ts`, `src/types/index.ts` |
 
 > `Chamado.historico` continua sendo **texto** e serve como rastro legível. A
@@ -337,7 +366,7 @@ ido. Não havia conferência nenhuma nesse caminho.
 
 ## Cobertura de teste
 
-`backend/src/routes/chamados.fluxo.test.ts` — 22 casos sobre o que travamos
+`backend/src/routes/chamados.fluxo.test.ts` — 24 casos sobre o que travamos
 acima: aceite indevido, registro antes do aceite, conclusão sem texto,
 contestação sem texto, conferência em chamado não concluído, técnico tentando
 fazer a conferência, e o destino de cada notificação.
@@ -350,10 +379,22 @@ cd chamados/backend && npx vitest run src/routes/chamados.fluxo.test.ts
 
 ## Sobre estas imagens
 
-As capturas foram feitas contra o **frontend real** rodando com um mock do
-backend (sem banco), percorrendo o app de verdade — inclusive clicando nos
-botões do fluxo. Os dados são fictícios, mas as telas, os estados e as
+As capturas foram feitas contra o **frontend e o backend reais**, com o dev
+server (`vite` em `:5173`, backend de chamados em `:10000`) e o banco de
+desenvolvimento. Os chamados mostrados são sintéticos, com prefixo
+`CH-TESTE-`, semeados em cada etapa do fluxo; as telas, os estados e as
 mensagens são os do código de produção.
+
+Para recriá-los:
+
+```bash
+cd chamados/backend && npx tsx _seed-prints.mjs   # semeia os CH-TESTE-*
+```
+
+O script aceita `--limpar` para apagar tudo. Os usuários usados são
+`teste.tecnico@local.com` (técnico), `teste.mae@local.com` (gestor da unidade) e
+`teste.filha@local.com`, todos com a senha `Tec2026..` — criados por
+`_criar-usuarios-teste.mjs`.
 
 Detalhe que só aparece quem tenta: a CSP do `index.html` fixa as portas de
 `connect-src` em `localhost:10000` e `localhost:3000`. Qualquer backend de

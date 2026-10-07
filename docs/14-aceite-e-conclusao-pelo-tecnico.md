@@ -77,19 +77,25 @@ abrir o detalhe:
 
 ![Lista com botão Aceitar](./screenshots/38-chamados-aceitar-lista.png)
 
-**2. No modal de detalhes** — bloco no **topo**, com botão de largura total e
-altura de toque confortável (52px), difícil de não ver no celular:
+**2. No modal de detalhes** — barra de ação no **topo**, com botão de largura
+total e altura de toque confortável (52px), difícil de não ver no celular:
 
 ![Modal com botão Aceitar chamado](./screenshots/39-chamado-aceitar-modal.png)
 
-Depois do aceite, o bloco mostra o horário em que você assumiu e oferece a
-conclusão:
+Depois do aceite, a mesma barra passa a oferecer o registro do serviço:
 
-![Modal com botão Concluir chamado](./screenshots/40-chamado-concluir-modal.png)
+![Modal com botão Registrar o que foi feito](./screenshots/40-chamado-concluir-modal.png)
 
-E o chamado concluído guarda os dois carimbos no detalhe e na linha do tempo:
+E o chamado concluído e conferido guarda os dois carimbos nos marcos e na
+linha do tempo:
 
 ![Detalhe com Aceito em e Concluído em](./screenshots/41-chamado-carimbos.png)
+
+> O modal mudou depois deste documento: a ação do momento virou uma barra
+> única no topo e o resto virou seções que abrem e fecham. Ver
+> **[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)**,
+> que é o capítulo atual do fluxo. As prints acima foram regravadas com a tela
+> nova.
 
 ---
 
