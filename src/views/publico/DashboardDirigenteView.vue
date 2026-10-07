@@ -148,7 +148,7 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
     <header class="cabecalho">
       <div>
         <p class="eyebrow">Unidade Regional de Ensino — Leste 3</p>
-        <h1>Painel do dirigente</h1>
+        <h1>Painel do Setor</h1>
         <p class="sub">
           Resumo geral dos chamados de tecnologia.
           <span v-if="atualizadoEm">Atualizado às {{ atualizadoEm }}.</span>
