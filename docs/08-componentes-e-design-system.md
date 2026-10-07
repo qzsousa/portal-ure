@@ -90,6 +90,13 @@ Em componentes há variantes locais: `.btn-mini`, `.btn-grande`, `.btn-del`
 | `.input` | Input e textarea |
 | `.select-input` | `<select>` com a mesma aparência |
 | Foco | Borda azul + halo `rgb(37 99 235 / 0.15)` |
+| `.input:disabled` / `.select-input:disabled` | Fundo `--surface-muted`, borda tracejada, texto esmaecido, cursor `not-allowed` |
+
+> **Campo travado ≠ campo desabilitado sem aviso.** O `:disabled` global existe
+> para que um campo que o perfil **não pode** alterar (o *Perfil* no cadastro de
+> usuário, que o Gestor não escolhe) fique **visivelmente** travado. Sem essa
+> regra o campo ficava idêntico ao editável, e a trava só aparecia na captura
+> de tela — o usuário não tinha como saber que aquilo era uma regra.
 
 ### Tabelas
 

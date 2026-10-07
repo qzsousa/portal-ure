@@ -153,6 +153,7 @@ Duas consequências que afetam o tratamento de erro:
 | GET | `/chamados/encaminhar/tecnicos/:id` | opções que atendem a unidade |
 | GET | `/chamados/filtros/tecnicos` | select "Técnico" do filtro |
 | POST | `/chamados/:id/encaminhar` | "Encaminhar para técnico" |
+| POST | `/chamados/:id/aceitar` | botão "Aceitar" do técnico (carimba `aceitoEm`) |
 | GET | `/dashboard/stats` | KPIs de `ChamadosView` e aba Integrações |
 
 ##### Fluxo de atendimento
@@ -175,7 +176,9 @@ certo, `conferir` exige texto na contestação (é ele que diz o que faltou) e
 > A escola **não** mexe no status por `PATCH /chamados/:id/status` — encerrar é
 > uma conferência, que valida se o técnico realmente concluiu antes de aceitar o
 > "ok" (ou reabre se não). Esse `PATCH` continua existindo para a matriz corrigir
-> status fora do fluxo.
+> status fora do fluxo, e o `/batch` também carimba `aceitoEm`/`concluidoEm` nas
+> transições válidas. Ver
+> [14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md).
 
 > `/chamados` aceita `page`, `limit`, `unidade`, `categoria`, `categoriaChave`,
 > `status`, `urgencia` e `responsavel`. **Filtros vazios são removidos antes do

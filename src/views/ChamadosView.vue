@@ -5,17 +5,23 @@ import type { AxiosError } from 'axios'
 import { apiError } from '@/utils/apiError'
 import {
   AlertTriangle,
-  CheckCircle2,
+  Check,
   CheckCheck,
+  CheckCircle2,
   ClipboardList,
   ClipboardPen,
   Clock,
   Copy,
+  FileText,
   Heart,
+  History,
   Layers,
   Loader2,
   Mail,
+  MessageCircle,
+  MessageSquare,
   Paperclip,
+  RefreshCcw,
   RotateCcw,
   School,
   Search,
@@ -95,7 +101,7 @@ const EMAILS_POR_ESCOLA: Record<string, string> = {
   'E.E. BARRO BRANCO II': 'e926048a@educacao.sp.gov.br',
   'E.E. BELIZE': 'e284324a@educacao.sp.gov.br',
   'E.E. BENJAMIN SAMUEL BLOOM': 'e011788a@educacao.sp.gov.br',
-  'E.E. BERNADIM RIBEIRO': 'e906189a@educacao.sp.gov.br',
+  'E.E. BERNARDIM RIBEIRO': 'e906189a@educacao.sp.gov.br',
   'E.E. BRENO ROSSI, MAESTRO': 'e916730a@educacao.sp.gov.br',
   'E.E. CÂNDIDO PROCÓPIO F. CAMARGO': 'e904922a@educacao.sp.gov.br',
   'E.E. CARLOS HENRIQUE LIBERALLI': 'e039251a@educacao.sp.gov.br',
@@ -254,6 +260,23 @@ const portalNetCampos = computed(() => {
   return Object.keys(campos).length ? campos : null
 })
 
+/**
+ * Trechos da descrição que NÃO são "chave: valor": é aí que cai a descrição
+ * adicional digitada livremente no formulário. Antes era descartada aqui — o
+ * modal mostrava só os campos do PortalNet e o texto sumia.
+ */
+const portalNetExtras = computed(() => {
+  if (!ehPortalNet.value || !detalhe.value?.descricao) return []
+  return detalhe.value.descricao
+    .split(/\r?\n|\s*\|\s*/)
+    .map(p => p.trim())
+    .filter(Boolean)
+    .filter((parte) => {
+      const idx = parte.indexOf(':')
+      return !(idx > 0 && parte.slice(0, idx).trim() && parte.slice(idx + 1).trim())
+    })
+})
+
 /** Campos do PortalNet que gain botão de copiar (comparação sem diferenciar maiúsculas). */
 const CAMPOS_COPIAVEIS = ['rg', 'cie', 'nome']
 
@@ -303,7 +326,92 @@ const filtros = reactive<FiltrosChamado>({
 /* Matriz (ADMIN/TECNICO) tem controle total; escola (GESTOR/VISUALIZADOR) só responde e conclui. */
 const ehMatriz = computed(() => ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || ''))
 const ehEscola = computed(() => ['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
+const ehTecnico = computed(() => auth.user?.nivel === 'TECNICO')
 const podeLote = computed(() => ehMatriz.value)
+
+/* ------- Aceitar / concluir rápido (técnico, pensado para o celular) ------- */
+
+/**
+ * O chamado está ENCAMINHADO PARA O TÉCNICO LOGADO? O vínculo é o nome gravado
+ * em `responsavel` pelo encaminhamento (manual ou automático) — o backend
+ * valida de novo na hora de aceitar/concluir.
+ */
+function ehDoTecnico(c: Chamado): boolean {
+  return ehTecnico.value && !!auth.user?.nome && c.responsavel === auth.user.nome
+}
+
+/**
+ * Ações RÁPIDAS na LINHA da tabela (fora do modal).
+ *
+ * Nome com sufixo de propósito: o modal tem os seus próprios, calculados a
+ * partir de `detalhe`. São duas coisas diferentes — aqui o chamado é um item da
+ * lista e o técnico precisa estar de celular, um toque e pronto; lá o técnico
+ * pode registrar o serviço, anexar foto e descrever a conclusão.
+ */
+function podeAceitarNaLinha(c: Chamado): boolean {
+  return ehDoTecnico(c) && !c.aceitoEm && ['ABERTO', 'ENCAMINHADO'].includes(c.status)
+}
+
+/** Já aceito e não concluído: mostra "Concluir chamado" na linha. */
+function podeConcluirNaLinha(c: Chamado): boolean {
+  return ehDoTecnico(c) && !!c.aceitoEm && !['RESOLVIDO', 'AGUARDANDO_CONFERENCIA'].includes(c.status)
+}
+
+/** Id do chamado com ação rápida em voo — trava o botão contra toque duplo. */
+const acaoRapidaEmAndamento = ref<string | null>(null)
+
+/** Reflete o chamado atualizado na linha da tabela e no modal, se for o aberto. */
+function refletirAtualizacao(atualizado: Chamado) {
+  const i = estado.items.findIndex((x) => x.id === atualizado.id)
+  if (i >= 0) estado.items[i] = { ...estado.items[i], ...atualizado }
+  if (detalhe.value?.id === atualizado.id) {
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+  }
+}
+
+async function aceitarChamadoRapido(c: Chamado) {
+  if (acaoRapidaEmAndamento.value) return
+  acaoRapidaEmAndamento.value = c.id
+  try {
+    const atualizado = await aceitarChamado(c.id)
+    refletirAtualizacao(atualizado)
+    ui.success(`Chamado ${atualizado.protocolo} aceito — você é o responsável pelo atendimento.`)
+    await Promise.all([carregar(true), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao aceitar o chamado.'))
+  } finally {
+    acaoRapidaEmAndamento.value = null
+  }
+}
+
+/**
+ * Concluir pela LINHA ou pelo botão grande do topo do modal.
+ *
+ * Não chama `PATCH /status` com `RESOLVIDO`: no fluxo atual o técnico **não
+ * encerra** o chamado — ele entrega o serviço e a escola confere. Por isso vai
+ * para `AGUARDANDO_CONFERENCIA` pelo endpoint `/concluir`, que exige o texto do
+ * que foi feito (é o que a escola vai ler para decidir).
+ */
+async function concluirChamadoTecnico(c: Chamado) {
+  if (acaoRapidaEmAndamento.value) return
+  const descricao = window.prompt(
+    `O que foi feito no chamado #${c.protocolo}?\n\nEste texto é o que a escola lê para conferir o serviço.`,
+    c.descricaoResolucao || '',
+  )
+  if (!descricao?.trim()) return
+  acaoRapidaEmAndamento.value = c.id
+  try {
+    const atualizado = await concluirChamado(c.id, { texto: descricao.trim() })
+    refletirAtualizacao(atualizado)
+    ui.success(`Atendimento concluído. A escola foi avisada para conferir o chamado #${c.protocolo}.`)
+    await Promise.all([carregar(true), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao concluir o atendimento.'))
+  } finally {
+    acaoRapidaEmAndamento.value = null
+  }
+}
 
 /* ---------- Seleção múltipla (batch) ---------- */
 const selecionados = ref<Set<string>>(new Set())
@@ -747,7 +855,7 @@ interface EntradaHistorico {
 function tomDaEntrada(texto: string): TomTimeline {
   const t = texto.toLowerCase()
   if (t.includes('resolvido') || t.includes('concluído') || t.includes('concluido')) return 'green'
-  if (t.includes('status alterado')) return 'blue'
+  if (t.includes('status alterado') || t.includes('aceito por')) return 'blue'
   if (t.includes('respond') || t.includes('comunicado')) return 'purple'
   return 'slate'
 }
@@ -1052,7 +1160,7 @@ async function enviarResposta() {
     const atualizado = await responderChamado(detalhe.value.id, { texto: textoResposta.value.trim() })
     detalhe.value = atualizado
     textoResposta.value = ''
-    ui.success('Resposta registrada no histórico.')
+    ui.success('Comentário registrado no histórico.')
   } catch (e) {
     ui.error(apiError(e, 'Falha ao registrar resposta.'))
   } finally {
@@ -1274,17 +1382,42 @@ useAutoRefresh(async () => {
               >{{ c.descricao }}</td>
               <td><StatusPill :status="rotuloStatusChamado(c.status)" /></td>
               <td class="td-acoes">
-                <RowActions
-                  :itens="[
-                    { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
-                    ...(ehMatriz
-                      ? [
-                          { rotulo: 'Encaminhar para técnico', icone: UserPlus, acao: () => abrirEncaminhar(c) },
-                          { rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) },
-                        ]
-                      : []),
-                  ]"
-                />
+                <div class="acoes-linha">
+                  <!-- Ação rápida do técnico: botão grande e visível, pensado para o celular -->
+                  <button
+                    v-if="podeAceitarNaLinha(c)"
+                    class="btn-acao btn-aceitar"
+                    type="button"
+                    :disabled="acaoRapidaEmAndamento === c.id"
+                    @click="aceitarChamadoRapido(c)"
+                  >
+                    <Loader2 v-if="acaoRapidaEmAndamento === c.id" class="spin" :size="15" />
+                    <Check v-else :size="15" />
+                    Aceitar
+                  </button>
+                  <button
+                    v-else-if="podeConcluirNaLinha(c)"
+                    class="btn-acao btn-concluir"
+                    type="button"
+                    :disabled="acaoRapidaEmAndamento === c.id"
+                    @click="concluirChamadoTecnico(c)"
+                  >
+                    <Loader2 v-if="acaoRapidaEmAndamento === c.id" class="spin" :size="15" />
+                    <CheckCheck v-else :size="15" />
+                    Concluir
+                  </button>
+                  <RowActions
+                    :itens="[
+                      { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
+                      ...(ehMatriz
+                        ? [
+                            { rotulo: 'Encaminhar para técnico', icone: UserPlus, acao: () => abrirEncaminhar(c) },
+                            { rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) },
+                          ]
+                        : []),
+                    ]"
+                  />
+                </div>
               </td>
             </tr>
           </tbody>
@@ -1305,6 +1438,45 @@ useAutoRefresh(async () => {
       @fechar="detalheAberto = false"
     >
       <div v-if="detalhe" class="detalhe">
+        <!--
+             Ação do técnico na PRIMEIRA altura do modal: o botão grande, de um
+             toque, para o técnico aceitar do celular. As ações completas do
+             fluxo (registrar o serviço com foto, concluir com descrição) ficam
+             na caixa "Atendimento", mais abaixo.
+        -->
+        <div v-if="podeAceitarNaLinha(detalhe) || podeConcluirNaLinha(detalhe)" class="acao-tecnico">
+          <button
+            v-if="podeAceitarNaLinha(detalhe)"
+            class="btn-acao btn-aceitar btn-acao-grande"
+            type="button"
+            :disabled="acaoRapidaEmAndamento === detalhe.id"
+            @click="aceitarChamadoRapido(detalhe)"
+          >
+            <Loader2 v-if="acaoRapidaEmAndamento === detalhe.id" class="spin" :size="20" />
+            <Check v-else :size="20" />
+            {{ acaoRapidaEmAndamento === detalhe.id ? 'Aceitando...' : 'Aceitar chamado' }}
+          </button>
+          <template v-else>
+            <p class="acao-tecnico-info">
+              Você aceitou este chamado em <strong>{{ formatDateTime(detalhe.aceitoEm!) }}</strong>.
+            </p>
+            <button
+              class="btn-acao btn-concluir btn-acao-grande"
+              type="button"
+              :disabled="acaoRapidaEmAndamento === detalhe.id"
+              @click="concluirChamadoTecnico(detalhe)"
+            >
+              <Loader2 v-if="acaoRapidaEmAndamento === detalhe.id" class="spin" :size="20" />
+              <CheckCheck v-else :size="20" />
+              {{ acaoRapidaEmAndamento === detalhe.id ? 'Concluindo...' : 'Concluir atendimento' }}
+            </button>
+            <p class="acao-tecnico-info">
+              Concluir entrega o serviço para a <strong>escola conferir</strong> — quem encerra o
+              chamado é a unidade.
+            </p>
+          </template>
+        </div>
+
         <dl class="detalhe-grid">
           <div><dt>Unidade</dt><dd>{{ detalhe.unidade }}</dd></div>
           <div class="full">
@@ -1329,10 +1501,12 @@ useAutoRefresh(async () => {
           <div><dt>Urgência</dt><dd>{{ detalhe.urgencia }}</dd></div>
           <div><dt>Responsável</dt><dd>{{ detalhe.responsavel || '—' }}</dd></div>
           <div><dt>Status atual</dt><dd><StatusPill :status="rotuloStatusChamado(detalhe.status)" /></dd></div>
+          <div v-if="detalhe.aceitoEm"><dt>Aceito em</dt><dd>{{ formatDateTime(detalhe.aceitoEm) }}</dd></div>
+          <div v-if="detalhe.concluidoEm"><dt>Concluído em</dt><dd>{{ formatDateTime(detalhe.concluidoEm) }}</dd></div>
         </dl>
 
         <div class="descricao-box">
-          <h4>Descrição</h4>
+          <h4><FileText :size="15" /> Descrição</h4>
           <template v-if="portalNetCampos">
             <div class="portal-net-campos">
               <div class="portal-campo" v-for="(valor, chave) in portalNetCampos" :key="chave">
@@ -1351,6 +1525,9 @@ useAutoRefresh(async () => {
                 </div>
               </div>
             </div>
+            <div v-if="portalNetExtras.length" class="descricao-linhas descricao-extra">
+              <p v-for="(trecho, i) in portalNetExtras" :key="i">{{ trecho }}</p>
+            </div>
           </template>
           <div v-else-if="descricaoLinhas.length" class="descricao-linhas">
             <p v-for="(linha, i) in descricaoLinhas" :key="i">{{ linha }}</p>
@@ -1359,7 +1536,7 @@ useAutoRefresh(async () => {
         </div>
 
         <div v-if="detalhe.historico" class="descricao-box">
-          <h4>Histórico</h4>
+          <h4><History :size="15" /> Histórico</h4>
           <div ref="timelineRef" class="timeline">
             <div v-for="(entrada, i) in historicoEntradas" :key="i" class="timeline-item">
               <span class="timeline-dot" :class="`dot-${entrada.tom}`" />
@@ -1371,7 +1548,7 @@ useAutoRefresh(async () => {
 
         <!-- Conversa matriz ↔ escola (perguntas e respostas com anexos temporários) -->
         <div v-if="conversa.length" class="descricao-box">
-          <h4>Perguntas e respostas</h4>
+          <h4><MessageSquare :size="15" /> Perguntas e respostas</h4>
           <div class="msgs">
             <div v-for="m in conversa" :key="m.id" class="msg" :class="m.tipo === 'PERGUNTA' ? 'msg-pergunta' : 'msg-resposta'">
               <span class="msg-meta">
@@ -1643,7 +1820,7 @@ useAutoRefresh(async () => {
           </div>
 
           <div class="acao-box">
-            <h4>Alterar status</h4>
+            <h4><RefreshCcw :size="15" /> Alterar status</h4>
             <div class="acao-linha">
               <select v-model="novoStatus" class="select-input">
                 <option v-for="s in STATUS_FLUXO" :key="s" :value="s">{{ rotuloStatusChamado(s) }}</option>
@@ -1693,7 +1870,7 @@ useAutoRefresh(async () => {
           </div>
 
           <div class="acao-box">
-            <h4>Adicionar resposta ao histórico</h4>
+            <h4><Send :size="15" /> Adicionar comentário ao histórico</h4>
             <div class="acao-linha">
               <input v-model="textoResposta" class="input" placeholder="Escreva uma atualização..." />
               <button class="btn btn-outline" type="button" :disabled="salvando || !textoResposta.trim()" @click="enviarResposta">
@@ -1719,7 +1896,7 @@ useAutoRefresh(async () => {
           </div>
 
           <div v-if="detalhe.status === 'COMUNICADO'" class="acao-box acao-pergunta">
-            <h4>Pergunta da matriz</h4>
+            <h4><MessageCircle :size="15" /> Pergunta da matriz</h4>
             <p class="pergunta-texto">{{ ultimaPergunta?.texto || 'A equipe aguarda um retorno da sua unidade.' }}</p>
             <div v-if="ultimaPergunta?.anexos?.length" class="msg-anexos">
               <a v-for="a in ultimaPergunta.anexos" :key="a.id" :href="a.url" target="_blank" rel="noopener" class="msg-anexo">
@@ -2358,10 +2535,30 @@ tr.selecionado td {
   margin-left: 4px;
 }
 
+/* Seções do modal em cartões separados: descrição, histórico, ações e conversa
+   ficam visualmente distintas (antes era tudo na mesma coluna, sem borda nem
+   fundo, e o modal parecia um bloco só). */
+.descricao-box,
+.acao-box {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
 .descricao-box h4,
 .acao-box h4 {
-  font-size: 13px;
-  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  padding-bottom: 8px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .descricao-box p {
@@ -2376,6 +2573,13 @@ tr.selecionado td {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* Trecho livre que sobrou do parse PortalNet (descrição adicional). */
+.descricao-extra {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-strong);
 }
 
 /* ---------- Chips de filtro rápido ---------- */
@@ -2786,6 +2990,95 @@ tr.selecionado td {
 
   .detalhe-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Ação rápida do técnico (aceitar/concluir) ---------- */
+
+.acoes-linha {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-acao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease;
+}
+
+.btn-acao:active {
+  transform: translateY(1px);
+}
+
+.btn-acao:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-aceitar {
+  background: var(--blue);
+}
+
+.btn-aceitar:hover {
+  background: #1d4ed8;
+}
+
+.btn-concluir {
+  background: var(--green);
+}
+
+.btn-concluir:hover {
+  background: #15803d;
+}
+
+/*
+ * Bloco no topo do modal de detalhes — é a ação principal do técnico e precisa
+ * ser impossível de não ver no celular: botão de largura total e alvo de
+ * toque alto (52px+).
+ */
+.acao-tecnico {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  border: 1.5px solid var(--border);
+}
+
+.acao-tecnico-info {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.btn-acao-grande {
+  width: 100%;
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

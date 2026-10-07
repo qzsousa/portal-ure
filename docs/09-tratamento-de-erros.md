@@ -312,7 +312,20 @@ Requisição ao SCE
 |---|---|
 | **Sintoma** | O select de perfil está desabilitado mostrando só *Visualizador* |
 | **Causa** | Regra de negócio: GESTOR só cria Visualizador da própria escola. |
-| **Detalhe** | O backend também limita a **2 usuários ativos por unidade** e ignora qualquer `nivel`/`filial` enviados pelo Gestor. |
+| **Detalhe** | O campo vem preenchido e travado (borda tracejada), porque é a conta logada que decide perfil e unidade. O backend também limita a **2 usuários ativos por unidade** e ignora qualquer `nivel`/`filial` enviados pelo Gestor. |
+
+### C6. "Limite de 2 usuários por unidade atingido"
+
+| | |
+|---|---|
+| **Sintoma** | Aviso vermelho no topo de `/usuarios` e botão *Novo usuário* travado |
+| **Causa** | A unidade já tem 3 usuários `ATIVO` — o Gestor e as 2 vagas dele |
+| **Diagnóstico** | `GET /usuarios?status=ATIVO` → `meta.total` é 3. O portal usa esse mesmo total para pintar o aviso, então a tela e o servidor concordam. |
+| **Solução** | *⋮ → Desativar* em um usuário da lista (só Visualizador da própria escola). Desativar libera a vaga na hora — a tela recalcula a contagem depois da ação. |
+
+> O limite é do **backend** (`MAX_GESTORES_UNIDADE` em `chamados/backend/src/routes/usuarios.ts`);
+> o botão travado do portal é aviso, não é a trava. Chamar a API direto com a
+> unidade cheia devolve **400** `VALIDATION_ERROR`.
 
 ---
 

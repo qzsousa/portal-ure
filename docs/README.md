@@ -27,7 +27,8 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | Fazer uma manutenção comum | [11 · Manutenção e checklists](./11-manutencao-e-checklists.md) |
 | Decifrar siglas e nomes próprios | [12 · Glossário](./12-glossario.md) |
 | **Entender a avaliação de atendimento** (do fechamento à nota) | **[13 · Avaliação de atendimento](./13-avaliacao-de-atendimento.md)** |
-| **Ver o fluxo do chamado inteiro** (da abertura — conferência da escola) | **[14 — Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)** |
+| **Entender o aceite e a conclusão pelo técnico** (carimbos de horário) | **[14 · Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md)** |
+| **Ver o fluxo do chamado inteiro** (da abertura até a conferência da escola) | **[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)** |
 
 ---
 
@@ -88,6 +89,42 @@ sistema rodando com dados reais.
 | 36 | Equipamentos — **escola MÃE** do mesmo grupo: sem banner, com "Adicionar equipamento" e Editar/Remover | [`36-equipamentos-escola-mae-com-edicao.png`](./screenshots/36-equipamentos-escola-mae-com-edicao.png) |
 | 37 | Login usado no teste dos perfis MÃE/FILHA | [`37-login-teste.png`](./screenshots/37-login-teste.png) |
 
+### Aceite e conclusão pelo técnico
+
+| # | Tela | Arquivo |
+|---|---|---|
+| 38 | Chamados — botão **Aceitar** na linha do chamado encaminhado | [`38-chamados-aceitar-lista.png`](./screenshots/38-chamados-aceitar-lista.png) |
+| 39 | Detalhe — botão grande **Aceitar chamado** no topo do modal | [`39-chamado-aceitar-modal.png`](./screenshots/39-chamado-aceitar-modal.png) |
+| 40 | Detalhe — após o aceite: horário assumido + botão **Concluir chamado** | [`40-chamado-concluir-modal.png`](./screenshots/40-chamado-concluir-modal.png) |
+| 41 | Detalhe concluído — carimbos **Aceito em** / **Concluído em** e linha do tempo | [`41-chamado-carimbos.png`](./screenshots/41-chamado-carimbos.png) |
+
+### Usuários geridos pelo Gestor
+
+| # | Tela | Arquivo |
+|---|---|---|
+| 42 | Usuários — **perfil Gestor**: só a própria unidade e o aviso de cota ("1 de 2") | [`42-usuarios-gestor-unidade.png`](./screenshots/42-usuarios-gestor-unidade.png) |
+| 43 | Modal *Novo usuário* como Gestor — **Perfil** e **Unidade** travados | [`43-usuarios-gestor-modal-perfil-travado.png`](./screenshots/43-usuarios-gestor-modal-perfil-travado.png) |
+| 44 | Usuários — **cota esgotada**: aviso vermelho e botão *Novo usuário* travado | [`44-usuarios-gestor-limite-atingido.png`](./screenshots/44-usuarios-gestor-limite-atingido.png) |
+
+> **Sobre os prints 42 a 44.** Capturados com o portal local e o usuário de
+> teste **`teste.mae@local.com`** (perfil **GESTOR**, unidade
+> `E.E. CESAR DONATO CALABREZ`). São dados reais — a outra linha da tabela é o
+> técnico da mesma escola, `teste.tecnico@local.com`.
+>
+> O print 44 exigia a unidade com a cota cheia. O usuário
+> `teste.cota.gestor@local.com` foi **criado pela própria tela** para chegar
+> lá (2 de 2), fotografado e **desativado em seguida** — que é o que a tela
+> avisa fazer. Ele continua no banco como `INATIVO`, sem efeito em nada.
+>
+> Também foi conferido, chamando a API direto com o token do Gestor, que
+> `POST /usuarios` com a unidade cheia responde **400** *"Limite de 2 usuários
+> por unidade atingido"* e que `GET /usuarios?filial=<outra escola>` continua
+> devolvendo **só** a própria unidade.
+
+> **Sobre os prints 38 a 41.** Capturados com o usuário de teste
+> `teste.tecnico@local.com` (perfil TÉCNICO) e chamados sintéticos `CH-TESTE-*`
+> encaminhados para ele — ver [Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md).
+
 > **Sobre os prints 35 e 36.** Capturados com o portal local e **dois usuários
 > de teste do mesmo grupo de escolas irmãs** (`E.E. CESAR DONATO CALABREZ /
 > LEILA DINIZ`), ambos com perfil Gestor: um cadastrado na **MÃE** e outro na
@@ -111,7 +148,9 @@ sistema rodando com dados reais.
 
 > **Sobre os prints.** Todos foram capturados do portal rodando localmente
 > (`localhost:5173`) contra o banco de desenvolvimento, com um usuário
-> **Administrador**. Três ressalvas:
+> **Administrador** — exceto os 35 a 37 e os 42 a 44, capturados com usuários de
+> teste de perfil **Gestor** (cada bloco de prints traz o seu próprio recado).
+> Três ressalvas:
 >
 > - **24 — Logs do sistema:** as três entradas de "Erros dos backends" são
 >   **exemplo**, inseridas manualmente para ilustrar o agrupamento (`×3`), o
@@ -136,40 +175,40 @@ sistema rodando com dados reais.
 > Os prints 01–06 e 07 usam o chamado **`CH-20260929-0006`**, criado durante a
 > captura para demonstrar o fluxo completo de ponta a ponta.
 
-### Fluxo de atendimento do chamado (38 a 62)
+### Fluxo de atendimento do chamado (63 a 87)
 
 O caminho completo de um chamado, do formulário público até a conferência da
 escola. Ver **[14 — Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)**.
 
 | # | Tela | Arquivo |
 |---|---|---|
-| 38 | Abertura de chamado — escolha de categoria | [`38-fluxo-01-abrir-chamado.png`](./screenshots/38-fluxo-01-abrir-chamado.png) |
-| 39 | Abertura — categoria *Equipamento* escolhida | [`39-fluxo-02-abrir-chamado-equipamento.png`](./screenshots/39-fluxo-02-abrir-chamado-equipamento.png) |
-| 40 | Abertura — perguntas dinâmicas com alerta e cascata de equipamento | [`40-fluxo-03-abrir-chamado-perguntas.png`](./screenshots/40-fluxo-03-abrir-chamado-perguntas.png) |
-| 41 | Abertura — etapa de identificação | [`41-fluxo-04-abrir-chamado-identificacao.png`](./screenshots/41-fluxo-04-abrir-chamado-identificacao.png) |
-| 42 | Consulta por protocolo — registros de atendimento visíveis ao solicitante | [`42-fluxo-05-consulta-protocolo.png`](./screenshots/42-fluxo-05-consulta-protocolo.png) |
-| 43 | Consulta — chamado reaberto, com a contestação da escola | [`43-fluxo-06-consulta-protocolo-reaberto.png`](./screenshots/43-fluxo-06-consulta-protocolo-reaberto.png) |
-| 44 | Painel geral público — os 6 status do fluxo | [`44-fluxo-07-painel-publico-matriz.png`](./screenshots/44-fluxo-07-painel-publico-matriz.png) |
-| 45 | Painel do dirigente — nota média e ranking de unidades | [`45-fluxo-08-painel-dirigente.png`](./screenshots/45-fluxo-08-painel-dirigente.png) |
-| 46 | Login | [`46-fluxo-09-login.png`](./screenshots/46-fluxo-09-login.png) |
-| 47 | Painel da escola (GESTOR) | [`47-fluxo-10-painel-escola.png`](./screenshots/47-fluxo-10-painel-escola.png) |
-| 48 | Chamados da escola — só a unidade dela | [`48-fluxo-11-chamados-escola.png`](./screenshots/48-fluxo-11-chamados-escola.png) |
-| 49 | Painel da matriz (ADMIN) | [`49-fluxo-12-painel-matriz.png`](./screenshots/49-fluxo-12-painel-matriz.png) |
-| 50 | Chamados da matriz — os chips são as etapas do fluxo | [`50-fluxo-13-chamados-matriz.png`](./screenshots/50-fluxo-13-chamados-matriz.png) |
-| 51 | Filtro por *Aguardando conferência* | [`51-fluxo-14-chamados-filtro-conferencia.png`](./screenshots/51-fluxo-14-chamados-filtro-conferencia.png) |
-| 52 | Detalhe ENCAMINHADO — botão **Aceitar chamado** | [`52-fluxo-15-detalhe-encaminhado-aceitar.png`](./screenshots/52-fluxo-15-detalhe-encaminhado-aceitar.png) |
-| 53 | Detalhe ANDAMENTO — registros datados, marcos e trilha de passos | [`53-fluxo-16-detalhe-andamento.png`](./screenshots/53-fluxo-16-detalhe-andamento.png) |
-| 54 | Registro do que foi feito (repetível, com foto) | [`54-fluxo-17-detalhe-registro-aberto.png`](./screenshots/54-fluxo-17-detalhe-registro-aberto.png) |
-| 55 | Conclusão do atendimento — exige descrever | [`55-fluxo-18-detalhe-conclusao.png`](./screenshots/55-fluxo-18-detalhe-conclusao.png) |
-| 56 | AGUARDANDO_CONFERÊNCIA visto pela escola | [`56-fluxo-19-detalhe-conferencia-escola.png`](./screenshots/56-fluxo-19-detalhe-conferencia-escola.png) |
-| 57 | Contestação — texto obrigatório, foto opcional | [`57-fluxo-20-detalhe-contestacao.png`](./screenshots/57-fluxo-20-detalhe-contestacao.png) |
-| 58 | RESOLVIDO com a conferência da escola registrada | [`58-fluxo-21-detalhe-resolvido.png`](./screenshots/58-fluxo-21-detalhe-resolvido.png) |
-| 59 | Chamado reaberto — registro anterior preservado, etiqueta "reaberto 1x" | [`59-fluxo-22-detalhe-reaberto.png`](./screenshots/59-fluxo-22-detalhe-reaberto.png) |
-| 60 | Sino com o aviso de reabertura para admin e técnico | [`60-fluxo-23-sino-notificacao-reabertura.png`](./screenshots/60-fluxo-23-sino-notificacao-reabertura.png) |
-| 61 | COMUNICADO — pergunta da matriz para a escola | [`61-fluxo-24-detalhe-comunicado.png`](./screenshots/61-fluxo-24-detalhe-comunicado.png) |
-| 62 | Avaliação — só aparece depois que a escola conferiu | [`62-fluxo-25-avaliacao-painel.png`](./screenshots/62-fluxo-25-avaliacao-painel.png) |
+| 38 | Abertura de chamado — escolha de categoria | [`63-fluxo-01-abrir-chamado.png`](./screenshots/63-fluxo-01-abrir-chamado.png) |
+| 39 | Abertura — categoria *Equipamento* escolhida | [`64-fluxo-02-abrir-chamado-equipamento.png`](./screenshots/64-fluxo-02-abrir-chamado-equipamento.png) |
+| 40 | Abertura — perguntas dinâmicas com alerta e cascata de equipamento | [`65-fluxo-03-abrir-chamado-perguntas.png`](./screenshots/65-fluxo-03-abrir-chamado-perguntas.png) |
+| 41 | Abertura — etapa de identificação | [`66-fluxo-04-abrir-chamado-identificacao.png`](./screenshots/66-fluxo-04-abrir-chamado-identificacao.png) |
+| 42 | Consulta por protocolo — registros de atendimento visíveis ao solicitante | [`67-fluxo-05-consulta-protocolo.png`](./screenshots/67-fluxo-05-consulta-protocolo.png) |
+| 43 | Consulta — chamado reaberto, com a contestação da escola | [`68-fluxo-06-consulta-protocolo-reaberto.png`](./screenshots/68-fluxo-06-consulta-protocolo-reaberto.png) |
+| 44 | Painel geral público — os 6 status do fluxo | [`69-fluxo-07-painel-publico-matriz.png`](./screenshots/69-fluxo-07-painel-publico-matriz.png) |
+| 45 | Painel do dirigente — nota média e ranking de unidades | [`70-fluxo-08-painel-dirigente.png`](./screenshots/70-fluxo-08-painel-dirigente.png) |
+| 46 | Login | [`71-fluxo-09-login.png`](./screenshots/71-fluxo-09-login.png) |
+| 47 | Painel da escola (GESTOR) | [`72-fluxo-10-painel-escola.png`](./screenshots/72-fluxo-10-painel-escola.png) |
+| 48 | Chamados da escola — só a unidade dela | [`73-fluxo-11-chamados-escola.png`](./screenshots/73-fluxo-11-chamados-escola.png) |
+| 49 | Painel da matriz (ADMIN) | [`74-fluxo-12-painel-matriz.png`](./screenshots/74-fluxo-12-painel-matriz.png) |
+| 50 | Chamados da matriz — os chips são as etapas do fluxo | [`75-fluxo-13-chamados-matriz.png`](./screenshots/75-fluxo-13-chamados-matriz.png) |
+| 51 | Filtro por *Aguardando conferência* | [`76-fluxo-14-chamados-filtro-conferencia.png`](./screenshots/76-fluxo-14-chamados-filtro-conferencia.png) |
+| 52 | Detalhe ENCAMINHADO — botão **Aceitar chamado** | [`77-fluxo-15-detalhe-encaminhado-aceitar.png`](./screenshots/77-fluxo-15-detalhe-encaminhado-aceitar.png) |
+| 53 | Detalhe ANDAMENTO — registros datados, marcos e trilha de passos | [`78-fluxo-16-detalhe-andamento.png`](./screenshots/78-fluxo-16-detalhe-andamento.png) |
+| 54 | Registro do que foi feito (repetível, com foto) | [`79-fluxo-17-detalhe-registro-aberto.png`](./screenshots/79-fluxo-17-detalhe-registro-aberto.png) |
+| 55 | Conclusão do atendimento — exige descrever | [`80-fluxo-18-detalhe-conclusao.png`](./screenshots/80-fluxo-18-detalhe-conclusao.png) |
+| 56 | AGUARDANDO_CONFERÊNCIA visto pela escola | [`81-fluxo-19-detalhe-conferencia-escola.png`](./screenshots/81-fluxo-19-detalhe-conferencia-escola.png) |
+| 57 | Contestação — texto obrigatório, foto opcional | [`82-fluxo-20-detalhe-contestacao.png`](./screenshots/82-fluxo-20-detalhe-contestacao.png) |
+| 58 | RESOLVIDO com a conferência da escola registrada | [`83-fluxo-21-detalhe-resolvido.png`](./screenshots/83-fluxo-21-detalhe-resolvido.png) |
+| 59 | Chamado reaberto — registro anterior preservado, etiqueta "reaberto 1x" | [`84-fluxo-22-detalhe-reaberto.png`](./screenshots/84-fluxo-22-detalhe-reaberto.png) |
+| 60 | Sino com o aviso de reabertura para admin e técnico | [`85-fluxo-23-sino-notificacao-reabertura.png`](./screenshots/85-fluxo-23-sino-notificacao-reabertura.png) |
+| 61 | COMUNICADO — pergunta da matriz para a escola | [`86-fluxo-24-detalhe-comunicado.png`](./screenshots/86-fluxo-24-detalhe-comunicado.png) |
+| 62 | Avaliação — só aparece depois que a escola conferiu | [`87-fluxo-25-avaliacao-painel.png`](./screenshots/87-fluxo-25-avaliacao-painel.png) |
 
-> **Sobre os prints 38 a 62.** Capturados do frontend real rodando
+> **Sobre os prints 63 a 87.** Capturados do frontend real rodando
 > (`localhost:5173`) contra um **mock do backend**, sem banco de dados — o portal
 > foi percorrido de verdade, clicando nos botões do fluxo (aceitar, registrar,
 > concluir, conferir, contestar). As telas, os estados, as mensagens de erro e as

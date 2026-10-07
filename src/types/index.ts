@@ -176,6 +176,7 @@ export interface Chamado {
   mensagens?: ChamadoMensagem[]
   /** Quantas vezes a escola contestou e o chamado voltou para ABERTO. */
   reaberturas?: number
+  /** Técnico assumiu o chamado neste ciclo. */
   aceitoEm?: string | null
   aceitoPor?: string | null
   /** Técnico registrou a conclusão (bola com a escola). */

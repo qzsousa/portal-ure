@@ -88,12 +88,12 @@ O solicitante não precisa de conta. Preenche um assistente por categoria; as
 perguntas são configuráveis pela matriz em *Configurações → Formulário*, e cada
 opção pode disparar um alerta (inclusive mandando para a categoria certa).
 
-![Abertura de chamado](screenshots/38-fluxo-01-abrir-chamado.png)
+![Abertura de chamado](screenshots/63-fluxo-01-abrir-chamado.png)
 
 Ao escolher **Equipamento**, aparecem as perguntas dinâmicas. A opção escolhida
 pode mostrar um aviso — aqui, "Roteador / Switch" sugere a categoria Rede:
 
-![Perguntas dinâmicas de equipamento](screenshots/40-fluxo-03-abrir-chamado-perguntas.png)
+![Perguntas dinâmicas de equipamento](screenshots/65-fluxo-03-abrir-chamado-perguntas.png)
 
 A última etapa pede identificação e devolve o **protocolo** (`CH-AAAAMMDD-NNNN`).
 Esse número é a credencial de acompanhamento, junto com o e-mail informado.
@@ -117,7 +117,7 @@ Se não houver técnico cadastrado para a unidade, nada quebra: o chamado segue
 O técnico abre o chamado e vê o botão **Aceitar chamado**. O caminho de aceite
 é o único que libera os próximos passos.
 
-![Chamado encaminhado aguardando aceite](screenshots/52-fluxo-15-detalhe-encaminhado-aceitar.png)
+![Chamado encaminhado aguardando aceite](screenshots/77-fluxo-15-detalhe-encaminhado-aceitar.png)
 
 Repare nos três cartões de marco no rodapé do modal: *Aceito*, *Concluído pelo
 técnico* e *Conferido pela escola* — todos vazios. Eles vão se preenchendo
@@ -132,7 +132,7 @@ Aqui é onde mora a maior parte do trabalho. O técnico registra **cada etapa do
 serviço**, quantas vezes precisar. Cada envio vira uma linha com a data e a hora
 do servidor.
 
-![Chamado em atendimento com registros](screenshots/53-fluxo-16-detalhe-andamento.png)
+![Chamado em atendimento com registros](screenshots/78-fluxo-16-detalhe-andamento.png)
 
 A trilha no topo da caixa *Atendimento* mostra onde o chamado está:
 
@@ -150,11 +150,11 @@ depois.
 
 O formulário de registro, aberto:
 
-![Registrando o que foi feito](screenshots/54-fluxo-17-detalhe-registro-aberto.png)
+![Registrando o que foi feito](screenshots/79-fluxo-17-detalhe-registro-aberto.png)
 
 E a conclusão, que exige o mesmo texto (é o que a escola vai ler):
 
-![Concluindo o atendimento](screenshots/55-fluxo-18-detalhe-conclusao.png)
+![Concluindo o atendimento](screenshots/80-fluxo-18-detalhe-conclusao.png)
 
 ---
 
@@ -163,7 +163,7 @@ E a conclusão, que exige o mesmo texto (é o que a escola vai ler):
 Esta é a etapa que **não existia** antes do fluxo novo. O técnico não encerra o
 chamado: ele entrega o serviço, e quem confirma é a unidade que abriu.
 
-![Conferência do atendimento pela escola](screenshots/56-fluxo-19-detalhe-conferencia-escola.png)
+![Conferência do atendimento pela escola](screenshots/81-fluxo-19-detalhe-conferencia-escola.png)
 
 A escola tem dois botões, e a escolha é irreversível no caminho feliz:
 
@@ -175,7 +175,7 @@ A escola tem dois botões, e a escolha é irreversível no caminho feliz:
 A contestação exige o texto do que faltou (é ele que orienta o retrabalho); a
 foto é opcional:
 
-![Contestação reabrindo o chamado](screenshots/57-fluxo-20-detalhe-contestacao.png)
+![Contestação reabrindo o chamado](screenshots/82-fluxo-20-detalhe-contestacao.png)
 
 ---
 
@@ -184,17 +184,17 @@ foto é opcional:
 Depois de aprovada, o chamado fica `RESOLVIDO` com a linha de aprovação na
 timeline e o cartão "Conferido pela escola" preenchido:
 
-![Chamado concluído e conferido](screenshots/58-fluxo-21-detalhe-resolvido.png)
+![Chamado concluído e conferido](screenshots/83-fluxo-21-detalhe-resolvido.png)
 
 Quando a escola contesta, o chamado volta para `ABERTO` **preservando tudo**: o
 registro da tentativa anterior continua na timeline, marcado como "reaberto Nx",
 e o técnico precisa **aceitar de novo** para registrar e concluir outra vez.
 
-![Chamado reaberto após contestação](screenshots/59-fluxo-22-detalhe-reaberto.png)
+![Chamado reaberto após contestação](screenshots/84-fluxo-22-detalhe-reaberto.png)
 
 O administrador e o técnico responsável recebem o aviso no sino:
 
-![Notificação de reabertura](screenshots/60-fluxo-23-sino-notificacao-reabertura.png)
+![Notificação de reabertura](screenshots/85-fluxo-23-sino-notificacao-reabertura.png)
 
 ---
 
@@ -203,7 +203,7 @@ O administrador e o técnico responsável recebem o aviso no sino:
 Quem abriu o chamado acompanha tudo pela tela pública de consulta, com
 **protocolo + e-mail** (o protocolo sozinho é sequencial e adivinhável).
 
-![Consulta de protocolo com registros de atendimento](screenshots/42-fluxo-05-consulta-protocolo.png)
+![Consulta de protocolo com registros de atendimento](screenshots/67-fluxo-05-consulta-protocolo.png)
 
 O bloco **Atendimento** mostra os mesmos registros datados que a matriz vê, com
 os anexos. É o que responde "já vieram? o que trocaram?" sem precisar ligar na
@@ -211,7 +211,7 @@ escola.
 
 Depois de reaberto, o solicitante vê a contestação na mesma tela:
 
-![Consulta de protocolo de chamado reaberto](screenshots/43-fluxo-06-consulta-protocolo-reaberto.png)
+![Consulta de protocolo de chamado reaberto](screenshots/68-fluxo-06-consulta-protocolo-reaberto.png)
 
 ---
 
@@ -224,39 +224,39 @@ O mesmo chamado aparece diferente conforme quem abre.
 Visão agregada de toda a URE. Serve para transparência e é o único lugar que
 mostra os **6 status** lado a lado:
 
-![Painel geral de chamados](screenshots/44-fluxo-07-painel-publico-matriz.png)
+![Painel geral de chamados](screenshots/69-fluxo-07-painel-publico-matriz.png)
 
 O painel do dirigente é a versão com nota média de atendimento e ranking de
 unidades:
 
-![Painel do dirigente](screenshots/45-fluxo-08-painel-dirigente.png)
+![Painel do dirigente](screenshots/70-fluxo-08-painel-dirigente.png)
 
 ### Escola (GESTOR / VISUALIZADOR)
 
 O painel da escola é o do próprio equipamento e dos próprios chamados — sem
 número da URE, sem outros técnicos:
 
-![Painel da escola](screenshots/47-fluxo-10-painel-escola.png)
+![Painel da escola](screenshots/72-fluxo-10-painel-escola.png)
 
 Na listagem, a escola vê **só os chamados da sua unidade**:
 
-![Chamados da escola](screenshots/48-fluxo-11-chamados-escola.png)
+![Chamados da escola](screenshots/73-fluxo-11-chamados-escola.png)
 
 ### Matriz (ADMIN / TÉCNICO)
 
 O painel da matriz tem o inventário de toda a rede e as notas de atendimento:
 
-![Painel da matriz](screenshots/49-fluxo-12-painel-matriz.png)
+![Painel da matriz](screenshots/74-fluxo-12-painel-matriz.png)
 
 A listagem tem todos os chamados da URE, com checkbox para ação em lote. Os chips
 no topo são as **etapas do fluxo**, na ordem em que o chamado passa por elas:
 
-![Chamados da matriz](screenshots/50-fluxo-13-chamados-matriz.png)
+![Chamados da matriz](screenshots/75-fluxo-13-chamados-matriz.png)
 
 Filtro por uma etapa específica — a fila que mais some no dia a dia é a de
 conferência, porque ninguém está "trabalhando" nela:
 
-![Filtro por aguardando conferência](screenshots/51-fluxo-14-chamados-filtro-conferencia.png)
+![Filtro por aguardando conferência](screenshots/76-fluxo-14-chamados-filtro-conferencia.png)
 
 ---
 

@@ -194,6 +194,16 @@ Três decisões importantes:
 > "Seu perfil não tem permissão para gerar este relatório (disponível apenas
 > para ADMIN)."
 
+> **Sobre `/usuarios` e o GESTOR.** As três camadas: a rota e o item de menu
+> abrem para `ADMIN` e `GESTOR`; a tela trava *Perfil* e *Unidade escolar* e
+> esconde *Nova senha temporária*; e o backend restringe tudo à própria filial,
+> ignorando o `?filial=` da consulta e qualquer `nivel`/`filial` do corpo. São
+> **2 vagas** por unidade, com aviso na tela — os prints
+> [`42`](./screenshots/42-usuarios-gestor-unidade.png),
+> [`43`](./screenshots/43-usuarios-gestor-modal-perfil-travado.png) e
+> [`44`](./screenshots/44-usuarios-gestor-limite-atingido.png) mostram os três
+> estados.
+
 ---
 
 ## O menu lateral

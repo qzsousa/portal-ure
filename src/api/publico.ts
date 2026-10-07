@@ -159,7 +159,7 @@ export interface DashboardMatriz {
   chamados: Chamado[]
   /**
    * Nota média do atendimento (só agregado). Ausente em backends antigos —
-   * o painel do dirigente mostra "—" enquanto isso.
+   * o painel do setor mostra "—" enquanto isso.
    */
   avaliacoes?: {
     total: number

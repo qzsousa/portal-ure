@@ -48,10 +48,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true, title: 'Painel geral' },
   },
   {
+    // Rota antiga "/dirigente" mantida: links antigos e prints do sistema
+    // anterior apontam para ela. O NOME visível é "Painel do Setor".
     path: '/dirigente',
     name: 'dirigente',
     component: () => import('@/views/publico/DashboardDirigenteView.vue'),
-    meta: { public: true, title: 'Painel do dirigente' },
+    meta: { public: true, title: 'Painel do Setor' },
   },
 
   // ---- Área autenticada (shell com sidebar/topbar) ----
