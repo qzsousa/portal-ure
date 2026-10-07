@@ -1713,9 +1713,7 @@ onMounted(() => {
 /* Busca de chamado por protocolo */
 .busca-chamado {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 14px;
   padding: 16px 18px;
 }
@@ -1746,8 +1744,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
+  width: 100%;
 }
 
 .busca-campo {
@@ -1815,14 +1812,6 @@ onMounted(() => {
 }
 
 @media (max-width: 640px) {
-  .busca-chamado {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .busca-grupo {
-    min-width: 0;
-    width: 100%;
-  }
   .contato {
     flex-direction: column;
     align-items: stretch;
