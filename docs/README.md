@@ -27,6 +27,7 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | Fazer uma manutenção comum | [11 · Manutenção e checklists](./11-manutencao-e-checklists.md) |
 | Decifrar siglas e nomes próprios | [12 · Glossário](./12-glossario.md) |
 | **Entender a avaliação de atendimento** (do fechamento à nota) | **[13 · Avaliação de atendimento](./13-avaliacao-de-atendimento.md)** |
+| **Entender o aceite e a conclusão pelo técnico** (carimbos de horário) | **[14 · Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md)** |
 
 ---
 
@@ -86,6 +87,19 @@ sistema rodando com dados reais.
 | 35 | Equipamentos — **escola FILHA**: banner de compartilhamento, sem "Adicionar equipamento" e sem Editar/Remover | [`35-equipamentos-escola-filha-somente-leitura.png`](./screenshots/35-equipamentos-escola-filha-somente-leitura.png) |
 | 36 | Equipamentos — **escola MÃE** do mesmo grupo: sem banner, com "Adicionar equipamento" e Editar/Remover | [`36-equipamentos-escola-mae-com-edicao.png`](./screenshots/36-equipamentos-escola-mae-com-edicao.png) |
 | 37 | Login usado no teste dos perfis MÃE/FILHA | [`37-login-teste.png`](./screenshots/37-login-teste.png) |
+
+### Aceite e conclusão pelo técnico
+
+| # | Tela | Arquivo |
+|---|---|---|
+| 38 | Chamados — botão **Aceitar** na linha do chamado encaminhado | [`38-chamados-aceitar-lista.png`](./screenshots/38-chamados-aceitar-lista.png) |
+| 39 | Detalhe — botão grande **Aceitar chamado** no topo do modal | [`39-chamado-aceitar-modal.png`](./screenshots/39-chamado-aceitar-modal.png) |
+| 40 | Detalhe — após o aceite: horário assumido + botão **Concluir chamado** | [`40-chamado-concluir-modal.png`](./screenshots/40-chamado-concluir-modal.png) |
+| 41 | Detalhe concluído — carimbos **Aceito em** / **Concluído em** e linha do tempo | [`41-chamado-carimbos.png`](./screenshots/41-chamado-carimbos.png) |
+
+> **Sobre os prints 38 a 41.** Capturados com o usuário de teste
+> `teste.tecnico@local.com` (perfil TÉCNICO) e chamados sintéticos `CH-TESTE-*`
+> encaminhados para ele — ver [Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md).
 
 > **Sobre os prints 35 e 36.** Capturados com o portal local e **dois usuários
 > de teste do mesmo grupo de escolas irmãs** (`E.E. CESAR DONATO CALABREZ /

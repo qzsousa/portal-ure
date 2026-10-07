@@ -153,7 +153,12 @@ Duas consequências que afetam o tratamento de erro:
 | GET | `/chamados/encaminhar/tecnicos/:id` | opções que atendem a unidade |
 | GET | `/chamados/filtros/tecnicos` | select "Técnico" do filtro |
 | POST | `/chamados/:id/encaminhar` | "Encaminhar para técnico" |
+| POST | `/chamados/:id/aceitar` | botão "Aceitar" do técnico (carimba `aceitoEm`) |
 | GET | `/dashboard/stats` | KPIs de `ChamadosView` e aba Integrações |
+
+> O `PATCH /chamados/:id/status` (e o `/batch`) também carimba `concluidoEm` na
+> 1ª ida para `RESOLVIDO` e zera se o chamado for reaberto — ver
+> [14 · Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md).
 
 > `/chamados` aceita `page`, `limit`, `unidade`, `categoria`, `categoriaChave`,
 > `status`, `urgencia` e `responsavel`. **Filtros vazios são removidos antes do

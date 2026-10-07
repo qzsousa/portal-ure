@@ -410,6 +410,14 @@ Clicar na descrição expande/recua o texto (funciona bem no celular).
 | **Adicionar resposta ao histórico** | Input + "Registrar" |
 | **Excluir** | Só ADMIN (restrição do backend) |
 
+**Ações rápidas do técnico** (só para o TÉCNICO responsável pelo chamado — ver
+[14 · Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md)):
+
+| Ação | Quando |
+|---|---|
+| **Aceitar** (botão azul, na linha e no topo do modal) | Chamado encaminhado para ele e ainda sem `aceitoEm`. Carimba o horário e tira de *Aberto* para *Em atendimento*. |
+| **Concluir** (botão verde, mesmos lugares) | Depois de aceitar. Carimba `concluidoEm` e marca *Concluído*. O detalhe passa a mostrar "Aceito em" e "Concluído em". |
+
 **Ações da escola:**
 
 | Ação | Quando |
