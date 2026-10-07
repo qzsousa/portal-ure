@@ -68,6 +68,15 @@ export async function atualizarStatusChamado(id: string, payload: AtualizarStatu
   return data
 }
 
+/**
+ * O técnico aceita um chamado encaminhado para ele (botão "Aceitar chamado").
+ * O backend carimba `aceitoEm` e tira o chamado de "Aberto". Idempotente.
+ */
+export async function aceitarChamado(id: string): Promise<Chamado> {
+  const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/aceitar`)
+  return data
+}
+
 export interface ResponderChamadoPayload {
   texto: string
   anexos?: AnexoMensagemPayload[]

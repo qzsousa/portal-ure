@@ -101,6 +101,10 @@ export interface Chamado {
    * — chamado antigo vem sem a chave.
    */
   categoriaChave?: string | null
+  /** Quando o técnico aceitou o chamado (botão "Aceitar"). Null = ainda não assumiu. */
+  aceitoEm?: string | null
+  /** Quando o chamado foi concluído (status -> RESOLVIDO). Null se reaberto. */
+  concluidoEm?: string | null
   mensagens?: ChamadoMensagem[]
   /**
    * Avaliação do atendimento, quando existe (só no detalhe do chamado).

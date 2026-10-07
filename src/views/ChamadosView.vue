@@ -5,6 +5,8 @@ import type { AxiosError } from 'axios'
 import { apiError } from '@/utils/apiError'
 import {
   AlertTriangle,
+  Check,
+  CheckCheck,
   CheckCircle2,
   ClipboardList,
   Clock,
@@ -28,6 +30,7 @@ import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
+  aceitarChamado,
   atualizarChamadosEmLote,
   atualizarStatusChamado,
   deletarChamado,
@@ -279,7 +282,73 @@ const filtros = reactive<FiltrosChamado>({
 /* Matriz (ADMIN/TECNICO) tem controle total; escola (GESTOR/VISUALIZADOR) só responde e conclui. */
 const ehMatriz = computed(() => ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || ''))
 const ehEscola = computed(() => ['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
+const ehTecnico = computed(() => auth.user?.nivel === 'TECNICO')
 const podeLote = computed(() => ehMatriz.value)
+
+/* ------- Aceitar / concluir rápido (técnico, pensado para o celular) ------- */
+
+/**
+ * O chamado está ENCAMINHADO PARA O TÉCNICO LOGADO? O vínculo é o nome gravado
+ * em `responsavel` pelo encaminhamento (manual ou automático) — o backend
+ * valida de novo na hora de aceitar/concluir.
+ */
+function ehDoTecnico(c: Chamado): boolean {
+  return ehTecnico.value && !!auth.user?.nome && c.responsavel === auth.user.nome
+}
+
+/** Encaminhado e ainda não aceito: mostra "Aceitar chamado". */
+function podeAceitar(c: Chamado): boolean {
+  return ehDoTecnico(c) && !c.aceitoEm && c.status !== 'RESOLVIDO'
+}
+
+/** Já aceito e não concluído: mostra "Concluir chamado". */
+function podeConcluirTecnico(c: Chamado): boolean {
+  return ehDoTecnico(c) && !!c.aceitoEm && c.status !== 'RESOLVIDO'
+}
+
+/** Id do chamado com ação rápida em voo — trava o botão contra toque duplo. */
+const acaoRapidaEmAndamento = ref<string | null>(null)
+
+/** Reflete o chamado atualizado na linha da tabela e no modal, se for o aberto. */
+function refletirAtualizacao(atualizado: Chamado) {
+  const i = estado.items.findIndex((x) => x.id === atualizado.id)
+  if (i >= 0) estado.items[i] = { ...estado.items[i], ...atualizado }
+  if (detalhe.value?.id === atualizado.id) {
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+  }
+}
+
+async function aceitarChamadoRapido(c: Chamado) {
+  if (acaoRapidaEmAndamento.value) return
+  acaoRapidaEmAndamento.value = c.id
+  try {
+    const atualizado = await aceitarChamado(c.id)
+    refletirAtualizacao(atualizado)
+    ui.success(`Chamado ${atualizado.protocolo} aceito — você é o responsável pelo atendimento.`)
+    await Promise.all([carregar(true), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao aceitar o chamado.'))
+  } finally {
+    acaoRapidaEmAndamento.value = null
+  }
+}
+
+async function concluirChamadoTecnico(c: Chamado) {
+  if (acaoRapidaEmAndamento.value) return
+  if (!window.confirm(`Concluir o chamado #${c.protocolo}?`)) return
+  acaoRapidaEmAndamento.value = c.id
+  try {
+    const atualizado = await atualizarStatusChamado(c.id, { status: 'RESOLVIDO' })
+    refletirAtualizacao(atualizado)
+    ui.success(`Chamado ${atualizado.protocolo} concluído.`)
+    await Promise.all([carregar(true), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao concluir o chamado.'))
+  } finally {
+    acaoRapidaEmAndamento.value = null
+  }
+}
 
 /* ---------- Seleção múltipla (batch) ---------- */
 const selecionados = ref<Set<string>>(new Set())
@@ -698,7 +767,7 @@ interface EntradaHistorico {
 function tomDaEntrada(texto: string): TomTimeline {
   const t = texto.toLowerCase()
   if (t.includes('resolvido') || t.includes('concluído') || t.includes('concluido')) return 'green'
-  if (t.includes('status alterado')) return 'blue'
+  if (t.includes('status alterado') || t.includes('aceito por')) return 'blue'
   if (t.includes('respond') || t.includes('comunicado')) return 'purple'
   return 'slate'
 }
@@ -1011,17 +1080,42 @@ useAutoRefresh(async () => {
               >{{ c.descricao }}</td>
               <td><StatusPill :status="rotuloStatusChamado(c.status)" /></td>
               <td class="td-acoes">
-                <RowActions
-                  :itens="[
-                    { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
-                    ...(ehMatriz
-                      ? [
-                          { rotulo: 'Encaminhar para técnico', icone: UserPlus, acao: () => abrirEncaminhar(c) },
-                          { rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) },
-                        ]
-                      : []),
-                  ]"
-                />
+                <div class="acoes-linha">
+                  <!-- Ação rápida do técnico: botão grande e visível, pensado para o celular -->
+                  <button
+                    v-if="podeAceitar(c)"
+                    class="btn-acao btn-aceitar"
+                    type="button"
+                    :disabled="acaoRapidaEmAndamento === c.id"
+                    @click="aceitarChamadoRapido(c)"
+                  >
+                    <Loader2 v-if="acaoRapidaEmAndamento === c.id" class="spin" :size="15" />
+                    <Check v-else :size="15" />
+                    Aceitar
+                  </button>
+                  <button
+                    v-else-if="podeConcluirTecnico(c)"
+                    class="btn-acao btn-concluir"
+                    type="button"
+                    :disabled="acaoRapidaEmAndamento === c.id"
+                    @click="concluirChamadoTecnico(c)"
+                  >
+                    <Loader2 v-if="acaoRapidaEmAndamento === c.id" class="spin" :size="15" />
+                    <CheckCheck v-else :size="15" />
+                    Concluir
+                  </button>
+                  <RowActions
+                    :itens="[
+                      { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
+                      ...(ehMatriz
+                        ? [
+                            { rotulo: 'Encaminhar para técnico', icone: UserPlus, acao: () => abrirEncaminhar(c) },
+                            { rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) },
+                          ]
+                        : []),
+                    ]"
+                  />
+                </div>
               </td>
             </tr>
           </tbody>
@@ -1042,6 +1136,36 @@ useAutoRefresh(async () => {
       @fechar="detalheAberto = false"
     >
       <div v-if="detalhe" class="detalhe">
+        <!-- Ação do técnico: primeira coisa do modal, botão grande para o celular -->
+        <div v-if="podeAceitar(detalhe) || podeConcluirTecnico(detalhe)" class="acao-tecnico">
+          <button
+            v-if="podeAceitar(detalhe)"
+            class="btn-acao btn-aceitar btn-acao-grande"
+            type="button"
+            :disabled="acaoRapidaEmAndamento === detalhe.id"
+            @click="aceitarChamadoRapido(detalhe)"
+          >
+            <Loader2 v-if="acaoRapidaEmAndamento === detalhe.id" class="spin" :size="20" />
+            <Check v-else :size="20" />
+            {{ acaoRapidaEmAndamento === detalhe.id ? 'Aceitando...' : 'Aceitar chamado' }}
+          </button>
+          <template v-else>
+            <p class="acao-tecnico-info">
+              Você aceitou este chamado em <strong>{{ formatDateTime(detalhe.aceitoEm!) }}</strong>.
+            </p>
+            <button
+              class="btn-acao btn-concluir btn-acao-grande"
+              type="button"
+              :disabled="acaoRapidaEmAndamento === detalhe.id"
+              @click="concluirChamadoTecnico(detalhe)"
+            >
+              <Loader2 v-if="acaoRapidaEmAndamento === detalhe.id" class="spin" :size="20" />
+              <CheckCheck v-else :size="20" />
+              {{ acaoRapidaEmAndamento === detalhe.id ? 'Concluindo...' : 'Concluir chamado' }}
+            </button>
+          </template>
+        </div>
+
         <dl class="detalhe-grid">
           <div><dt>Unidade</dt><dd>{{ detalhe.unidade }}</dd></div>
           <div class="full">
@@ -1066,6 +1190,8 @@ useAutoRefresh(async () => {
           <div><dt>Urgência</dt><dd>{{ detalhe.urgencia }}</dd></div>
           <div><dt>Responsável</dt><dd>{{ detalhe.responsavel || '—' }}</dd></div>
           <div><dt>Status atual</dt><dd><StatusPill :status="rotuloStatusChamado(detalhe.status)" /></dd></div>
+          <div v-if="detalhe.aceitoEm"><dt>Aceito em</dt><dd>{{ formatDateTime(detalhe.aceitoEm) }}</dd></div>
+          <div v-if="detalhe.concluidoEm"><dt>Concluído em</dt><dd>{{ formatDateTime(detalhe.concluidoEm) }}</dd></div>
         </dl>
 
         <div class="descricao-box">
@@ -2115,6 +2241,95 @@ tr.selecionado td {
 
   .detalhe-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Ação rápida do técnico (aceitar/concluir) ---------- */
+
+.acoes-linha {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-acao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    transform 0.05s ease;
+}
+
+.btn-acao:active {
+  transform: translateY(1px);
+}
+
+.btn-acao:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-aceitar {
+  background: var(--blue);
+}
+
+.btn-aceitar:hover {
+  background: #1d4ed8;
+}
+
+.btn-concluir {
+  background: var(--green);
+}
+
+.btn-concluir:hover {
+  background: #15803d;
+}
+
+/*
+ * Bloco no topo do modal de detalhes — é a ação principal do técnico e precisa
+ * ser impossível de não ver no celular: botão de largura total e alvo de
+ * toque alto (52px+).
+ */
+.acao-tecnico {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  border: 1.5px solid var(--border);
+}
+
+.acao-tecnico-info {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.btn-acao-grande {
+  width: 100%;
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>
