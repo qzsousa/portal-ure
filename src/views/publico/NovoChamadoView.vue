@@ -1713,7 +1713,7 @@ onMounted(() => {
 /* Busca de chamado por protocolo */
 .busca-chamado {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 14px;
@@ -1746,14 +1746,16 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 0 1 300px;
-  min-width: 260px;
+  flex: 1;
+  min-width: 0;
 }
 
 .busca-campo {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+  min-width: 0;
 }
 
 .busca-campo label {
