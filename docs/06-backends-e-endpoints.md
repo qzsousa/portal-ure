@@ -155,6 +155,28 @@ Duas consequências que afetam o tratamento de erro:
 | POST | `/chamados/:id/encaminhar` | "Encaminhar para técnico" |
 | GET | `/dashboard/stats` | KPIs de `ChamadosView` e aba Integrações |
 
+##### Fluxo de atendimento
+
+Os quatro passos do fluxo são endpoints **separados** (e não um `PATCH /status`
+genérico) porque cada um tem permissão, pré-condição, registro obrigatório e
+notificação própria:
+
+| Método | Rota | Quem pode | O que faz |
+|---|---|---|---|
+| POST | `/chamados/:id/aceitar` | responsável, ou ADMIN | `ENCAMINHADO`/`ABERTO` → `ANDAMENTO`, carimba `aceitoEm` |
+| POST | `/chamados/:id/atividades` | responsável, ou ADMIN | registra o que foi feito (repetível, com data/hora do servidor) |
+| POST | `/chamados/:id/concluir` | responsável, ou ADMIN | → `AGUARDANDO_CONFERENCIA`; exige `descricaoResolucao` |
+| POST | `/chamados/:id/conferir` | GESTOR/VISUALIZADOR da unidade | `{aprovado:true}` → `RESOLVIDO`; `{aprovado:false}` → reabre para `ABERTO` e conta `reaberturas++` |
+
+`atividades` e `conferir` respondem `409` se o chamado não estiver no estado
+certo, `conferir` exige texto na contestação (é ele que diz o que faltou) e
+`aceitar` recusa quem não é o responsável (`403`).
+
+> A escola **não** mexe no status por `PATCH /chamados/:id/status` — encerrar é
+> uma conferência, que valida se o técnico realmente concluiu antes de aceitar o
+> "ok" (ou reabre se não). Esse `PATCH` continua existindo para a matriz corrigir
+> status fora do fluxo.
+
 > `/chamados` aceita `page`, `limit`, `unidade`, `categoria`, `categoriaChave`,
 > `status`, `urgencia` e `responsavel`. **Filtros vazios são removidos antes do
 > envio** — o backend rejeita `''` em enums.
@@ -320,7 +342,11 @@ direto.
 |---|---|---|---|
 | Chamados — abertura de chamado | 25 MB (body) | Supabase Storage, bucket `anexos` | Permanente |
 | Chamados — pergunta/resposta | 5 MB por arquivo, 5 arquivos | mesmo bucket | **7 dias** |
+| Chamados — registro de atendimento | 5 MB por arquivo, 5 arquivos | mesmo bucket, pasta `atividades/` | **Permanente** |
 | SCE — boletim de ocorrência | 8 MB (limite do servidor), 10 MB (body) | mesmo bucket | Permanente |
+
+O anexo do registro de atendimento **não expira**, ao contrário da conversa: ele
+é a prova do serviço e a escola precisa conseguir conferir meses depois.
 
 O frontend converte o arquivo com `FileReader.readAsDataURL` e envia **só a parte
 base64** (sem o prefixo `data:…;base64,`):

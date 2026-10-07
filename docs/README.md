@@ -27,6 +27,7 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | Fazer uma manutenção comum | [11 · Manutenção e checklists](./11-manutencao-e-checklists.md) |
 | Decifrar siglas e nomes próprios | [12 · Glossário](./12-glossario.md) |
 | **Entender a avaliação de atendimento** (do fechamento à nota) | **[13 · Avaliação de atendimento](./13-avaliacao-de-atendimento.md)** |
+| **Ver o fluxo do chamado inteiro** (da abertura — conferência da escola) | **[14 — Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)** |
 
 ---
 
@@ -134,6 +135,51 @@ sistema rodando com dados reais.
 >
 > Os prints 01–06 e 07 usam o chamado **`CH-20260929-0006`**, criado durante a
 > captura para demonstrar o fluxo completo de ponta a ponta.
+
+### Fluxo de atendimento do chamado (38 a 62)
+
+O caminho completo de um chamado, do formulário público até a conferência da
+escola. Ver **[14 — Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)**.
+
+| # | Tela | Arquivo |
+|---|---|---|
+| 38 | Abertura de chamado — escolha de categoria | [`38-fluxo-01-abrir-chamado.png`](./screenshots/38-fluxo-01-abrir-chamado.png) |
+| 39 | Abertura — categoria *Equipamento* escolhida | [`39-fluxo-02-abrir-chamado-equipamento.png`](./screenshots/39-fluxo-02-abrir-chamado-equipamento.png) |
+| 40 | Abertura — perguntas dinâmicas com alerta e cascata de equipamento | [`40-fluxo-03-abrir-chamado-perguntas.png`](./screenshots/40-fluxo-03-abrir-chamado-perguntas.png) |
+| 41 | Abertura — etapa de identificação | [`41-fluxo-04-abrir-chamado-identificacao.png`](./screenshots/41-fluxo-04-abrir-chamado-identificacao.png) |
+| 42 | Consulta por protocolo — registros de atendimento visíveis ao solicitante | [`42-fluxo-05-consulta-protocolo.png`](./screenshots/42-fluxo-05-consulta-protocolo.png) |
+| 43 | Consulta — chamado reaberto, com a contestação da escola | [`43-fluxo-06-consulta-protocolo-reaberto.png`](./screenshots/43-fluxo-06-consulta-protocolo-reaberto.png) |
+| 44 | Painel geral público — os 6 status do fluxo | [`44-fluxo-07-painel-publico-matriz.png`](./screenshots/44-fluxo-07-painel-publico-matriz.png) |
+| 45 | Painel do dirigente — nota média e ranking de unidades | [`45-fluxo-08-painel-dirigente.png`](./screenshots/45-fluxo-08-painel-dirigente.png) |
+| 46 | Login | [`46-fluxo-09-login.png`](./screenshots/46-fluxo-09-login.png) |
+| 47 | Painel da escola (GESTOR) | [`47-fluxo-10-painel-escola.png`](./screenshots/47-fluxo-10-painel-escola.png) |
+| 48 | Chamados da escola — só a unidade dela | [`48-fluxo-11-chamados-escola.png`](./screenshots/48-fluxo-11-chamados-escola.png) |
+| 49 | Painel da matriz (ADMIN) | [`49-fluxo-12-painel-matriz.png`](./screenshots/49-fluxo-12-painel-matriz.png) |
+| 50 | Chamados da matriz — os chips são as etapas do fluxo | [`50-fluxo-13-chamados-matriz.png`](./screenshots/50-fluxo-13-chamados-matriz.png) |
+| 51 | Filtro por *Aguardando conferência* | [`51-fluxo-14-chamados-filtro-conferencia.png`](./screenshots/51-fluxo-14-chamados-filtro-conferencia.png) |
+| 52 | Detalhe ENCAMINHADO — botão **Aceitar chamado** | [`52-fluxo-15-detalhe-encaminhado-aceitar.png`](./screenshots/52-fluxo-15-detalhe-encaminhado-aceitar.png) |
+| 53 | Detalhe ANDAMENTO — registros datados, marcos e trilha de passos | [`53-fluxo-16-detalhe-andamento.png`](./screenshots/53-fluxo-16-detalhe-andamento.png) |
+| 54 | Registro do que foi feito (repetível, com foto) | [`54-fluxo-17-detalhe-registro-aberto.png`](./screenshots/54-fluxo-17-detalhe-registro-aberto.png) |
+| 55 | Conclusão do atendimento — exige descrever | [`55-fluxo-18-detalhe-conclusao.png`](./screenshots/55-fluxo-18-detalhe-conclusao.png) |
+| 56 | AGUARDANDO_CONFERÊNCIA visto pela escola | [`56-fluxo-19-detalhe-conferencia-escola.png`](./screenshots/56-fluxo-19-detalhe-conferencia-escola.png) |
+| 57 | Contestação — texto obrigatório, foto opcional | [`57-fluxo-20-detalhe-contestacao.png`](./screenshots/57-fluxo-20-detalhe-contestacao.png) |
+| 58 | RESOLVIDO com a conferência da escola registrada | [`58-fluxo-21-detalhe-resolvido.png`](./screenshots/58-fluxo-21-detalhe-resolvido.png) |
+| 59 | Chamado reaberto — registro anterior preservado, etiqueta "reaberto 1x" | [`59-fluxo-22-detalhe-reaberto.png`](./screenshots/59-fluxo-22-detalhe-reaberto.png) |
+| 60 | Sino com o aviso de reabertura para admin e técnico | [`60-fluxo-23-sino-notificacao-reabertura.png`](./screenshots/60-fluxo-23-sino-notificacao-reabertura.png) |
+| 61 | COMUNICADO — pergunta da matriz para a escola | [`61-fluxo-24-detalhe-comunicado.png`](./screenshots/61-fluxo-24-detalhe-comunicado.png) |
+| 62 | Avaliação — só aparece depois que a escola conferiu | [`62-fluxo-25-avaliacao-painel.png`](./screenshots/62-fluxo-25-avaliacao-painel.png) |
+
+> **Sobre os prints 38 a 62.** Capturados do frontend real rodando
+> (`localhost:5173`) contra um **mock do backend**, sem banco de dados — o portal
+> foi percorrido de verdade, clicando nos botões do fluxo (aceitar, registrar,
+> concluir, conferir, contestar). As telas, os estados, as mensagens de erro e as
+> regras de visibilidade são os do código de produção; **os dados são fictícios**
+> e nada foi gravado em nenhum banco.
+>
+> Ressalva de ambiente: a CSP do `index.html` fixa `connect-src` em
+> `localhost:10000` e `localhost:3000`, então o mock teve de rodar nessas
+> portas. Um backend de desenvolvimento em outra porta é bloqueado em silêncio.
+
 
 ---
 

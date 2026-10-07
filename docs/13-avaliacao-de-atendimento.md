@@ -42,28 +42,43 @@ Status muda para RESOLVIDO          ← o gatilho
 A tela recebe o status novo → bloco de avaliação se materializa
 ```
 
-### 1. O fechamento pode vir de dois lados
+### 1. O fechamento é sempre da escola, e passa pela conferência
 
-Quem muda o status para `RESOLVIDO`:
+Com o fluxo de atendimento, **quem muda para `RESOLVIDO` é a conferência** —
+não o técnico e não a matriz:
 
-| Quem | Pode mudar para | Por quê |
+| Quem | O que faz | Como |
 |---|---|---|
-| **Matriz** (ADMIN/TÉCNICO) | qualquer status | acompanha o atendimento |
-| **Escola** (GESTOR/VISUALIZADOR) | **só `RESOLVIDO`** | a escola apenas confirma que foi resolvido |
+| **Técnico** (ou ADMIN) | **conclui o atendimento** → `AGUARDANDO_CONFERENCIA` | `POST /chamados/:id/concluir` |
+| **Escola** (GESTOR/VISUALIZADOR) | **confirma** → `RESOLVIDO` | `POST /chamados/:id/conferir` com `{aprovado:true}` |
+| **Escola** | **contesta** → volta para `ABERTO` | `POST /chamados/:id/conferir` com `{aprovado:false, texto}` |
 
-A restrição é explícita no backend (`chamados.ts`): se o papel for
-`GESTOR`/`VISUALIZADOR` e o status novo for qualquer coisa diferente de
-`RESOLVIDO`, a resposta é `403` com *"A escola só pode alterar o chamado para
-Concluído"*.
+A escola não mexe mais no status por `PATCH /chamados/:id/status`: essa rota
+recusa com `403` para `GESTOR`/`VISUALIZADOR` e aponta a conferência. O motivo
+é que "a escola só pode concluir" permitsia que ela fechasse um serviço que o
+técnico **nunca concluiu** — não havia conferência nenhuma nesse caminho.
 
-No momento da conclusão o backend também grava — no mesmo `update`:
+A restrição continua valendo no `PATCH`: quem é matriz pode corrigir status
+fora do fluxo (erro de encaminhamento, chamado encerrado por decisão do setor),
+mas com a descrição da resolução obrigatória.
+
+No momento da conclusão o backend grava:
 
 - `tecnicoResolucao` — quem atendeu
 - `descricaoResolucao` — o que foi feito
+- `concluidoEm` — quando
+- uma **atividade** do tipo `CONCLUSAO` (a linha do tempo do atendimento)
 - uma linha no `historico`
 
-E dispara a notificação para a unidade (sino do portal), com o texto da
-resolução.
+E avisa a unidade no sino (com o texto da conclusão) e por e-mail.
+
+Na conferência aprovada, grava `conferidoEm`/`conferidoPor`, uma atividade
+`APROVACAO` (se houver comentário) e **avisa o técnico responsável** que o
+serviço foi validado.
+
+> **Avaliar exige conferência.** No modal, `podeAvaliar` exige `conferidoEm`
+> preenchido — não só `status === 'RESOLVIDO'`. É a diferença entre "terminado"
+> e "terminado e verificado por quem pediu".
 
 ### 2. A tela `/consulta` descobre sozinha
 

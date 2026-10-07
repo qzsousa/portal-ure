@@ -359,11 +359,13 @@ Rápido**, que só aparece para escola.
 
 A tela mais densa do sistema.
 
-**5 KPIs** (total, abertos, em atendimento, aguardando resposta, concluídos).
+**6 KPIs** (total, abertos, em atendimento, aguardando resposta, **aguardando
+conferência**, concluídos). O KPI de conferência existe porque é a fila em que
+o serviço já foi feito e **ninguém** fez nada ainda.
 
-**Chips de filtro rápido** — grupo 1 (seleção única): Todos, Abertos, Em
-atendimento, Aguardando resposta, Concluídos. Grupo 2 (alternadores): **Só
-urgentes**, **PortalNet**.
+**Chips de filtro rápido** — grupo 1 (seleção única): Todos, Abertos,
+Encaminhados, Em atendimento, Aguardando resposta, Aguardando conferência,
+Concluídos. Grupo 2 (alternadores): **Só urgentes**, **PortalNet**.
 
 **Toolbar** — busca por unidade, select de status, select de urgência, select de
 **categoria**, select de **técnico**, botão "Filtrar" e link dourado "Abrir
@@ -399,26 +401,53 @@ Clicar na descrição expande/recua o texto (funciona bem no celular).
 - **Histórico** — timeline vertical, rolada para o fim ao abrir, com cor por
   tipo de evento (verde para concluído, azul para mudança de status, roxo para
   resposta/comunicado)
+- **Atendimento** — a linha do tempo dos **registros datados**: o que o técnico
+  fez a cada visita, a conclusão, a contestação e a aprovação. Vem da tabela
+  `atividades`, então o horário é o do servidor (não é inferido do texto do
+  histórico). Etiqueta "reaberto Nx" no título quando houve contestação.
+- **Marcos do fluxo** — aceito / concluído pelo técnico / conferido pela escola,
+  com horário e nome de quem fez cada passo
 - **Perguntas e respostas** — a conversa com a escola
 
-**Ações da matriz:**
+### O fluxo dentro do modal
 
-| Ação | Detalhe |
-|---|---|
-| **Encaminhar para técnico** | Select com "Técnico da unidade (sugerido)" + optgroups "Atende esta unidade" (sempre primeiro) e "Outros técnicos". A lista é a **escala de atendimento** (`utils/tecnicos.ts`) e muda conforme a categoria do chamado. Observação opcional (500 chars) vai para o histórico. Se já houver responsável, pede confirmação. |
-| **Alterar status** | Select + "Salvar". Ao escolher *Aguardando resposta*, **exige** escrever a pergunta para a escola. Ao escolher *Concluído*, pede a descrição da resolução. |
-| **Adicionar resposta ao histórico** | Input + "Registrar" |
+```
+ABERTO ──▶ ENCAMINHADO ──▶ ANDAMENTO ──▶ AGUARDANDO_CONFERENCIA ──▶ RESOLVIDO
+  ▲                                                              (escola)
+  └──────────────── contestação da escola (+1 reabertura) ──────────┘
+```
+
+**Ações do técnico (e ADMIN):**
+
+| Ação | Quando | Observação |
+|---|---|---|
+| **Aceitar chamado** | `ABERTO`/`ENCAMINHADO` e sou o responsável | Carimba `aceitoEm` com a hora do servidor |
+| **Registrar o que foi feito** | Depois do aceite, antes da conferência | Repetível; texto + até 5 fotos. Cada envio é uma linha nova |
+| **Concluir atendimento** | Junto do registro anterior | Exige descrever o que foi feito — é o texto que a escola confere |
+| **Encaminhar para técnico** | Sempre | Select com "Técnico da unidade (sugerido)" + optgroups "Atende esta unidade" (sempre primeiro) e "Outros técnicos". A lista é a **escala de atendimento** (`utils/tecnicos.ts`) e muda conforme a categoria. Observação opcional (500 chars) vai para o histórico. Se já houver responsável, pede confirmação. |
+| **Alterar status** | Sempre | Correção para casos fora do fluxo. Ao escolher *Aguardando resposta*, **exige** a pergunta; ao escolher *Aguardando conferência*, **exige** a conclusão |
+| **Adicionar resposta ao histórico** | Sempre | Input + "Registrar" |
 | **Excluir** | Só ADMIN (restrição do backend) |
+
+Uma **trilha de passos** (Aceito → Registro → Concluído → Conferência) fica no
+topo da caixa "Atendimento": feito fica verde, o passo da vez fica azul.
 
 **Ações da escola:**
 
 | Ação | Quando |
 |---|---|
 | **Responder chamado** | Só quando o status é *Aguardando resposta*. Aceita anexos. |
-| **Concluir chamado** | Sempre que não estiver resolvido. |
+| **Conferência do atendimento** | Só quando o status é *Aguardando conferência*. Dois botões: **Ficou tudo certo** (encerra) e **Ficou faltando** (reabre). A contestação **exige** dizer o que faltou; foto é opcional. |
+| **Aguardando a equipe** | Nos outros estados — só um aviso, sem botão |
+
+> A escola **não encerra mais chamado** por conta própria: quem confirma é a
+> conferência, que valida se o técnico realmente concluiu. Se contestar, o
+> chamado volta para `ABERTO`, conta uma reabertura e **o administrador e o
+> técnico responsável recebem notificação no sino**.
 
 **Limites de anexo:** 5 MB por arquivo, 5 arquivos por mensagem, `image/*` e
-`.pdf`. Anexos de pergunta/resposta **expiram em 7 dias** (o backend apaga).
+`.pdf`. Anexos de pergunta/resposta **expiram em 7 dias** (o backend apaga); os
+dos registros de atendimento são **permanentes** (são a prova do serviço).
 
 **Deep link:** `?chamado=<id>` abre o modal direto. É assim que as notificações
 do sino trazem o usuário até o chamado certo.

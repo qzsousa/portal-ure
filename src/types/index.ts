@@ -53,7 +53,51 @@ export interface ChangePasswordRequest {
 
 /* ---------- Chamados ---------- */
 
-export type StatusChamado = 'ABERTO' | 'ANDAMENTO' | 'COMUNICADO' | 'RESOLVIDO'
+/**
+ * Fluxo do chamado (matriz → técnico → escola):
+ *
+ *   ABERTO ──encaminhar──▶ ENCAMINHADO ──aceitar──▶ ANDAMENTO
+ *                                                          │
+ *                                              concluir   ▼
+ *                                       AGUARDANDO_CONFERENCIA
+ *                                            │            │
+ *                             escola confirma│            │escola contesta
+ *                                            ▼            ▼
+ *                                        RESOLVIDO      ABERTO (+1 reabertura)
+ *
+ * `COMUNICADO` é a via paralela de pergunta/resposta entre matriz e escola.
+ * Espelha `StatusChamadoSchema` do backend (`shared/types/api.ts`).
+ */
+export type StatusChamado =
+  | 'ABERTO'
+  | 'ENCAMINHADO'
+  | 'ANDAMENTO'
+  | 'COMUNICADO'
+  | 'AGUARDANDO_CONFERENCIA'
+  | 'RESOLVIDO'
+
+/** Status que ainda não são finais — base dos KPIs e do filtro "em aberto". */
+export const STATUS_EM_ABERTO: StatusChamado[] = [
+  'ABERTO',
+  'ENCAMINHADO',
+  'ANDAMENTO',
+  'COMUNICADO',
+  'AGUARDANDO_CONFERENCIA',
+]
+
+export function chamadoEmAberto(status: StatusChamado): boolean {
+  return status !== 'RESOLVIDO'
+}
+
+/** Tipo do registro datado que fica na linha do tempo do atendimento. */
+export type TipoAtividade = 'REGISTRO' | 'CONCLUSAO' | 'CONTESTACAO' | 'APROVACAO'
+
+export const ROTULO_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
+  REGISTRO: 'Registro de atendimento',
+  CONCLUSAO: 'Conclusão',
+  CONTESTACAO: 'Contestação da escola',
+  APROVACAO: 'Conferência aprovada',
+}
 
 /** Anexo temporário de uma mensagem (expira 7 dias após o envio — o backend remove do banco/storage). */
 export interface ChamadoMensagemAnexo {
@@ -76,6 +120,32 @@ export interface ChamadoMensagem {
   anexos: ChamadoMensagemAnexo[]
 }
 
+/**
+ * Anexo do registro de atendimento. Não expira como o da conversa: é a prova
+ * do que foi feito no equipamento, então fica disponível para sempre.
+ */
+export interface ChamadoAtividadeAnexo {
+  id: string
+  nome: string
+  tipo?: string | null
+  url: string
+}
+
+/**
+ * Registro datado do atendimento — o que o técnico fez, a conclusão, a
+ * contestação da escola e a aprovação final. Vem em ordem cronológica e é o que
+ * dá o horário real de cada passo (o `historico` em texto é só o rastro legível).
+ */
+export interface ChamadoAtividade {
+  id: string
+  tipo: TipoAtividade
+  autorNome: string
+  autorNivel?: string | null
+  texto: string
+  criadoEm: string
+  anexos: ChamadoAtividadeAnexo[]
+}
+
 export interface Chamado {
   id: string
   protocolo: string
@@ -89,6 +159,8 @@ export interface Chamado {
   anexoUrl?: string | null
   status: StatusChamado
   responsavel?: string | null
+  /** Id do usuário responsável — é o que permite avisar o técnico na reabertura. */
+  responsavelId?: string | null
   ultimaAtualizacao: string
   historico?: string | null
   tecnicoResolucao?: string | null
@@ -102,6 +174,17 @@ export interface Chamado {
    */
   categoriaChave?: string | null
   mensagens?: ChamadoMensagem[]
+  /** Quantas vezes a escola contestou e o chamado voltou para ABERTO. */
+  reaberturas?: number
+  aceitoEm?: string | null
+  aceitoPor?: string | null
+  /** Técnico registrou a conclusão (bola com a escola). */
+  concluidoEm?: string | null
+  /** Escola confirmou que ficou tudo certo — é o que de fato encerra o chamado. */
+  conferidoEm?: string | null
+  conferidoPor?: string | null
+  /** Registros datados do atendimento — só no detalhe (`GET /chamados/:id`). */
+  atividades?: ChamadoAtividade[]
   /**
    * Avaliação do atendimento, quando existe (só no detalhe do chamado).
    * Ausente na listagem — o backend inclui apenas em `GET /chamados/:id`.

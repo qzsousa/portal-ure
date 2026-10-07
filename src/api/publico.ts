@@ -89,6 +89,23 @@ export interface MensagemConversa {
   anexos: MensagemConversaAnexo[]
 }
 
+/** Anexo do registro de atendimento (permanente, não expira como o da conversa). */
+export interface AtividadeAnexo {
+  nome: string
+  tipo?: string | null
+  url: string
+}
+
+/** Registro datado do atendimento, visível ao solicitante na consulta pública. */
+export interface AtividadePublica {
+  id: string
+  tipo: 'REGISTRO' | 'CONCLUSAO' | 'CONTESTACAO' | 'APROVACAO'
+  autorNome: string
+  texto: string
+  criadoEm: string
+  anexos: AtividadeAnexo[]
+}
+
 export interface ChamadoPublico {
   protocolo: string
   unidade: string
@@ -97,12 +114,16 @@ export interface ChamadoPublico {
   status: string
   descricao: string
   descricaoResolucao: string | null
+  /** Quantas vezes a unidade contestou e o chamado voltou para ABERTO. */
+  reaberturas: number
   anexoUrl: string | null
   timestamp: string
   ultimaAtualizacao: string
   avaliacao?: AvaliacaoChamado | null
   /** Conversa matriz ↔ unidade (perguntas e respostas do chamado). */
   mensagens?: MensagemConversa[]
+  /** O que a equipe registrou no atendimento, com data e hora de cada passo. */
+  atividades?: AtividadePublica[]
 }
 
 /**
@@ -123,9 +144,12 @@ export async function consultarChamadoPorProtocolo(protocolo: string, email: str
 
 export interface MatrizKpis {
   total: number
+  /** ABERTO + ENCAMINHADO: fila que ainda não começou a ser executada. */
   abertos: number
   andamento: number
   comunicado: number
+  /** Técnico concluiu, a escola ainda não conferiu. */
+  aguardandoConferencia: number
   resolvidos: number
   altaPrioridade: number
 }

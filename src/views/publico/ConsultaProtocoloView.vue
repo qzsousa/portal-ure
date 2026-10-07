@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { AxiosError } from 'axios'
-import { Heart, Loader2, Mail, MessageSquareText, Paperclip, Search, SearchX, Send, Star } from '@lucide/vue'
+import { ClipboardList, Heart, Loader2, Mail, MessageSquareText, Paperclip, Search, SearchX, Send, Star } from '@lucide/vue'
 import PublicoLayout from '@/components/publico/PublicoLayout.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
@@ -11,6 +11,7 @@ import {
   type ChamadoPublico,
 } from '@/api/publico'
 import { rotuloStatusChamado } from '@/api/chamados'
+import { ROTULO_TIPO_ATIVIDADE } from '@/types'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 
 const protocolo = ref('')
@@ -250,6 +251,42 @@ function formatarData(ts: string | null | undefined): string {
         <h3>O que foi relatado</h3>
         <p>{{ resultado.descricao }}</p>
       </div>
+
+      <!--
+           Linha do tempo do atendimento: o solicitante tem direito de ler o que
+           fizeram no equipamento dele, com a data e hora de cada passo. É o que
+           responde "já vieram? o que trocaram?" sem precisar ligar na escola.
+      -->
+      <section v-if="resultado.atividades?.length" class="atendimento">
+        <h3 class="atendimento-titulo">
+          <ClipboardList :size="16" />
+          Atendimento
+          <span v-if="resultado.reaberturas" class="reabertura-tag">
+            reaberto {{ resultado.reaberturas }}x
+          </span>
+        </h3>
+        <ol class="thread">
+          <li v-for="a in resultado.atividades" :key="a.id" class="msg msg-atividade">
+            <span class="msg-meta">
+              <strong>{{ ROTULO_TIPO_ATIVIDADE[a.tipo] }}</strong> · {{ a.autorNome }} ·
+              {{ formatarData(a.criadoEm) }}
+            </span>
+            <p class="msg-texto">{{ a.texto }}</p>
+            <div v-if="a.anexos?.length" class="msg-anexos">
+              <a
+                v-for="(an, i) in a.anexos"
+                :key="i"
+                :href="an.url"
+                target="_blank"
+                rel="noopener"
+                class="r-link"
+              >
+                <Paperclip :size="13" /> {{ an.nome }}
+              </a>
+            </div>
+          </li>
+        </ol>
+      </section>
 
       <div v-if="resultado.descricaoResolucao" class="r-bloco r-resolucao">
         <h3>Resposta da equipe</h3>
@@ -698,6 +735,43 @@ function formatarData(ts: string | null | undefined): string {
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 10px;
+}
+
+/* ---------- Atendimento (registros datados, visível ao solicitante) ---------- */
+.atendimento {
+  margin-top: 16px;
+}
+
+.atendimento-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 10px;
+}
+
+.reabertura-tag {
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.msg-atividade {
+  background: var(--surface-muted);
+  border-color: var(--border-strong);
+}
+
+.msg-anexos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .conversa-alerta {

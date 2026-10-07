@@ -18,11 +18,14 @@ const carregando = ref(false)
 const erro = ref('')
 const atualizadoEm = ref('')
 
-const STATUS_ORDEM = ['ABERTO', 'ANDAMENTO', 'COMUNICADO', 'RESOLVIDO'] as const
+/** Ordem das fases do fluxo na legenda e no gráfico de barras. */
+const STATUS_ORDEM = ['ABERTO', 'ENCAMINHADO', 'ANDAMENTO', 'COMUNICADO', 'AGUARDANDO_CONFERENCIA', 'RESOLVIDO'] as const
 const CORES_STATUS_COD: Record<string, string> = {
   ABERTO: '#dc2626',
+  ENCAMINHADO: '#d97706',
   ANDAMENTO: '#2563eb',
   COMUNICADO: '#9333ea',
+  AGUARDANDO_CONFERENCIA: '#7c3aed',
   RESOLVIDO: '#16a34a',
 }
 const CORES_STATUS_ROTULO: Record<string, string> = {
@@ -33,7 +36,14 @@ const CORES_STATUS_ROTULO: Record<string, string> = {
 }
 
 const kpis = computed(() => dados.value?.kpis)
-const emAtendimento = computed(() => (kpis.value ? kpis.value.andamento + kpis.value.comunicado : 0))
+/**
+ * Em atendimento = tudo que já saiu da fila e ainda não foi conferido.
+ * `AGUARDANDO_CONFERENCIA` entra aqui porque o serviço foi executado e só falta
+ * a escola dar o ok — do ponto de vista da URE, ainda é trabalho em curso.
+ */
+const emAtendimento = computed(() =>
+  kpis.value ? kpis.value.andamento + kpis.value.comunicado + kpis.value.aguardandoConferencia : 0,
+)
 const taxaResolucao = computed(() =>
   kpis.value && kpis.value.total > 0 ? Math.round((kpis.value.resolvidos / kpis.value.total) * 100) : 0,
 )
@@ -57,7 +67,9 @@ const porCategoria = computed(() => {
   const mapa = new Map<string, Record<string, number>>()
   for (const c of dados.value?.chamados || []) {
     const tipo = c.tipo || 'Outros'
-    if (!mapa.has(tipo)) mapa.set(tipo, { ABERTO: 0, ANDAMENTO: 0, COMUNICADO: 0, RESOLVIDO: 0 })
+    if (!mapa.has(tipo)) {
+      mapa.set(tipo, { ABERTO: 0, ENCAMINHADO: 0, ANDAMENTO: 0, COMUNICADO: 0, AGUARDANDO_CONFERENCIA: 0, RESOLVIDO: 0 })
+    }
     const linha = mapa.get(tipo)!
     linha[c.status] = (linha[c.status] || 0) + 1
   }

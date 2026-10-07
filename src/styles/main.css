@@ -108,6 +108,20 @@ h4 {
   background: var(--surface-muted);
 }
 
+/**
+ * Ação destrutiva ou que rejeita algo (contestar a conclusão de um chamado,
+ * excluir). Existe separado do `btn-primary` para que a tela deixe claro qual
+ * dos dois botões é "não".
+ */
+.btn-perigo {
+  background: var(--red);
+  color: #fff;
+}
+
+.btn-perigo:hover {
+  background: #b91c1c;
+}
+
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;

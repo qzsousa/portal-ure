@@ -23,7 +23,7 @@ import { apiError } from '@/utils/apiError'
 import { formatDate } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { Chamado, StatusChamado } from '@/types'
+import { STATUS_EM_ABERTO, type Chamado, type StatusChamado } from '@/types'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -91,8 +91,13 @@ function csvDeChamados(chamados: Chamado[]): string {
   )
 }
 
+/**
+ * Tudo que ainda não foi encerrado. Lista explícita em vez de "todos menos os
+ * concluídos": o backend rejeita lista vazia e um status novo errado aqui
+ * sumiria chamado do relatório em silêncio.
+ */
 async function gerarChamadosAbertos() {
-  const chamados = await listarTodosChamados(['ABERTO', 'ANDAMENTO'])
+  const chamados = await listarTodosChamados(STATUS_EM_ABERTO)
   baixarCsv(`chamados-abertos-atendimento-${Date.now()}.csv`, csvDeChamados(chamados))
 }
 
@@ -183,8 +188,8 @@ const relatorios: Relatorio[] = [
   },
   {
     id: 'chamados-abertos',
-    titulo: 'Chamados Abertos e em Atendimento',
-    descricao: 'Listagem de todos os chamados com status "Aberto" ou "Em atendimento".',
+    titulo: 'Chamados em Aberto',
+    descricao: 'Listagem de todos os chamados ainda não concluídos pela conferência da escola.',
     formato: 'CSV',
     tone: 'yellow',
     icone: ClipboardList,

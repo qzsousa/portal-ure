@@ -47,7 +47,13 @@ Siglas e termos próprios do sistema.
 | **Encerra** | Flag de alerta que **bloqueia** o avanço do formulário. |
 | **Exige anexo** | Flag de alerta que torna o anexo obrigatório. |
 | **"Outro (descrever)"** | Opção automática de toda pergunta de opções, que abre um campo livre. |
-| **Status do chamado** | `ABERTO`, `ANDAMENTO`, `COMUNICADO` (aguardando a escola), `RESOLVIDO`. |
+| **Status do chamado** | `ABERTO` → `ENCAMINHADO` → `ANDAMENTO` → `AGUARDANDO_CONFERENCIA` → `RESOLVIDO`, mais `COMUNICADO` (pergunta da matriz à escola). |
+| **Aceite** | Momento em que o técnico assume o chamado (`aceitoEm`). Antes disso não pode registrar nem concluir. |
+| **Registro de atendimento** | Linha datada do que o técnico fez. Pode repetir; cada uma guarda a hora do servidor. |
+| **Conclusão** | Registro do técnico ao entregar o serviço; leva o chamado a `AGUARDANDO_CONFERENCIA`. |
+| **Conferência** | Verificação da escola sobre o que o técnico fez. É ela que encerra o chamado. |
+| **Contestação** | Escola informa o que ficou faltando: o chamado volta para `ABERTO` e conta mais uma reabertura. |
+| **Reabertura** | Quantas vezes o chamado foi contestado e reaberto (`reaberturas`). |
 | **Pergunta da matriz** | Mensagem da equipe para a escola, enviada ao mudar para *Aguardando resposta*. |
 | **Resposta da escola** | Mensagem da unidade para a matriz. |
 | **Encaminhamento** | Atribuir um responsável técnico ao chamado. |

@@ -1,5 +1,5 @@
 ﻿import { chamadosApi } from './http'
-import type { Chamado, StatusChamado } from '@/types'
+import type { Chamado, ChamadoAtividade, StatusChamado } from '@/types'
 
 /** Cliente da API de chamados (backend que também provê autenticação). */
 
@@ -75,6 +75,56 @@ export interface ResponderChamadoPayload {
 
 export async function responderChamado(id: string, payload: ResponderChamadoPayload): Promise<Chamado> {
   const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/resposta`, payload)
+  return data
+}
+
+/* ---------- Fluxo de atendimento ---------- */
+
+/**
+ * ACEITA o chamado: o técnico assume e o horário do aceite é carimbado pelo
+ * servidor (não pelo relógio do navegador, que pode estar errado).
+ *
+ * Endpoint próprio, e não `PATCH /status`: só o responsável pelo chamado pode
+ * aceitar, e o backend responde 409 se ele já estiver em atendimento.
+ */
+export async function aceitarChamado(id: string): Promise<Chamado> {
+  const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/aceitar`)
+  return data
+}
+
+/** Registro do que foi feito. Pode repetir quantas vezes quiser — cada envio vira uma linha datada. */
+export async function registrarAtividade(
+  id: string,
+  payload: ResponderChamadoPayload,
+): Promise<ChamadoAtividade> {
+  const { data } = await chamadosApi.post<ChamadoAtividade>(`/chamados/${id}/atividades`, payload)
+  return data
+}
+
+/**
+ * CONCLUI o atendimento: não encerra o chamado, passa para a conferência da
+ * escola (`AGUARDANDO_CONFERENCIA`). O backend exige a descrição.
+ */
+export async function concluirChamado(
+  id: string,
+  payload: ResponderChamadoPayload,
+): Promise<Chamado> {
+  const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/concluir`, {
+    descricaoResolucao: payload.texto,
+    anexos: payload.anexos,
+  })
+  return data
+}
+
+/**
+ * CONFERÊNCIA DA ESCOLA: `aprovado` encerra o chamado; `aprovado: false`
+ * reabre (o texto é obrigatório — é ele que diz o que ficou faltando).
+ */
+export async function conferirChamado(
+  id: string,
+  payload: { aprovado: boolean; texto?: string; anexos?: AnexoMensagemPayload[] },
+): Promise<Chamado> {
+  const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/conferir`, payload)
   return data
 }
 
@@ -162,11 +212,36 @@ export async function encaminharChamado(
 
 export const ROTULO_STATUS_CHAMADO: Record<StatusChamado, string> = {
   ABERTO: 'Aberto',
+  ENCAMINHADO: 'Encaminhado',
   ANDAMENTO: 'Em atendimento',
   COMUNICADO: 'Aguardando resposta',
+  AGUARDANDO_CONFERENCIA: 'Aguardando conferência',
   RESOLVIDO: 'Concluído',
+}
+
+/** Ajuda a entender por que um status é o que é, direto no rótulo da lista. */
+export const AJUDA_STATUS_CHAMADO: Record<StatusChamado, string> = {
+  ABERTO: 'Novo ou reaberto. Falta encaminhar para um técnico.',
+  ENCAMINHADO: 'Já está com um técnico, aguardando o aceite dele.',
+  ANDAMENTO: 'O técnico aceitou e está registrando o serviço.',
+  COMUNICADO: 'A equipe fez uma pergunta e aguarda a resposta da escola.',
+  AGUARDANDO_CONFERENCIA: 'O técnico concluiu. A escola precisa conferir.',
+  RESOLVIDO: 'Encerrado — a escola confirmou que ficou tudo certo.',
 }
 
 export function rotuloStatusChamado(status: string): string {
   return ROTULO_STATUS_CHAMADO[status as StatusChamado] || status
 }
+
+/**
+ * Fases do fluxo, na ordem. Serve para agrupar os filtros e para a coluna
+ * "onde está parado" da lista.
+ */
+export const STATUS_FLUXO: StatusChamado[] = [
+  'ABERTO',
+  'ENCAMINHADO',
+  'ANDAMENTO',
+  'COMUNICADO',
+  'AGUARDANDO_CONFERENCIA',
+  'RESOLVIDO',
+]

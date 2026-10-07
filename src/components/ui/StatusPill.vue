@@ -13,7 +13,12 @@ const tone = computed(() => {
   if (s.includes('manuten')) return 'yellow'
   if (s.includes('quebrad') || s === 'aberto') return 'red'
   if (s.includes('extrav')) return 'slate'
+  // Encaminhado é chamado que já saiu da fila da matriz mas ainda não começou:
+  // entra antes de "andamento" porque "encaminhado para atendimento" também
+  // contém "atendimento".
+  if (s.includes('encaminhad')) return 'yellow'
   if (s.includes('andamento') || s.includes('atendimento')) return 'blue'
+  // "Aguardando conferência" é o purple: bola com a escola.
   if (s.includes('aguard') || s.includes('comunicado')) return 'purple'
   if (s.includes('conclu') || s.includes('resolv') || s.includes('emprestad')) return 'green'
   if (s.includes('pendent')) return 'yellow'

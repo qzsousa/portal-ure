@@ -6,7 +6,9 @@ import { apiError } from '@/utils/apiError'
 import {
   AlertTriangle,
   CheckCircle2,
+  CheckCheck,
   ClipboardList,
+  ClipboardPen,
   Clock,
   Copy,
   Heart,
@@ -14,10 +16,13 @@ import {
   Loader2,
   Mail,
   Paperclip,
+  RotateCcw,
   School,
   Search,
   Send,
   Star,
+  ThumbsDown,
+  ThumbsUp,
   UserPlus,
   Wrench,
   X,
@@ -28,8 +33,11 @@ import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
+  aceitarChamado,
   atualizarChamadosEmLote,
   atualizarStatusChamado,
+  conferirChamado,
+  concluirChamado,
   deletarChamado,
   encaminharChamado,
   getChamado,
@@ -37,8 +45,10 @@ import {
   listarTecnicos,
   listarTecnicosDaUnidade,
   listarTecnicosDoFiltro,
+  registrarAtividade,
   responderChamado,
   rotuloStatusChamado,
+  STATUS_FLUXO,
   CATEGORIA_SEM_CHAVE,
   type AnexoMensagemPayload,
   type FiltrosChamado,
@@ -55,7 +65,14 @@ import { formatDate, formatDateTime } from '@/utils/format'
 import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaEquipeReduzida, ordenarTecnicos } from '@/utils/tecnicos'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import type { Chamado, ChamadoMensagem, StatusChamado } from '@/types'
+import {
+  ROTULO_TIPO_ATIVIDADE,
+  type Chamado,
+  type ChamadoAtividade,
+  type ChamadoMensagem,
+  type StatusChamado,
+  type TipoAtividade,
+} from '@/types'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -257,7 +274,14 @@ const descricaoLinhas = computed(() => {
     .filter(Boolean)
 })
 
-const stats = ref<{ total: number; abertos: number; andamento: number; comunicado: number; resolvidos: number } | null>(null)
+const stats = ref<{
+  total: number
+  abertos: number
+  andamento: number
+  comunicado: number
+  aguardandoConferencia: number
+  resolvidos: number
+} | null>(null)
 
 const estado = reactive({
   loading: true,
@@ -369,11 +393,18 @@ async function carregarOpcoesFiltro() {
 }
 
 /* ------- Chips de filtro rápido ------- */
+/**
+ * Os chips são as ETAPAS do fluxo, na ordem em que o chamado passa por elas.
+ * Não existe chip "em aberto" porque isso exigiria um filtro de conjunto no
+ * backend; quem quer a fila inteira marca "Abertos" e "Encaminhados".
+ */
 const STATUS_CHIPS: Array<{ rotulo: string; valor: StatusChamado | '' }> = [
   { rotulo: 'Todos', valor: '' },
   { rotulo: 'Abertos', valor: 'ABERTO' },
+  { rotulo: 'Encaminhados', valor: 'ENCAMINHADO' },
   { rotulo: 'Em atendimento', valor: 'ANDAMENTO' },
   { rotulo: 'Aguardando resposta', valor: 'COMUNICADO' },
+  { rotulo: 'Aguardando conferência', valor: 'AGUARDANDO_CONFERENCIA' },
   { rotulo: 'Concluídos', valor: 'RESOLVIDO' },
 ]
 
@@ -590,11 +621,16 @@ const eDonoDoChamado = computed(() => {
   return emailChamado === emailSessao
 })
 
-/** Formulário só depois de concluído e ainda sem nota. */
+/** Formulário só depois de concluído e ainda sem nota.
+ *
+ * `conferidoEm` exige que a ESCOLA tenha conferido — e não a matriz ter
+ * encerrado pelo seletor de status. É essa a diferença entre "terminado" e
+ * "terminado e verificado por quem pediu". */
 const podeAvaliar = computed(
   () =>
     ehEscola.value &&
     detalhe.value?.status === 'RESOLVIDO' &&
+    !!detalhe.value?.conferidoEm &&
     !detalhe.value?.avaliacao &&
     !avaliacaoEnviada.value,
 )
@@ -650,6 +686,19 @@ async function abrirDetalhe(c: Chamado) {
   comentarioAvaliacao.value = ''
   erroAvaliacao.value = ''
   avaliacaoEnviada.value = 0
+  // O fluxo entra limpo: os textareas são de uso único, e uma rascunho deixada
+  // num chamado apareceria no próximo aberto na mesma sessão.
+  registroAberto.value = false
+  textoAtividade.value = ''
+  anexosAtividade.value = []
+  conclusaoAberta.value = false
+  textoConclusao.value = ''
+  anexosConclusao.value = []
+  conferenciaAberta.value = false
+  textoConferencia.value = ''
+  anexosConferencia.value = []
+  modalidadeConferencia.value = 'aprovado'
+  acaoFluxo.value = false
   detalheAberto.value = true
   // A listagem não traz a conversa — busca o chamado completo (perguntas, respostas e anexos)
   try {
@@ -687,7 +736,7 @@ watch(detalheAberto, (aberto) => {
 })
 
 /* ------- Histórico como linha do tempo ------- */
-type TomTimeline = 'green' | 'blue' | 'purple' | 'slate'
+type TomTimeline = 'green' | 'blue' | 'purple' | 'slate' | 'red'
 
 interface EntradaHistorico {
   horario: string | null
@@ -734,6 +783,238 @@ watch([detalheAberto, () => detalhe.value?.historico], async ([aberto]) => {
   const el = timelineRef.value
   if (el) el.scrollTop = el.scrollHeight
 })
+
+/* ==============================================================
+ * FLUXO DE ATENDIMENTO
+ *
+ *   ABERTO ──▶ ENCAMINHADO ──▶ ANDAMENTO ──▶ AGUARDANDO_CONFERENCIA ──▶ RESOLVIDO
+ *     ▲                                                              (escola)
+ *     └──────────────── contestação da escola (+1 reabertura) ──────────┘
+ *
+ * Cada etapa é um endpoint próprio do backend, com permissão e pré-condição
+ * diferentes. Aqui só se espelha isso para mostrar o botão certo e explicar o
+ * bloqueio — quem decide é o servidor.
+ * ============================================================== */
+
+/** `PABLO FERREIRA SOUSA` / `pablo ferreira sousa` → `PABLO FERREIRA SOUSA` */
+function normalizarNome(nome?: string | null) {
+  return (nome || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+}
+
+/**
+ * O chamado é meu? Isto é: sou eu quem ficou como responsável por ele.
+ *
+ * O backend resolve o responsável pelo `responsavelId` (id do usuário), mas
+ * chamado encaminhado antes desse campo existir só tem o nome — aí a comparação
+ * cai para o nome, que é o que `encaminharChamado` gravava.
+ */
+const souEuResponsavel = computed(() => {
+  const c = detalhe.value
+  if (!c) return false
+  if (c.responsavelId && auth.user?.id) return c.responsavelId === auth.user.id
+  return !!c.responsavel && normalizarNome(c.responsavel) === normalizarNome(auth.user?.nome)
+})
+
+/** Status em que o técnico ainda precisa assumir o chamado. */
+const AGUARDANDO_ACEITE: StatusChamado[] = ['ABERTO', 'ENCAMINHADO']
+
+/** Status em que o técnico já assumiu neste ciclo — libera registrar e concluir. */
+const COM_TECNICO_ACEITO: StatusChamado[] = ['ANDAMENTO', 'COMUNICADO', 'AGUARDANDO_CONFERENCIA']
+
+/**
+ * Quem mexe no fluxo: o responsável pelo chamado e a matriz.
+ *
+ * O ADMIN entra porque é o nível mais alto do sistema e atende chamado de
+ * unidade que ninguém aceitou — mas continua sendo "Aceitar", com o nome de
+ * quem aceitou gravado no histórico.
+ */
+const souDaMatriz = computed(() => ehMatriz.value && (auth.user?.nivel === 'ADMIN' || souEuResponsavel.value))
+
+/** Chão de uma requisição do fluxo — desabilita os botões enquanto ela corre. */
+const acaoFluxo = ref(false)
+
+/** Botão "Aceitar": só faz sentido para quem tem o chamado e ele não foi aceito. */
+const podeAceitar = computed(
+  () =>
+    !acaoFluxo.value &&
+    souDaMatriz.value &&
+    !!detalhe.value &&
+    AGUARDANDO_ACEITE.includes(detalhe.value.status),
+)
+
+/**
+ * Registrar o que foi feito: depois do aceite e antes da conferência.
+ *
+ * Sai de AGUARDANDO_CONFERENCIA de propósito — contestada, a escola joga o
+ * chamado para ABERTO e o técnico precisa aceitar de novo antes de refazer.
+ */
+const podeRegistrar = computed(
+  () =>
+    !acaoFluxo.value &&
+    souDaMatriz.value &&
+    !!detalhe.value &&
+    COM_TECNICO_ACEITO.includes(detalhe.value.status) &&
+    detalhe.value.status !== 'AGUARDANDO_CONFERENCIA',
+)
+
+/** Concluir entrega o serviço para a escola conferir — as duas andam juntas. */
+const podeConcluir = computed(() => podeRegistrar.value)
+
+/** A escola só age quando o técnico terminou e passou o serviço para conferência. */
+const podeConferir = computed(
+  () => !acaoFluxo.value && ehEscola.value && detalhe.value?.status === 'AGUARDANDO_CONFERENCIA',
+)
+
+/* ---- Registro do que foi feito ---- */
+const registroAberto = ref(false)
+const textoAtividade = ref('')
+const anexosAtividade = ref<AnexoMensagemPayload[]>([])
+
+/* ---- Conclusão do técnico ---- */
+const conclusaoAberta = ref(false)
+const textoConclusao = ref('')
+const anexosConclusao = ref<AnexoMensagemPayload[]>([])
+
+/* ---- Conferência da escola ---- */
+const conferenciaAberta = ref(false)
+const textoConferencia = ref('')
+const anexosConferencia = ref<AnexoMensagemPayload[]>([])
+/** Qual dos dois botões da conferência foi clicado. */
+const modalidadeConferencia = ref<'aprovado' | 'contestar'>('aprovado')
+
+function abrirRegistro() {
+  registroAberto.value = true
+  textoAtividade.value = ''
+  anexosAtividade.value = []
+}
+
+async function salvarRegistro() {
+  if (!detalhe.value || acaoFluxo.value) return
+  const texto = textoAtividade.value.trim()
+  if (!texto) {
+    ui.error('Descreva o que foi feito.')
+    return
+  }
+  acaoFluxo.value = true
+  try {
+    const atividade = await registrarAtividade(detalhe.value.id, { texto, anexos: anexosAtividade.value })
+    // A lista do modal é a fonte da linha nova: não precisa recarregar tudo.
+    detalhe.value = { ...detalhe.value, atividades: [...(detalhe.value.atividades || []), atividade] }
+    registroAberto.value = false
+    textoAtividade.value = ''
+    anexosAtividade.value = []
+    ui.success('Registro adicionado ao atendimento.')
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao registrar o atendimento.'))
+  } finally {
+    acaoFluxo.value = false
+  }
+}
+
+function abrirConclusao() {
+  conclusaoAberta.value = true
+  textoConclusao.value = detalhe.value?.descricaoResolucao || ''
+  anexosConclusao.value = []
+}
+
+async function salvarConclusao() {
+  if (!detalhe.value || acaoFluxo.value) return
+  const texto = textoConclusao.value.trim()
+  if (!texto) {
+    ui.error('Registre o que foi feito — é isso que a escola vai conferir.')
+    return
+  }
+  acaoFluxo.value = true
+  try {
+    const atualizado = await concluirChamado(detalhe.value.id, { texto, anexos: anexosConclusao.value })
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+    conclusaoAberta.value = false
+    anexosConclusao.value = []
+    ui.success('Atendimento concluído. A escola foi avisada para conferir.')
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao concluir o atendimento.'))
+  } finally {
+    acaoFluxo.value = false
+  }
+}
+
+function abrirConferencia(modalidade: 'aprovado' | 'contestar') {
+  modalidadeConferencia.value = modalidade
+  conferenciaAberta.value = true
+  textoConferencia.value = ''
+  anexosConferencia.value = []
+}
+
+async function salvarConferencia() {
+  if (!detalhe.value || acaoFluxo.value) return
+  const texto = textoConferencia.value.trim()
+  const contestando = modalidadeConferencia.value === 'contestar'
+  if (contestando && !texto) {
+    ui.error('Registre o que ficou faltando para o técnico refazer.')
+    return
+  }
+  acaoFluxo.value = true
+  try {
+    const atualizado = await conferirChamado(detalhe.value.id, {
+      aprovado: !contestando,
+      texto: texto || undefined,
+      anexos: anexosConferencia.value,
+    })
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+    conferenciaAberta.value = false
+    anexosConferencia.value = []
+    ui.success(
+      contestando
+        ? `Chamado reaberto (${atualizado.reaberturas ?? 1}x). Administrador e técnico foram avisados.`
+        : 'Chamado concluído. O técnico foi avisado.',
+    )
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, contestando ? 'Falha ao reabrir o chamado.' : 'Falha ao concluir o chamado.'))
+  } finally {
+    acaoFluxo.value = false
+  }
+}
+
+async function aceitarMeuChamado() {
+  if (!detalhe.value || acaoFluxo.value) return
+  acaoFluxo.value = true
+  try {
+    const atualizado = await aceitarChamado(detalhe.value.id)
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+    ui.success('Chamado aceito! O horário ficou registrado.')
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível aceitar o chamado.'))
+  } finally {
+    acaoFluxo.value = false
+  }
+}
+
+/* ---- Lista de registros de atendimento ---- */
+const atividades = computed<ChamadoAtividade[]>(() => detalhe.value?.atividades || [])
+
+/**
+ * Cor de cada tipo de registro na linha do tempo.
+ *
+ * Distingue "o technician avançou" (azul), "a bola está com a escola" (roxo) e
+ * "fechou" (verde) — que é a informação que se procura na lista. A contestação
+ * fica vermelha porque é a única linha que significa retrabalho.
+ */
+const TOM_ATIVIDADE: Record<TipoAtividade, TomTimeline> = {
+  REGISTRO: 'blue',
+  CONCLUSAO: 'purple',
+  CONTESTACAO: 'red',
+  APROVACAO: 'green',
+}
 
 async function salvarStatus() {
   if (!detalhe.value) return
@@ -802,24 +1083,6 @@ async function responderAoChamado() {
   }
 }
 
-/* Escola só pode alterar o chamado para "Concluído" */
-async function concluirChamado() {
-  if (!detalhe.value) return
-  if (!window.confirm(`Concluir o chamado #${detalhe.value.protocolo}?`)) return
-  salvando.value = true
-  try {
-    const atualizado = await atualizarStatusChamado(detalhe.value.id, { status: 'RESOLVIDO' })
-    detalhe.value = atualizado
-    novoStatus.value = atualizado.status
-    ui.success(`Chamado ${atualizado.protocolo} concluído.`)
-    await Promise.all([carregar(), carregarStats()])
-  } catch (e) {
-    ui.error(apiError(e, 'Falha ao concluir o chamado.'))
-  } finally {
-    salvando.value = false
-  }
-}
-
 /* Toque na célula de descrição expande/recolhe o texto completo (mobile não tem tooltip) */
 const descExpandida = ref<string | null>(null)
 
@@ -864,6 +1127,9 @@ useAutoRefresh(async () => {
         tone="purple"
       ><School :size="22" /></StatCard>
       <StatCard label="Concluídos" :value="stats?.resolvidos ?? '…'" tone="green"><CheckCircle2 :size="22" /></StatCard>
+      <StatCard label="Aguardando conferência" :value="stats?.aguardandoConferencia ?? '…'" tone="purple">
+        <ClipboardPen :size="22" />
+      </StatCard>
     </div>
 
     <!-- Chips de filtro rápido -->
@@ -913,10 +1179,7 @@ useAutoRefresh(async () => {
       </div>
       <select v-model="filtros.status" class="select-input slim" @change="aplicarFiltros">
         <option value="">Status: Todos</option>
-        <option value="ABERTO">Aberto</option>
-        <option value="ANDAMENTO">Em atendimento</option>
-        <option value="COMUNICADO">Aguardando resposta</option>
-        <option value="RESOLVIDO">Concluído</option>
+        <option v-for="s in STATUS_FLUXO" :key="s" :value="s">{{ rotuloStatusChamado(s) }}</option>
       </select>
       <select v-model="filtros.urgencia" class="select-input slim" @change="aplicarFiltros">
         <option value="">Urgência: Todas</option>
@@ -1125,6 +1388,59 @@ useAutoRefresh(async () => {
           </div>
         </div>
 
+        <!--
+             Linha do tempo do ATENDIMENTO: o que o técnico registrou a cada
+             visita, a conclusão, a contestação da escola e a aprovação final.
+             Vem de `atividades` (tabela com `criadoEm` do servidor), não do
+             `historico` em texto — os horários aqui são reais, não inferidos
+             por regex.
+        -->
+        <div v-if="atividades.length" class="descricao-box">
+          <h4>
+            Atendimento
+            <span v-if="detalhe.reaberturas" class="reabertura-tag">
+              <RotateCcw :size="12" /> reaberto {{ detalhe.reaberturas }}x
+            </span>
+          </h4>
+          <div ref="timelineRef" class="timeline">
+            <div v-for="a in atividades" :key="a.id" class="timeline-item">
+              <span class="timeline-dot" :class="`dot-${TOM_ATIVIDADE[a.tipo]}`" />
+              <span class="timeline-hora">{{ formatDateTime(a.criadoEm) }}</span>
+              <p class="timeline-texto">
+                <strong>{{ ROTULO_TIPO_ATIVIDADE[a.tipo] }}</strong> — {{ a.autorNome }}
+              </p>
+              <p class="timeline-corpo">{{ a.texto }}</p>
+              <div v-if="a.anexos?.length" class="msg-anexos">
+                <a v-for="an in a.anexos" :key="an.id" :href="an.url" target="_blank" rel="noopener" class="msg-anexo">
+                  <Paperclip :size="13" /> {{ an.nome }}
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Marcos com horário: respondem de cara às perguntas que se faz de um
+             chamado ("aceito quando?", "quem confirmou que terminou?"). -->
+        <div class="marcos">
+          <div class="marco">
+            <dt>Aceito</dt>
+            <dd>{{ detalhe.aceitoEm ? `${formatDateTime(detalhe.aceitoEm)} · ${detalhe.aceitoPor}` : '—' }}</dd>
+          </div>
+          <div class="marco">
+            <dt>Concluído pelo técnico</dt>
+            <dd>{{ detalhe.concluidoEm ? formatDateTime(detalhe.concluidoEm) : '—' }}</dd>
+          </div>
+          <div class="marco">
+            <dt>Conferido pela escola</dt>
+            <dd>
+              <template v-if="detalhe.conferidoEm">
+                {{ formatDateTime(detalhe.conferidoEm) }} · {{ detalhe.conferidoPor }}
+              </template>
+              <template v-else>—</template>
+            </dd>
+          </div>
+        </div>
+
         <!-- ===== Ações da MATRIZ (ADMIN/TECNICO) ===== -->
         <template v-if="ehMatriz">
           <!-- Encaminhar para técnico: categoria errada na abertura, equipamento,
@@ -1190,19 +1506,156 @@ useAutoRefresh(async () => {
             </template>
           </div>
 
+          <!--
+               Barra do fluxo: aceitar → registrar → concluir. Fica no topo das
+               ações porque é o caminho que todo chamado da matriz percorre.
+          -->
+          <div v-if="souDaMatriz" class="acao-box acao-fluxo">
+            <h4><Wrench :size="15" /> Atendimento</h4>
+
+            <div class="fluxo-passos">
+              <span class="passo" :class="{ feito: detalhe.aceitoEm, atual: podeAceitar }">
+                <CheckCheck :size="13" /> Aceito
+              </span>
+              <span class="passo-seta">→</span>
+              <span class="passo" :class="{ feito: atividades.some((a) => a.tipo === 'REGISTRO'), atual: podeRegistrar }">
+                <ClipboardPen :size="13" /> Registro
+              </span>
+              <span class="passo-seta">→</span>
+              <span class="passo" :class="{ feito: detalhe.concluidoEm, atual: podeConcluir }">
+                <Send :size="13" /> Concluído
+              </span>
+              <span class="passo-seta">→</span>
+              <span
+                class="passo"
+                :class="{ feito: detalhe.conferidoEm, atual: detalhe.status === 'AGUARDANDO_CONFERENCIA' }"
+              >
+                <School :size="13" /> Conferência
+              </span>
+            </div>
+
+            <!-- Passo 1: aceite -->
+            <div v-if="podeAceitar" class="acao-linha">
+              <p class="acao-dica">
+                Este chamado está com <strong>{{ detalhe.responsavel || 'você' }}</strong> e ainda não foi aceito.
+              </p>
+              <button class="btn btn-primary" type="button" :disabled="acaoFluxo" @click="aceitarMeuChamado">
+                <Loader2 v-if="acaoFluxo" class="spin" :size="15" />
+                <CheckCheck v-else :size="15" />
+                Aceitar chamado
+              </button>
+            </div>
+            <p v-else-if="!detalhe.responsavel && ehMatriz" class="acao-dica enc-aviso">
+              Sem responsável: encaminhe para um técnico antes de aceitar.
+            </p>
+
+            <!-- Passo 2: registrar o que foi feito (repetível) -->
+            <div v-if="podeRegistrar" class="acao-linha">
+              <p class="acao-dica">
+                Registre cada etapa do serviço. Cada registro guarda data e hora.
+              </p>
+              <button v-if="!registroAberto" class="btn btn-outline" type="button" @click="abrirRegistro">
+                <Paperclip :size="15" />
+                Registrar o que foi feito
+              </button>
+              <template v-else>
+                <textarea
+                  v-model="textoAtividade"
+                  class="input textarea"
+                  placeholder="Ex.: troquei o cabo de rede da sala 3 e o sinal normalizou."
+                />
+                <label class="anexo-label">
+                  <Paperclip :size="14" /> Fotos (opcional — ficam guardadas como prova do serviço)
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf"
+                    class="anexo-input"
+                    @change="(e) => onAnexosChange(e, anexosAtividade)"
+                  />
+                </label>
+                <ul v-if="anexosAtividade.length" class="anexo-lista">
+                  <li v-for="(a, i) in anexosAtividade" :key="i">
+                    <Paperclip :size="13" /> {{ a.nome }}
+                    <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosAtividade.splice(i, 1)">
+                      <X :size="13" />
+                    </button>
+                  </li>
+                </ul>
+                <div class="acao-linha">
+                  <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoAtividade.trim()" @click="salvarRegistro">
+                    Salvar registro
+                  </button>
+                  <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="registroAberto = false">
+                    Cancelar
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <!-- Passo 3: concluir e passar para a conferência da escola -->
+            <div v-if="podeConcluir" class="acao-linha">
+              <p class="acao-dica">
+                Terminou? Registre a conclusão — a escola confere antes de fechar o chamado.
+              </p>
+              <button v-if="!conclusaoAberta" class="btn btn-primary" type="button" @click="abrirConclusao">
+                <CheckCircle2 :size="15" />
+                Concluir atendimento
+              </button>
+              <template v-else>
+                <textarea
+                  v-model="textoConclusao"
+                  class="input textarea"
+                  placeholder="O que foi feito de verdade? A escola lê este texto para conferir."
+                />
+                <label class="anexo-label">
+                  <Paperclip :size="14" /> Fotos (opcional)
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf"
+                    class="anexo-input"
+                    @change="(e) => onAnexosChange(e, anexosConclusao)"
+                  />
+                </label>
+                <ul v-if="anexosConclusao.length" class="anexo-lista">
+                  <li v-for="(a, i) in anexosConclusao" :key="i">
+                    <Paperclip :size="13" /> {{ a.nome }}
+                    <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosConclusao.splice(i, 1)">
+                      <X :size="13" />
+                    </button>
+                  </li>
+                </ul>
+                <div class="acao-linha">
+                  <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoConclusao.trim()" @click="salvarConclusao">
+                    Enviar para conferência
+                  </button>
+                  <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="conclusaoAberta = false">
+                    Cancelar
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <p v-if="detalhe.status === 'AGUARDANDO_CONFERENCIA'" class="acao-dica">
+              Aguardando a <strong>escola</strong> conferir o serviço. Ela pode confirmar ou reabrir o chamado.
+            </p>
+          </div>
+
           <div class="acao-box">
             <h4>Alterar status</h4>
             <div class="acao-linha">
               <select v-model="novoStatus" class="select-input">
-                <option value="ABERTO">Aberto</option>
-                <option value="ANDAMENTO">Em atendimento</option>
-                <option value="COMUNICADO">Aguardando resposta</option>
-                <option value="RESOLVIDO">Concluído</option>
+                <option v-for="s in STATUS_FLUXO" :key="s" :value="s">{{ rotuloStatusChamado(s) }}</option>
               </select>
               <button class="btn btn-primary" type="button" :disabled="salvando" @click="salvarStatus">
                 Salvar
               </button>
             </div>
+            <p class="acao-dica">
+              Correção para casos fora do fluxo (erro de encaminhamento, chamado encerrado por
+              decisão da matriz). O caminho normal é usar os botões acima.
+            </p>
 
             <!-- Ao pedir retorno da escola, a pergunta (e os anexos) vão junto -->
             <template v-if="novoStatus === 'COMUNICADO'">
@@ -1213,21 +1666,29 @@ useAutoRefresh(async () => {
               />
               <label class="anexo-label">
                 <Paperclip :size="14" /> Anexar arquivos (opcional — ficam disponíveis por 7 dias)
-                <input type="file" multiple accept="image/*,.pdf" class="anexo-input" @change="(e) => onAnexosChange(e, anexosPergunta)" />
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  class="anexo-input"
+                  @change="(e) => onAnexosChange(e, anexosPergunta)"
+                />
               </label>
               <ul v-if="anexosPergunta.length" class="anexo-lista">
                 <li v-for="(a, i) in anexosPergunta" :key="i">
                   <Paperclip :size="13" /> {{ a.nome }}
-                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosPergunta.splice(i, 1)"><X :size="13" /></button>
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosPergunta.splice(i, 1)">
+                    <X :size="13" />
+                  </button>
                 </li>
               </ul>
             </template>
 
             <textarea
-              v-if="novoStatus === 'RESOLVIDO'"
+              v-if="novoStatus === 'AGUARDANDO_CONFERENCIA'"
               v-model="descricaoResolucao"
               class="input textarea"
-              placeholder="Descreva a resolução (obrigatório informar o que foi feito)"
+              placeholder="Descreva a conclusão (obrigatório informar o que foi feito)"
             />
           </div>
 
@@ -1242,8 +1703,21 @@ useAutoRefresh(async () => {
           </div>
         </template>
 
-        <!-- ===== Ações da ESCOLA (GESTOR/VISUALIZADOR): responder e concluir ===== -->
+        <!-- ===== Ações da ESCOLA (GESTOR/VISUALIZADOR): responder e conferir ===== -->
         <template v-else-if="ehEscola && detalhe.status !== 'RESOLVIDO'">
+          <!-- Enquanto a equipe trabalha não há nada a fazer aqui: dizer isso
+               explicitamente evita a impressão de que a tela quebrou. -->
+          <div v-if="!podeConferir && detalhe.status !== 'COMUNICADO'" class="acao-box acao-aguardando">
+            <h4><Clock :size="15" /> Aguardando a equipe</h4>
+            <p class="acao-dica">
+              <template v-if="detalhe.responsavel">
+                O técnico <strong>{{ detalhe.responsavel }}</strong> está com o chamado
+                ({{ rotuloStatusChamado(detalhe.status) }}).
+              </template>
+              <template v-else>O chamado está na fila da equipe.</template>
+            </p>
+          </div>
+
           <div v-if="detalhe.status === 'COMUNICADO'" class="acao-box acao-pergunta">
             <h4>Pergunta da matriz</h4>
             <p class="pergunta-texto">{{ ultimaPergunta?.texto || 'A equipe aguarda um retorno da sua unidade.' }}</p>
@@ -1283,14 +1757,85 @@ useAutoRefresh(async () => {
             </template>
           </div>
 
-          <div class="acao-box">
-            <h4>Concluir chamado</h4>
-            <div class="acao-linha">
-              <button class="btn btn-primary" type="button" :disabled="salvando" @click="concluirChamado">
-                Concluir chamado
+          <!--
+               Conferência: a escola olha o que o técnico registrou e decide.
+               Confirmar encerra o chamado; contestar reabre e avisa a matriz e o
+               técnico — é o caminho de volta do fluxo.
+          -->
+          <div v-if="podeConferir" class="acao-box acao-conferencia">
+            <h4><ClipboardPen :size="15" /> Conferência do atendimento</h4>
+            <p class="acao-dica">
+              A equipe concluiu o serviço em
+              <strong>{{ detalhe.concluidoEm ? formatDateTime(detalhe.concluidoEm) : '—' }}</strong>.
+              Confira os registros acima e diga se ficou tudo certo.
+            </p>
+
+            <div v-if="!conferenciaAberta" class="conferencia-botoes">
+              <button class="btn btn-primary" type="button" :disabled="acaoFluxo" @click="abrirConferencia('aprovado')">
+                <ThumbsUp :size="15" />
+                Ficou tudo certo
               </button>
-              <span class="acao-dica">A escola só pode responder e concluir o chamado.</span>
+              <button class="btn btn-perigo" type="button" :disabled="acaoFluxo" @click="abrirConferencia('contestar')">
+                <ThumbsDown :size="15" />
+                Ficou faltando
+              </button>
             </div>
+
+            <template v-else>
+              <label class="ava-label" for="texto-conferencia">
+                <template v-if="modalidadeConferencia === 'aprovado'">
+                  Comentário <span class="ava-opcional">opcional</span>
+                </template>
+                <template v-else>O que ficou faltando <span class="ava-obrigatorio">obrigatório</span></template>
+              </label>
+              <textarea
+                id="texto-conferencia"
+                v-model="textoConferencia"
+                class="input textarea"
+                :placeholder="
+                  modalidadeConferencia === 'aprovado'
+                    ? 'Tudo certo por aqui, obrigado.'
+                    : 'Ex.: a impressora continua sem imprimir, só ligou e piscou.'
+                "
+              />
+              <label class="anexo-label">
+                <Paperclip :size="14" /> Fotos (opcional — comprovam o que ficou faltando)
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  class="anexo-input"
+                  @change="(e) => onAnexosChange(e, anexosConferencia)"
+                />
+              </label>
+              <ul v-if="anexosConferencia.length" class="anexo-lista">
+                <li v-for="(a, i) in anexosConferencia" :key="i">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosConferencia.splice(i, 1)">
+                    <X :size="13" />
+                  </button>
+                </li>
+              </ul>
+              <div class="acao-linha">
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  :disabled="acaoFluxo || (modalidadeConferencia === 'contestar' && !textoConferencia.trim())"
+                  @click="salvarConferencia"
+                >
+                  <Loader2 v-if="acaoFluxo" class="spin" :size="15" />
+                  <template v-else-if="modalidadeConferencia === 'aprovado'">Confirmar e encerrar</template>
+                  <template v-else>Reabrir chamado</template>
+                </button>
+                <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="conferenciaAberta = false">
+                  Cancelar
+                </button>
+              </div>
+              <p v-if="modalidadeConferencia === 'contestar'" class="acao-dica enc-aviso">
+                Ao reabrir, o chamado volta para a fila e o <strong>administrador</strong> e o
+                <strong>técnico responsável</strong> recebem um aviso.
+              </p>
+            </template>
           </div>
         </template>
 
@@ -1923,6 +2468,12 @@ tr.selecionado td {
   box-shadow: 0 0 0 3px var(--slate-soft);
 }
 
+/* Contestação da escola: a única linha da timeline que significa retrabalho. */
+.dot-red {
+  background: var(--red);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
+
 .timeline-hora {
   display: block;
   font-size: 11.5px;
@@ -1935,6 +2486,126 @@ tr.selecionado td {
   font-size: 13px;
   color: var(--text-secondary);
   white-space: pre-wrap;
+}
+
+/** O texto do registro em si, abaixo do cabeçalho "tipo — autor". */
+.timeline-corpo {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+/* Etiqueta de reabertura no título "Atendimento". */
+.reabertura-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ---------- Marcos do fluxo (aceito / concluído / conferido) ---------- */
+.marcos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.marco {
+  padding: 8px 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+}
+
+.marco dt {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+}
+
+.marco dd {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+/* ---------- Barra do fluxo (aceitar → registrar → concluir) ---------- */
+.acao-fluxo {
+  border-color: var(--blue);
+}
+
+.acao-fluxo h4,
+.acao-conferencia h4,
+.acao-aguardando h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fluxo-passos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.passo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Passo já cumprido: verde e apagado — é histórico, não ação. */
+.passo.feito {
+  background: var(--green-soft);
+  border-color: transparent;
+  color: var(--green);
+}
+
+/* Passo que é a próxima coisa a fazer: destaque forte, é o botão da vez. */
+.passo.atual {
+  background: var(--blue);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 700;
+}
+
+.passo-seta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ---------- Conferência da escola ---------- */
+.acao-conferencia {
+  border-color: var(--purple);
+}
+
+.conferencia-botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ava-obrigatorio {
+  color: var(--red);
+  font-weight: 700;
 }
 
 /* ---------- Conversa (perguntas e respostas) ---------- */
