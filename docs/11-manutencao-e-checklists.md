@@ -133,7 +133,14 @@ senha". Comunique esse valor ao usuário — ele será obrigado a definir uma se
 definitiva no primeiro acesso.
 
 **Limites:** um Gestor pode ter no máximo **2 usuários ativos** na própria
-escola, e só pode criar Visualizadores.
+escola, e só pode criar Visualizadores. A tela mostra a cota no topo de
+`/usuarios` ("Em uso: 1 de 2") e **trava o botão *Novo usuário*** quando as 2
+vagas acabam — ver [Rotas e telas](./05-rotas-e-telas.md#a-cota-do-gestor-na-tela).
+A trava do portal é aviso: quem recusa é o backend, com **400** *"Limite de 2
+usuários por unidade atingido"*.
+
+> A contagem é de **usuários ativos** da filial, não de Visualizadores: um
+> Técnico já cadastrado na escola também ocupa uma das vagas.
 
 ### Desativar ≠ excluir
 

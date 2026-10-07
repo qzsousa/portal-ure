@@ -149,6 +149,18 @@ h4 {
   color: var(--text-muted);
 }
 
+/* Campo travado por regra de negócio (ex.: o Perfil, que o Gestor não escolhe).
+   Sem isto, um `disabled` aparece idêntico ao campo editável e a trava fica
+   invisível — tanto para o usuário quanto para quem lê a tela. */
+.input:disabled,
+.select-input:disabled {
+  background: var(--surface-muted);
+  border-color: var(--border);
+  border-style: dashed;
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 /* ============ Tabela padrão ============ */
 .table-wrap {
   overflow-x: auto;

@@ -60,6 +60,38 @@ const PERFIS_FILTRO: Array<{ valor: Nivel; rotulo: string }> = [
 /** Só o Admin filtra por unidade: o Gestor já vê apenas a própria escola. */
 const podeFiltrarUnidade = computed(() => isAdmin.value)
 
+/**
+ * Cota do Gestor: ele + **2** usuários = 3 usuários ATIVOS na unidade.
+ * Espelha `MAX_GESTORES_UNIDADE` do backend (`chamados/backend/src/routes/usuarios.ts`),
+ * que recusa o `POST /usuarios` com 400 quando a unidade já tem 3 ativos.
+ *
+ * A contagem é de **usuários**, não de visualizadores: o backend conta todo
+ * `status: 'ATIVO'` da filial, então um Técnico já cadastrado na escola também
+ * ocupa uma das vagas — e o texto do erro do servidor diz "usuários" por isso.
+ */
+const LIMITE_USUARIOS_UNIDADE = 2
+
+/**
+ * Total de usuários ATIVOS da unidade, contado pelo próprio backend
+ * (`GET /usuarios?status=ATIVO`). `null` = ainda não sabemos (primeiro load ou
+ * falhou): nesse caso a tela **não** trava — quem julga é o servidor, e uma
+ * leitura que falhou não pode trancar o cadastro de uma escola.
+ */
+const ativosDaUnidade = ref<number | null>(null)
+
+/** Vagas já ocupadas — a contagem inclui o próprio Gestor, que não é vaga. */
+const vagasUsadas = computed(() =>
+  ativosDaUnidade.value === null ? null : Math.max(0, ativosDaUnidade.value - 1),
+)
+
+/** Só o Gestor tem cota; o Admin cadastra quem quiser. */
+const limiteAtingido = computed(
+  () =>
+    isGestor.value &&
+    vagasUsadas.value !== null &&
+    vagasUsadas.value >= LIMITE_USUARIOS_UNIDADE,
+)
+
 const temFiltroAtivo = computed(
   () => !!(filtros.search || filtros.status || filtros.nivel || filtros.filial),
 )
@@ -80,6 +112,24 @@ async function carregar() {
 function aplicarFiltros() {
   estado.page = 1
   void carregar()
+}
+
+/**
+ * Conta os usuários ativos da unidade para a trava de cota.
+ * Só o Gestor precisa: `limit: 1` já devolve o total exato em `meta.total`,
+ * então não pesa na listagem nem na paginação da tabela.
+ */
+async function carregarVagas() {
+  if (!isGestor.value) {
+    ativosDaUnidade.value = null
+    return
+  }
+  try {
+    const res = await listarUsuarios({ status: 'ATIVO', page: 1, limit: 1 })
+    ativosDaUnidade.value = res.meta.total
+  } catch {
+    ativosDaUnidade.value = null
+  }
 }
 
 function limparFiltros() {
@@ -197,6 +247,7 @@ async function salvar() {
       senhaTempModal.value = { email: criado.email, senha: criado.senhaTemporaria }
     }
     await carregar()
+    await carregarVagas()
   } catch (e) {
     ui.error(apiError(e, 'Falha ao salvar usuário.'))
   } finally {
@@ -219,6 +270,7 @@ async function desativar(u: User) {
     await desativarUsuario(u.id)
     ui.success('Usuário desativado.')
     await carregar()
+    await carregarVagas() // desativar libera a vaga na cota da unidade
   } catch {
     ui.error('Não foi possível desativar o usuário.')
   }
@@ -231,6 +283,7 @@ function copiarSenha(senha: string) {
 
 onMounted(async () => {
   void carregar()
+  void carregarVagas()
   try {
     escolas.value = await listarEscolas()
   } catch {
@@ -241,6 +294,23 @@ onMounted(async () => {
 
 <template>
   <div class="usuarios-page">
+    <!-- Cota do Gestor: o servidor recusa o 3º usuário, a tela avisa antes -->
+    <p v-if="isGestor" class="cota card" :class="{ 'cota-cheia': limiteAtingido }">
+      <template v-if="limiteAtingido">
+        <strong>Limite de {{ LIMITE_USUARIOS_UNIDADE }} usuários por unidade atingido.</strong>
+        Desative um usuário da lista para liberar uma vaga.
+      </template>
+      <template v-else-if="vagasUsadas !== null">
+        Sua unidade pode ter até
+        <strong>{{ LIMITE_USUARIOS_UNIDADE }} usuários</strong> além de você.
+        Em uso: <strong>{{ vagasUsadas }} de {{ LIMITE_USUARIOS_UNIDADE }}</strong>.
+      </template>
+      <template v-else>
+        <strong>Não foi possível contar os usuários da unidade.</strong>
+        O cadastro continua liberado — o servidor valida no envio.
+      </template>
+    </p>
+
     <!-- Toolbar -->
     <div class="toolbar card">
       <div class="search-box">
@@ -283,7 +353,15 @@ onMounted(async () => {
         Limpar
       </button>
 
-      <button class="btn btn-primary btn-novo" type="button" @click="abrirCriar">
+      <button
+        class="btn btn-primary btn-novo"
+        type="button"
+        :disabled="limiteAtingido"
+        :title="
+          limiteAtingido ? `Limite de ${LIMITE_USUARIOS_UNIDADE} usuários por unidade atingido` : ''
+        "
+        @click="abrirCriar"
+      >
         <UserPlus :size="16" />
         Novo usuário
       </button>
@@ -539,6 +617,22 @@ onMounted(async () => {
 .erro {
   padding: 14px 18px;
   color: var(--red);
+  font-weight: 500;
+}
+
+/* Cota de usuários da unidade (só Gestor) — azul enquanto há vaga, vermelho quando fecha */
+.cota {
+  padding: 12px 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--blue-soft);
+  border: 1px solid transparent;
+}
+
+.cota-cheia {
+  color: var(--red);
+  background: var(--red-soft);
   font-weight: 500;
 }
 

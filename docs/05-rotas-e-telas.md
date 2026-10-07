@@ -568,6 +568,38 @@ senha".
 
 ![Tela de usuários](screenshots/23-usuarios.png)
 
+### A cota do Gestor na tela
+
+O Gestor tem **2 vagas** na própria unidade, e a tela mostra isso antes de o
+usuário tentar cadastrar:
+
+| Estado da unidade | Aviso no topo | Botão *Novo usuário* |
+|---|---|---|
+| 1 de 2 em uso | Azul — "Sua unidade pode ter até 2 usuários além de você. Em uso: 1 de 2" | liberado |
+| 2 de 2 em uso | Vermelho — "Limite de 2 usuários por unidade atingido" | **travado** |
+| Contagem falhou | "Não foi possível contar os usuários da unidade" | liberado |
+
+A contagem vem do próprio servidor (`GET /usuarios?status=ATIVO` com
+`limit: 1`, que devolve o total exato em `meta.total` — não pesa na paginação da
+tabela). **Se a contagem falhar, a tela não trava** — quem recusa é o backend, e
+uma leitura que falhou não pode trancar o cadastro de uma escola. O contador é
+recalculado ao criar e ao desativar, porque desativar é o que libera a vaga.
+
+A trava do portal é só aviso: quem decide é o `POST /usuarios`, que devolve
+**400** `VALIDATION_ERROR` — *"Limite de 2 usuários por unidade atingido.
+Desative um usuário existente antes."*
+
+![Usuários com perfil Gestor — lista da própria unidade e aviso de cota](screenshots/42-usuarios-gestor-unidade.png)
+
+No modal, *Perfil* e *Unidade escolar* aparecem tracejados e esmaecidos: o Gestor
+não escolhe nenhum dos dois, o formulário preenche pela conta que está logada.
+
+![Modal de novo usuário como Gestor — Perfil travado em Visualizador](screenshots/43-usuarios-gestor-modal-perfil-travado.png)
+
+Com a cota cheia, o aviso vira vermelho e o botão *Novo usuário* some a ação:
+
+![Usuários com perfil Gestor — limite de 2 usuários atingido](screenshots/44-usuarios-gestor-limite-atingido.png)
+
 ---
 
 ## `/feedback` — Elogios e avaliações *(matriz: ADMIN/TÉCNICO)*

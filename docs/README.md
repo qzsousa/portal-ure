@@ -97,6 +97,29 @@ sistema rodando com dados reais.
 | 40 | Detalhe — após o aceite: horário assumido + botão **Concluir chamado** | [`40-chamado-concluir-modal.png`](./screenshots/40-chamado-concluir-modal.png) |
 | 41 | Detalhe concluído — carimbos **Aceito em** / **Concluído em** e linha do tempo | [`41-chamado-carimbos.png`](./screenshots/41-chamado-carimbos.png) |
 
+### Usuários geridos pelo Gestor
+
+| # | Tela | Arquivo |
+|---|---|---|
+| 42 | Usuários — **perfil Gestor**: só a própria unidade e o aviso de cota ("1 de 2") | [`42-usuarios-gestor-unidade.png`](./screenshots/42-usuarios-gestor-unidade.png) |
+| 43 | Modal *Novo usuário* como Gestor — **Perfil** e **Unidade** travados | [`43-usuarios-gestor-modal-perfil-travado.png`](./screenshots/43-usuarios-gestor-modal-perfil-travado.png) |
+| 44 | Usuários — **cota esgotada**: aviso vermelho e botão *Novo usuário* travado | [`44-usuarios-gestor-limite-atingido.png`](./screenshots/44-usuarios-gestor-limite-atingido.png) |
+
+> **Sobre os prints 42 a 44.** Capturados com o portal local e o usuário de
+> teste **`teste.mae@local.com`** (perfil **GESTOR**, unidade
+> `E.E. CESAR DONATO CALABREZ`). São dados reais — a outra linha da tabela é o
+> técnico da mesma escola, `teste.tecnico@local.com`.
+>
+> O print 44 exigia a unidade com a cota cheia. O usuário
+> `teste.cota.gestor@local.com` foi **criado pela própria tela** para chegar
+> lá (2 de 2), fotografado e **desativado em seguida** — que é o que a tela
+> avisa fazer. Ele continua no banco como `INATIVO`, sem efeito em nada.
+>
+> Também foi conferido, chamando a API direto com o token do Gestor, que
+> `POST /usuarios` com a unidade cheia responde **400** *"Limite de 2 usuários
+> por unidade atingido"* e que `GET /usuarios?filial=<outra escola>` continua
+> devolvendo **só** a própria unidade.
+
 > **Sobre os prints 38 a 41.** Capturados com o usuário de teste
 > `teste.tecnico@local.com` (perfil TÉCNICO) e chamados sintéticos `CH-TESTE-*`
 > encaminhados para ele — ver [Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md).
@@ -124,7 +147,9 @@ sistema rodando com dados reais.
 
 > **Sobre os prints.** Todos foram capturados do portal rodando localmente
 > (`localhost:5173`) contra o banco de desenvolvimento, com um usuário
-> **Administrador**. Três ressalvas:
+> **Administrador** — exceto os 35 a 37 e os 42 a 44, capturados com usuários de
+> teste de perfil **Gestor** (cada bloco de prints traz o seu próprio recado).
+> Três ressalvas:
 >
 > - **24 — Logs do sistema:** as três entradas de "Erros dos backends" são
 >   **exemplo**, inseridas manualmente para ilustrar o agrupamento (`×3`), o
