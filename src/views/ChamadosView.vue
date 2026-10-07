@@ -16,6 +16,11 @@ import {
   Loader2,
   Mail,
   Paperclip,
+  FileText,
+  History,
+  MessageCircle,
+  MessageSquare,
+  RefreshCcw,
   School,
   Search,
   Send,
@@ -840,7 +845,7 @@ async function enviarResposta() {
     const atualizado = await responderChamado(detalhe.value.id, { texto: textoResposta.value.trim() })
     detalhe.value = atualizado
     textoResposta.value = ''
-    ui.success('Resposta registrada no histórico.')
+    ui.success('Comentário registrado no histórico.')
   } catch (e) {
     ui.error(apiError(e, 'Falha ao registrar resposta.'))
   } finally {
@@ -1195,7 +1200,7 @@ useAutoRefresh(async () => {
         </dl>
 
         <div class="descricao-box">
-          <h4>Descrição</h4>
+          <h4><FileText :size="15" /> Descrição</h4>
           <template v-if="portalNetCampos">
             <div class="portal-net-campos">
               <div class="portal-campo" v-for="(valor, chave) in portalNetCampos" :key="chave">
@@ -1222,7 +1227,7 @@ useAutoRefresh(async () => {
         </div>
 
         <div v-if="detalhe.historico" class="descricao-box">
-          <h4>Histórico</h4>
+          <h4><History :size="15" /> Histórico</h4>
           <div ref="timelineRef" class="timeline">
             <div v-for="(entrada, i) in historicoEntradas" :key="i" class="timeline-item">
               <span class="timeline-dot" :class="`dot-${entrada.tom}`" />
@@ -1234,7 +1239,7 @@ useAutoRefresh(async () => {
 
         <!-- Conversa matriz ↔ escola (perguntas e respostas com anexos temporários) -->
         <div v-if="conversa.length" class="descricao-box">
-          <h4>Perguntas e respostas</h4>
+          <h4><MessageSquare :size="15" /> Perguntas e respostas</h4>
           <div class="msgs">
             <div v-for="m in conversa" :key="m.id" class="msg" :class="m.tipo === 'PERGUNTA' ? 'msg-pergunta' : 'msg-resposta'">
               <span class="msg-meta">
@@ -1317,7 +1322,7 @@ useAutoRefresh(async () => {
           </div>
 
           <div class="acao-box">
-            <h4>Alterar status</h4>
+            <h4><RefreshCcw :size="15" /> Alterar status</h4>
             <div class="acao-linha">
               <select v-model="novoStatus" class="select-input">
                 <option value="ABERTO">Aberto</option>
@@ -1358,7 +1363,7 @@ useAutoRefresh(async () => {
           </div>
 
           <div class="acao-box">
-            <h4>Adicionar resposta ao histórico</h4>
+            <h4><Send :size="15" /> Adicionar comentário ao histórico</h4>
             <div class="acao-linha">
               <input v-model="textoResposta" class="input" placeholder="Escreva uma atualização..." />
               <button class="btn btn-outline" type="button" :disabled="salvando || !textoResposta.trim()" @click="enviarResposta">
@@ -1371,7 +1376,7 @@ useAutoRefresh(async () => {
         <!-- ===== Ações da ESCOLA (GESTOR/VISUALIZADOR): responder e concluir ===== -->
         <template v-else-if="ehEscola && detalhe.status !== 'RESOLVIDO'">
           <div v-if="detalhe.status === 'COMUNICADO'" class="acao-box acao-pergunta">
-            <h4>Pergunta da matriz</h4>
+            <h4><MessageCircle :size="15" /> Pergunta da matriz</h4>
             <p class="pergunta-texto">{{ ultimaPergunta?.texto || 'A equipe aguarda um retorno da sua unidade.' }}</p>
             <div v-if="ultimaPergunta?.anexos?.length" class="msg-anexos">
               <a v-for="a in ultimaPergunta.anexos" :key="a.id" :href="a.url" target="_blank" rel="noopener" class="msg-anexo">
@@ -1410,7 +1415,7 @@ useAutoRefresh(async () => {
           </div>
 
           <div class="acao-box">
-            <h4>Concluir chamado</h4>
+            <h4><CheckCheck :size="15" /> Concluir chamado</h4>
             <div class="acao-linha">
               <button class="btn btn-primary" type="button" :disabled="salvando" @click="concluirChamado">
                 Concluir chamado
@@ -1939,10 +1944,30 @@ tr.selecionado td {
   margin-left: 4px;
 }
 
+/* Seções do modal em cartões separados: descrição, histórico, ações e conversa
+   ficam visualmente distintas (antes era tudo na mesma coluna, sem borda nem
+   fundo, e o modal parecia um bloco só). */
+.descricao-box,
+.acao-box {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
 .descricao-box h4,
 .acao-box h4 {
-  font-size: 13px;
-  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  padding-bottom: 8px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .descricao-box p {
