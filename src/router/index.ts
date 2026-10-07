@@ -115,6 +115,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Unidades Escolares', breadcrumb: 'Unidades Escolares', roles: ['ADMIN', 'TECNICO'] as Nivel[] },
       },
       {
+        path: 'cameras-dvr',
+        name: 'cameras-dvr',
+        component: () => import('@/views/MonitorDvrsView.vue'),
+        meta: { title: 'Câmeras DVR', breadcrumb: 'Câmeras DVR', roles: ['ADMIN', 'TECNICO'] as Nivel[] },
+      },
+      {
         path: 'relatorios',
         name: 'relatorios',
         component: () => import('@/views/RelatoriosView.vue'),

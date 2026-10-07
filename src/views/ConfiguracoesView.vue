@@ -30,6 +30,7 @@ import {
   type ItemLista,
 } from '@/api/sce'
 import { chamadosApi } from '@/api/http'
+import { verificarHealthMonitor } from '@/api/monitor'
 import { apiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 import { ordenarTecnicos } from '@/utils/tecnicos'
@@ -320,6 +321,7 @@ async function carregarLogs() {
 const integracoes = reactive({
   chamados: { testado: false, ok: false, msg: '' },
   sce: { testado: false, ok: false, msg: '' },
+  monitor: { testado: false, ok: false, msg: '' },
   sso: { testado: false, ok: false, msg: '' },
   carregando: false,
 })
@@ -340,11 +342,39 @@ async function testarIntegracoes() {
   } catch {
     integracoes.sce = { testado: true, ok: false, msg: 'API do SCE indisponível' }
   }
-  // 3) SSO (o mesmo token funciona nos dois?)
+  // 3) Monitor de DVRs — roda NA MÁQUINA DA REDE, não na nuvem.
+  //
+  // Testa /health (público) e não /api/hosts: o que interessa aqui é "a máquina
+  // está no ar ereachable", que é a falha de infraestrutura comum. A aba
+  // Câmeras DVR faz o teste autenticado sozinha.
+  try {
+    const saude = await verificarHealthMonitor()
+    integracoes.monitor = saude.ssoConfigurado
+      ? {
+          testado: true,
+          ok: true,
+          msg: `${saude.monitorados} câmeras em ${saude.escolas} unidades`,
+        }
+      : {
+          testado: true,
+          ok: false,
+          msg: 'No ar, mas sem SSO_SECRET — a aba Câmeras DVR não vai abrir',
+        }
+  } catch {
+    integracoes.monitor = {
+      testado: true,
+      ok: false,
+      msg: 'Serviço de monitoramento inacessível (túnel ou máquina fora do ar)',
+    }
+  }
+  // 4) SSO — o mesmo token é aceito nos TRÊS serviços?
+  //
+  // Só é "ok" quando os três responderam: com o monitor fora do ar, dizer
+  // "login único ativo" seria afirmação que a tela não consegue provar.
   integracoes.sso =
-    integracoes.chamados.ok && integracoes.sce.ok
-      ? { testado: true, ok: true, msg: 'Login único ativo (JWT aceito nos dois backends)' }
-      : { testado: true, ok: false, msg: 'SSO indisponível para algum dos backends' }
+    integracoes.chamados.ok && integracoes.sce.ok && integracoes.monitor.ok
+      ? { testado: true, ok: true, msg: 'Login único ativo (JWT aceito nos três serviços)' }
+      : { testado: true, ok: false, msg: 'SSO indisponível para algum dos serviços' }
   integracoes.carregando = false
 }
 
@@ -694,7 +724,9 @@ onMounted(() => {
         <section v-else-if="aba === 'integracoes'" class="card conf-card">
           <h3>Integrações do portal</h3>
           <p class="conf-desc">
-            Verifica se o portal está conversando com os dois backends e se o login único (SSO) está ativo.
+            Verifica se o portal está conversando com os três serviços e se o login único (SSO)
+            está ativo em todos. O monitoramento das câmeras DVR roda numa máquina dentro da
+            rede privada das escolas — se ele estiver fora, apenas a aba Câmeras DVR é afetada.
           </p>
           <div class="integracoes">
             <div class="int-card" :class="{ ok: integracoes.chamados.ok, off: integracoes.chamados.testado && !integracoes.chamados.ok }">
@@ -714,6 +746,15 @@ onMounted(() => {
               </div>
               <CheckCircle2 v-if="integracoes.sce.ok" :size="18" class="ok-ic" />
               <XCircle v-else-if="integracoes.sce.testado" :size="18" class="off-ic" />
+            </div>
+            <div class="int-card" :class="{ ok: integracoes.monitor.ok, off: integracoes.monitor.testado && !integracoes.monitor.ok }">
+              <ShieldCheck :size="20" />
+              <div>
+                <strong>Monitoramento de DVRs</strong>
+                <span>{{ integracoes.monitor.msg || 'Não testado ainda' }}</span>
+              </div>
+              <CheckCircle2 v-if="integracoes.monitor.ok" :size="18" class="ok-ic" />
+              <XCircle v-else-if="integracoes.monitor.testado" :size="18" class="off-ic" />
             </div>
             <div class="int-card" :class="{ ok: integracoes.sso.ok, off: integracoes.sso.testado && !integracoes.sso.ok }">
               <ShieldCheck :size="20" />

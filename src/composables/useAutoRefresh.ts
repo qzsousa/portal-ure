@@ -6,6 +6,15 @@ export const AUTO_REFRESH_MS = {
   rapido: 30_000,
   /** Telas analíticas/secundárias (painel, manutenção, feedback, dirigente). */
   normal: 60_000,
+  /**
+   * Monitoramento das câmeras DVR.
+   *
+   * Alinhado ao ciclo do serviço (`intervaloSegundos`, 30 s no config.json
+   * do monitor). A tela pergunta no MESMO ritmo em que a máquina varre:
+   * consultar antes devolveria o mesmo payload pelo túnel, sem informação nova.
+   * Se mudar o ciclo do serviço, mude aqui junto.
+   */
+  monitor: 30_000,
 } as const
 
 /**

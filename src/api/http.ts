@@ -13,6 +13,7 @@ import { useErrorLogStore } from '@/stores/errorLog'
 
 export const CHAMADOS_BASE = import.meta.env.VITE_API_CHAMADOS_URL || 'http://localhost:10000/api'
 export const SCE_BASE = import.meta.env.VITE_API_SCE_URL || 'http://localhost:3000/api'
+export const MONITOR_BASE = import.meta.env.VITE_API_MONITOR_URL || 'http://localhost:4000'
 
 type TokenProvider = () => string | null
 type RefreshHandler = () => Promise<string | null>
@@ -143,6 +144,18 @@ export const sceApi = axios.create({
   timeout: 30000,
 })
 
+/**
+ * Timeout maior que o dos outros clientes de propósito: o monitor responde
+ * pela rede da escola e pelo túnel Cloudflare. Um túnel lento e um timeout de
+ * 30 s cortaria a carga inicial do painel, e o sintoma seria "não carrega"
+ * sem motivo aparente.
+ */
+export const monitorApi = axios.create({
+  baseURL: MONITOR_BASE,
+  headers: { 'Content-Type': 'application/json' },
+  timeout: 60000,
+})
+
 chamadosApi.interceptors.request.use(attachAuthHeader)
 chamadosApi.interceptors.response.use((r) => r, createRefreshInterceptor(chamadosApi))
 chamadosApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('Chamados'))
@@ -150,3 +163,7 @@ chamadosApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('C
 sceApi.interceptors.request.use(attachAuthHeader)
 sceApi.interceptors.response.use((r) => r, createRefreshInterceptor(sceApi))
 sceApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('SCE'))
+
+monitorApi.interceptors.request.use(attachAuthHeader)
+monitorApi.interceptors.response.use((r) => r, createRefreshInterceptor(monitorApi))
+monitorApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('Monitor DVR'))

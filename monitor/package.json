@@ -1,0 +1,15 @@
+{
+  "name": "monitor-dvr",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Serviço de ping dos DVRs de videovigilância da rede privada — consome pelo Portal URE Leste 3",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test \"testes/*.test.mjs\"",
+    "parse-dvr": "node scripts/parse-dvr.mjs"
+  }
+}

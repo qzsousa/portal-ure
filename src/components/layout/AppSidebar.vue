@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   BarChart3,
   BookOpen,
+  Camera,
   Headset,
   LayoutDashboard,
   Monitor,
@@ -37,6 +38,7 @@ const items: MenuItem[] = [
   { to: '/chamados', label: 'Chamados', icon: Headset },
   { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen },
   { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true },
+  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, matrizOnly: true },
   { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, matrizOnly: true },
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
   { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true },

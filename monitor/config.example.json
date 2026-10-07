@@ -1,0 +1,21 @@
+{
+  "_comentario": [
+    "Modelo do config.json — o arquivo real NÃO é versionado (tem a topologia",
+    "das escolas). Gere o seu com:  npm run parse-dvr",
+    "",
+    "O parser lê o texto do pingInfoView:",
+    "  Group: E.E. NOME DA ESCOLA",
+    "  10.109.121.194 VIDEO-DVR1 ADM",
+    "",
+    "portasPadrao: sondadas quando o ICMP é filtrado. 80 = web do DVR, 8000 =",
+    "SDK, 554 = RTSP, 443 = HTTPS, 37777 = protocolo NAT. Se a câmera filtrar",
+    "ping mas estiver servindo vídeo, o painel mostra ligada em vez de mentir."
+  ],
+  "intervaloSegundos": 30,
+  "concorrencia": 48,
+  "timeoutPingMs": 1000,
+  "timeoutPortaMs": 800,
+  "historico": 30,
+  "portasPadrao": [80, 8000, 554, 443, 37777],
+  "faixas": []
+}

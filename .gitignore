@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 .env
+!.env.example
+
+# Monitor de DVRs: o config.json e o manifesto com a topologia das escolas
+# (endereços de câmera) NÃO entram no repositório. config.example.json é o modelo.
+monitor/config.json
+monitor/dvr-raw.txt
+monitor/*.log
+monitor/*.err
 
 # Editor directories and files
 .vscode/*
