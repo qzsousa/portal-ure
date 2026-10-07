@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import { apiError } from '@/utils/apiError'
@@ -26,6 +26,7 @@ import {
   School,
   Search,
   Send,
+  Settings,
   Star,
   ThumbsDown,
   ThumbsUp,
@@ -33,6 +34,7 @@ import {
   Wrench,
   X,
 } from '@lucide/vue'
+import BaseAccordion from '@/components/ui/BaseAccordion.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
@@ -386,31 +388,20 @@ async function aceitarChamadoRapido(c: Chamado) {
 }
 
 /**
- * Concluir pela LINHA ou pelo botão grande do topo do modal.
+ * Concluir direto da LINHA da tabela.
+ *
+ * Antes chamava `window.prompt`: no celular isso abre um campo de uma linha só,
+ * não aceita foto e some com o contexto do chamado enquanto se digita. Abrir o
+ * modal já no formulário de conclusão custa o mesmo número de toques e devolve
+ * um formulário de verdade — texto com espaço, anexos e o histórico do serviço
+ * à vista para conferir antes de enviar.
  *
  * Não chama `PATCH /status` com `RESOLVIDO`: no fluxo atual o técnico **não
- * encerra** o chamado — ele entrega o serviço e a escola confere. Por isso vai
- * para `AGUARDANDO_CONFERENCIA` pelo endpoint `/concluir`, que exige o texto do
- * que foi feito (é o que a escola vai ler para decidir).
+ * encerra** o chamado — ele entrega o serviço e a escola confere. O envio vai
+ * pelo endpoint `/concluir`, que exige o texto do que foi feito.
  */
-async function concluirChamadoTecnico(c: Chamado) {
-  if (acaoRapidaEmAndamento.value) return
-  const descricao = window.prompt(
-    `O que foi feito no chamado #${c.protocolo}?\n\nEste texto é o que a escola lê para conferir o serviço.`,
-    c.descricaoResolucao || '',
-  )
-  if (!descricao?.trim()) return
-  acaoRapidaEmAndamento.value = c.id
-  try {
-    const atualizado = await concluirChamado(c.id, { texto: descricao.trim() })
-    refletirAtualizacao(atualizado)
-    ui.success(`Atendimento concluído. A escola foi avisada para conferir o chamado #${c.protocolo}.`)
-    await Promise.all([carregar(true), carregarStats()])
-  } catch (e) {
-    ui.error(apiError(e, 'Falha ao concluir o atendimento.'))
-  } finally {
-    acaoRapidaEmAndamento.value = null
-  }
+function concluirChamadoTecnico(c: Chamado) {
+  void abrirDetalhe(c, { abrirConclusao: true })
 }
 
 /* ---------- Seleção múltipla (batch) ---------- */
@@ -778,7 +769,15 @@ async function enviarAvaliacao() {
   }
 }
 
-async function abrirDetalhe(c: Chamado) {
+/**
+ * Abre o modal de detalhes.
+ *
+ * `opcoes.abrirConclusao` atende o botão "Concluir" da linha da tabela: em vez
+ * de um prompt, o modal abre com o formulário de conclusão já aberto e a seção
+ * "Atendimento" à vista — que é onde o técnico confere o que registrou antes de
+ * dizer que terminou.
+ */
+async function abrirDetalhe(c: Chamado, opcoes: { abrirConclusao?: boolean } = {}) {
   detalhe.value = c
   novoStatus.value = c.status
   descricaoResolucao.value = c.descricaoResolucao || ''
@@ -807,6 +806,14 @@ async function abrirDetalhe(c: Chamado) {
   anexosConferencia.value = []
   modalidadeConferencia.value = 'aprovado'
   acaoFluxo.value = false
+  secaoAberta.value = 'atendimento'
+  // Só abre a conclusão quando o chamado realmente permite concluir. A linha da
+  // tabela já filtra, mas o modal é a rede de segurança: não deve oferecer um
+  // formulário que o backend vai recusar com 409.
+  if (opcoes.abrirConclusao && COM_TECNICO_ACEITO.includes(c.status) && c.status !== 'AGUARDANDO_CONFERENCIA') {
+    conclusaoAberta.value = true
+    textoConclusao.value = c.descricaoResolucao || ''
+  }
   detalheAberto.value = true
   // A listagem não traz a conversa — busca o chamado completo (perguntas, respostas e anexos)
   try {
@@ -891,6 +898,71 @@ watch([detalheAberto, () => detalhe.value?.historico], async ([aberto]) => {
   const el = timelineRef.value
   if (el) el.scrollTop = el.scrollHeight
 })
+
+/* ==============================================================
+ * SEÇÕES DO MODAL (accordion)
+ *
+ * O modal de detalhes carrega muita coisa: identificação, descrição,
+ * atendimento, conversa, histórico e as ações da matriz. Todas abertas ao mesmo
+ * tempo viram uma parede — obriga a rolar até o fim para achar a ação do
+ * momento, que é justamente o que o técnico faz no celular.
+ *
+ * Aqui cada bloco é uma seção. Só uma fica aberta por vez (`secaoAberta`), como
+ * accordion de verdade: assim a altura do modal não cresce com o chamado.
+ *
+ * "atendimento" é a que nasce aberta, porque é onde o técnico trabalha e onde a
+ * escola confere. As outras nascem fechadas, com contador no título para dar
+ * para saber que existe conteúdo lá dentro sem precisar abrir.
+ * ============================================================== */
+type SecaoChamado = 'identificacao' | 'atendimento' | 'conversa' | 'historico' | 'matriz' | 'escola'
+
+/**
+ * A seção aberta. O tipo é `SecaoChamado | ''` porque o accordion fecha quando
+ * se toca na seção que já está aberta — como em qualquer accordion, só uma
+ * fica de pé por vez.
+ */
+const secaoAberta = ref<SecaoChamado | ''>('atendimento')
+
+function alternarSecao(s: SecaoChamado) {
+  secaoAberta.value = secaoAberta.value === s ? '' : s
+}
+
+/**
+ * Registrar e concluir são ações do MESMO lugar: o técnico anota o serviço e
+ * encerra em sequência, várias vezes no mesmo chamado. Na tela anterior eram
+ * dois blocos empilhados com dois "abrir" — e com o rascunho do registro ainda
+ * aberto, dava para mandar a conclusão por cima dele.
+ *
+ * Aqui quem decide o que está aberto é o modal inteiro: `registroAberto` e
+ * `conclusaoAberta` são exclusivos, e abrir um fecha o outro.
+ */
+function alternarRegistro() {
+  registroAberto.value = !registroAberto.value
+  if (registroAberto.value) {
+    conclusaoAberta.value = false
+    textoConclusao.value = ''
+    anexosConclusao.value = []
+  } else {
+    textoAtividade.value = ''
+    anexosAtividade.value = []
+  }
+  secaoAberta.value = 'atendimento'
+}
+
+function alternarConclusao() {
+  conclusaoAberta.value = !conclusaoAberta.value
+  if (conclusaoAberta.value) {
+    registroAberto.value = false
+    textoAtividade.value = ''
+    anexosAtividade.value = []
+    textoConclusao.value = detalhe.value?.descricaoResolucao || ''
+    anexosConclusao.value = []
+  } else {
+    textoConclusao.value = ''
+    anexosConclusao.value = []
+  }
+  secaoAberta.value = 'atendimento'
+}
 
 /* ==============================================================
  * FLUXO DE ATENDIMENTO
@@ -995,10 +1067,9 @@ const anexosConferencia = ref<AnexoMensagemPayload[]>([])
 /** Qual dos dois botões da conferência foi clicado. */
 const modalidadeConferencia = ref<'aprovado' | 'contestar'>('aprovado')
 
+/** Abre o formulário de registro, ou o fecha se já estiver aberto. */
 function abrirRegistro() {
-  registroAberto.value = true
-  textoAtividade.value = ''
-  anexosAtividade.value = []
+  alternarRegistro()
 }
 
 async function salvarRegistro() {
@@ -1024,10 +1095,9 @@ async function salvarRegistro() {
   }
 }
 
+/** Abre o formulário de conclusão, ou o fecha se já estiver aberto. */
 function abrirConclusao() {
-  conclusaoAberta.value = true
-  textoConclusao.value = detalhe.value?.descricaoResolucao || ''
-  anexosConclusao.value = []
+  alternarConclusao()
 }
 
 async function salvarConclusao() {
@@ -1091,6 +1161,114 @@ async function salvarConferencia() {
     acaoFluxo.value = false
   }
 }
+
+/**
+ * A única ação que cabe a QUEM está olhando este chamado agora.
+ *
+ * Antes havia um botão de aceitar e outro de concluir no topo do modal, cada um
+ * com a sua condição, e uma caixa "Atendimento" mais abaixo repetindo os dois —
+ * dava para ver três botões do mesmo passo numa tela. Aqui a barra de ação do
+ * topo é a fonte da verdade: mostra o que fazer agora, ou nada quando não é a
+ * vez desta pessoa.
+ *
+ * A ordem importa e é o fluxo: aceitar → registrar → concluir → conferir.
+ */
+const acaoDoMomento = computed<{
+  titulo: string
+  dica?: string
+  rotulo: string
+  classe: string
+  tom: 'blue' | 'green' | 'purple' | 'yellow'
+  icone: Component
+  acao: () => void
+} | null>(() => {
+  const c = detalhe.value
+  if (!c) return null
+
+  // Escola: a bola está com ela para confirmar o serviço (ou reabrir).
+  if (podeConferir.value) {
+    return {
+      titulo: 'Confira o atendimento',
+      dica: `A equipe concluiu em ${c.concluidoEm ? formatDateTime(c.concluidoEm) : '—'}. Confira os registros abaixo e diga se ficou tudo certo.`,
+      rotulo: 'Conferir agora',
+      classe: 'btn-verde',
+      tom: 'purple',
+      icone: ClipboardPen,
+      acao: () => {
+        secaoAberta.value = 'atendimento'
+        if (!conferenciaAberta.value) abrirConferencia('aprovado')
+      },
+    }
+  }
+
+  // Escola com pergunta da matriz em aberto.
+  if (ehEscola.value && c.status === 'COMUNICADO') {
+    return {
+      titulo: 'A equipe precisa de um retorno',
+      dica: 'Responda a pergunta para o atendimento continuar.',
+      rotulo: 'Responder',
+      classe: 'btn-verde',
+      tom: 'purple',
+      icone: MessageCircle,
+      acao: () => {
+        secaoAberta.value = 'atendimento'
+        if (!responderAberto.value) responderAberto.value = true
+      },
+    }
+  }
+
+  // Técnico/matriz: ainda precisa assumir o chamado.
+  if (podeAceitar.value) {
+    return {
+      titulo: 'Este chamado é seu',
+      dica: c.responsavel
+        ? `Encaminhado para ${c.responsavel}. Aceite para assumir o atendimento.`
+        : 'Aceite para assumir o atendimento.',
+      rotulo: 'Aceitar chamado',
+      classe: 'btn-aceitar',
+      tom: 'blue',
+      icone: CheckCheck,
+      acao: () => void aceitarMeuChamado(),
+    }
+  }
+
+  // Técnico/matriz com o chamado assumido e ainda não entregue à escola.
+  if (podeRegistrar.value) {
+    const temRegistro = atividades.value.some((a) => a.tipo === 'REGISTRO')
+    return {
+      titulo: 'Chamado em suas mãos',
+      dica: temRegistro
+        ? 'Pode registrar mais uma visita ou concluir quando terminar.'
+        : 'Registre o que você fez. Pode registrar quantas vezes quiser.',
+      rotulo: 'Registrar o que foi feito',
+      classe: 'btn-aceitar',
+      tom: 'blue',
+      icone: ClipboardPen,
+      acao: () => {
+        secaoAberta.value = 'atendimento'
+        if (!registroAberto.value && !conclusaoAberta.value) alternarRegistro()
+      },
+    }
+  }
+
+  // Sem responsável, ninguém pode aceitar: quem olha precisa encaminhar primeiro.
+  if (souDaMatriz.value && !c.responsavel && !c.aceitoEm) {
+    return {
+      titulo: 'Falta um responsável',
+      dica: 'Este chamado não tem técnico. Encaminhe para um poder aceitar.',
+      rotulo: 'Encaminhar para técnico',
+      classe: 'btn-ambar',
+      tom: 'yellow',
+      icone: UserPlus,
+      acao: () => {
+        secaoAberta.value = 'matriz'
+        void abrirEncaminhar(c)
+      },
+    }
+  }
+
+  return null
+})
 
 async function aceitarMeuChamado() {
   if (!detalhe.value || acaoFluxo.value) return
@@ -1439,43 +1617,60 @@ useAutoRefresh(async () => {
     >
       <div v-if="detalhe" class="detalhe">
         <!--
-             Ação do técnico na PRIMEIRA altura do modal: o botão grande, de um
-             toque, para o técnico aceitar do celular. As ações completas do
-             fluxo (registrar o serviço com foto, concluir com descrição) ficam
-             na caixa "Atendimento", mais abaixo.
+             Cabeçalho: o que se responde com uma olhada, antes de qualquer
+             clique. Protocolo e status já estão no título do modal — aqui ficam
+             unidade, quem pediu e quem é o técnico.
         -->
-        <div v-if="podeAceitarNaLinha(detalhe) || podeConcluirNaLinha(detalhe)" class="acao-tecnico">
-          <button
-            v-if="podeAceitarNaLinha(detalhe)"
-            class="btn-acao btn-aceitar btn-acao-grande"
-            type="button"
-            :disabled="acaoRapidaEmAndamento === detalhe.id"
-            @click="aceitarChamadoRapido(detalhe)"
-          >
-            <Loader2 v-if="acaoRapidaEmAndamento === detalhe.id" class="spin" :size="20" />
-            <Check v-else :size="20" />
-            {{ acaoRapidaEmAndamento === detalhe.id ? 'Aceitando...' : 'Aceitar chamado' }}
-          </button>
-          <template v-else>
-            <p class="acao-tecnico-info">
-              Você aceitou este chamado em <strong>{{ formatDateTime(detalhe.aceitoEm!) }}</strong>.
-            </p>
-            <button
-              class="btn-acao btn-concluir btn-acao-grande"
-              type="button"
-              :disabled="acaoRapidaEmAndamento === detalhe.id"
-              @click="concluirChamadoTecnico(detalhe)"
-            >
-              <Loader2 v-if="acaoRapidaEmAndamento === detalhe.id" class="spin" :size="20" />
-              <CheckCheck v-else :size="20" />
-              {{ acaoRapidaEmAndamento === detalhe.id ? 'Concluindo...' : 'Concluir atendimento' }}
-            </button>
-            <p class="acao-tecnico-info">
-              Concluir entrega o serviço para a <strong>escola conferir</strong> — quem encerra o
-              chamado é a unidade.
-            </p>
-          </template>
+        <div class="detalhe-cabecalho">
+          <div class="detalhe-cabecalho-linha">
+            <StatusPill :status="rotuloStatusChamado(detalhe.status)" />
+            <span v-if="detalhe.reaberturas" class="reabertura-tag">
+              <RotateCcw :size="12" /> reaberto {{ detalhe.reaberturas }}x
+            </span>
+          </div>
+          <p class="detalhe-unidade">{{ detalhe.unidade }}</p>
+          <p class="detalhe-solicitante">
+            {{ detalhe.solicitante }}<template v-if="detalhe.funcao"> · {{ detalhe.funcao }}</template>
+            <template v-if="detalhe.responsavel"> · técnico {{ detalhe.responsavel }}</template>
+          </p>
         </div>
+
+        <!--
+             Barra de ação: fica ACIMA das seções e sempre visível, respondendo a
+             pergunta "o que eu faço agora com este chamado?". Quem não tem nada
+             a fazer não vê botão nenhum, em vez de um botão esmaecido que só
+             explica que não pode.
+        -->
+        <div v-if="acaoDoMomento" class="acao-tecnico" :class="`acao-${acaoDoMomento.tom}`">
+          <p class="acao-tecnico-titulo">{{ acaoDoMomento.titulo }}</p>
+          <p v-if="acaoDoMomento.dica" class="acao-tecnico-info">{{ acaoDoMomento.dica }}</p>
+          <button
+            class="btn-acao btn-acao-grande"
+            :class="acaoDoMomento.classe"
+            type="button"
+            :disabled="acaoFluxo || acaoRapidaEmAndamento === detalhe.id"
+            @click="acaoDoMomento.acao()"
+          >
+            <Loader2 v-if="acaoFluxo || acaoRapidaEmAndamento === detalhe.id" class="spin" :size="20" />
+            <component :is="acaoDoMomento.icone" v-else :size="20" />
+            {{ acaoDoMomento.rotulo }}
+          </button>
+        </div>
+
+        <!--
+             DADOS DO CHAMADO: identificação e descrição. Nasce fechada por
+             padrão — quem abriu o chamado já sabe do que se trata (está na
+             lista), e o que interessa na tela é a ação.
+        -->
+        <BaseAccordion
+          class="secao"
+          titulo="Chamado"
+          tom="slate"
+          :contador="detalhe.urgencia === 'Alta' ? 'urgente' : null"
+          :aberto="secaoAberta === 'identificacao'"
+          @alternar="alternarSecao('identificacao')"
+        >
+          <template #icone><FileText :size="16" /></template>
 
         <dl class="detalhe-grid">
           <div><dt>Unidade</dt><dd>{{ detalhe.unidade }}</dd></div>
@@ -1535,20 +1730,51 @@ useAutoRefresh(async () => {
           <p v-else>{{ detalhe.descricao }}</p>
         </div>
 
-        <div v-if="detalhe.historico" class="descricao-box">
-          <h4><History :size="15" /> Histórico</h4>
-          <div ref="timelineRef" class="timeline">
+        </BaseAccordion>
+
+        <!--
+             ATENDIMENTO: onde o técnico trabalha e onde a escola confere. Nasce
+             aberta de propósito — é a seção que se abre todo dia, e o resto do
+             modal vira detalhe sob demanda.
+        -->
+        <!--
+             Histórico do chamado: o rastro em TEXTO, com o horário que o
+             backend gravou dentro da frase. É complementar à linha do tempo de
+             `atividades` (lá o horário é coluna, não texto), então fica numa
+             seção própria — é o registro de auditoria, não o atendimento.
+        -->
+        <BaseAccordion
+          class="secao"
+          titulo="Histórico"
+          tom="slate"
+          :contador="historicoEntradas.length || null"
+          :aberto="secaoAberta === 'historico'"
+          @alternar="alternarSecao('historico')"
+        >
+          <template #icone><History :size="16" /></template>
+          <div class="timeline">
             <div v-for="(entrada, i) in historicoEntradas" :key="i" class="timeline-item">
               <span class="timeline-dot" :class="`dot-${entrada.tom}`" />
               <span v-if="entrada.horario" class="timeline-hora">{{ entrada.horario }}</span>
               <p class="timeline-texto">{{ entrada.texto }}</p>
             </div>
           </div>
-        </div>
+        </BaseAccordion>
 
-        <!-- Conversa matriz ↔ escola (perguntas e respostas com anexos temporários) -->
-        <div v-if="conversa.length" class="descricao-box">
-          <h4><MessageSquare :size="15" /> Perguntas e respostas</h4>
+        <!--
+             Perguntas e respostas entre matriz e escola (anexos temporários, 7
+             dias). Só aparece quando existe conversa.
+        -->
+        <BaseAccordion
+          v-if="conversa.length"
+          class="secao"
+          titulo="Perguntas e respostas"
+          tom="purple"
+          :contador="conversa.length"
+          :aberto="secaoAberta === 'conversa'"
+          @alternar="alternarSecao('conversa')"
+        >
+          <template #icone><MessageSquare :size="16" /></template>
           <div class="msgs">
             <div v-for="m in conversa" :key="m.id" class="msg" :class="m.tipo === 'PERGUNTA' ? 'msg-pergunta' : 'msg-resposta'">
               <span class="msg-meta">
@@ -1563,23 +1789,48 @@ useAutoRefresh(async () => {
               </div>
             </div>
           </div>
-        </div>
+        </BaseAccordion>
 
-        <!--
-             Linha do tempo do ATENDIMENTO: o que o técnico registrou a cada
-             visita, a conclusão, a contestação da escola e a aprovação final.
-             Vem de `atividades` (tabela com `criadoEm` do servidor), não do
-             `historico` em texto — os horários aqui são reais, não inferidos
-             por regex.
-        -->
-        <div v-if="atividades.length" class="descricao-box">
-          <h4>
-            Atendimento
-            <span v-if="detalhe.reaberturas" class="reabertura-tag">
-              <RotateCcw :size="12" /> reaberto {{ detalhe.reaberturas }}x
+        <BaseAccordion
+          class="secao"
+          titulo="Atendimento"
+          tom="blue"
+          :contador="atividades.length || null"
+          :aberto="secaoAberta === 'atendimento'"
+          @alternar="alternarSecao('atendimento')"
+        >
+          <template #icone><Wrench :size="16" /></template>
+
+          <!-- Trilha do fluxo: onde este chamado parou, num relance. -->
+          <div class="fluxo-passos">
+            <span class="passo" :class="{ feito: detalhe.aceitoEm, atual: podeAceitar }">
+              <CheckCheck :size="13" /> Aceito
             </span>
-          </h4>
-          <div ref="timelineRef" class="timeline">
+            <span class="passo-seta">→</span>
+            <span class="passo" :class="{ feito: atividades.some((a) => a.tipo === 'REGISTRO'), atual: podeRegistrar }">
+              <ClipboardPen :size="13" /> Registro
+            </span>
+            <span class="passo-seta">→</span>
+            <span class="passo" :class="{ feito: detalhe.concluidoEm, atual: podeConcluir }">
+              <Send :size="13" /> Concluído
+            </span>
+            <span class="passo-seta">→</span>
+            <span
+              class="passo"
+              :class="{ feito: detalhe.conferidoEm, atual: detalhe.status === 'AGUARDANDO_CONFERENCIA' }"
+            >
+              <School :size="13" /> Conferência
+            </span>
+          </div>
+
+          <!--
+               Linha do tempo do ATENDIMENTO: o que o técnico registrou a cada
+               visita, a conclusão, a contestação da escola e a aprovação final.
+               Vem de `atividades` (tabela com `criadoEm` do servidor), não do
+               `historico` em texto — os horários aqui são reais, não inferidos
+               por regex.
+          -->
+          <div v-if="atividades.length" class="timeline">
             <div v-for="a in atividades" :key="a.id" class="timeline-item">
               <span class="timeline-dot" :class="`dot-${TOM_ATIVIDADE[a.tipo]}`" />
               <span class="timeline-hora">{{ formatDateTime(a.criadoEm) }}</span>
@@ -1594,35 +1845,248 @@ useAutoRefresh(async () => {
               </div>
             </div>
           </div>
-        </div>
+          <p v-else class="secao-vazia">
+            Nenhum registro ainda. O técnico anota aqui o que fez em cada visita.
+          </p>
 
-        <!-- Marcos com horário: respondem de cara às perguntas que se faz de um
-             chamado ("aceito quando?", "quem confirmou que terminou?"). -->
-        <div class="marcos">
-          <div class="marco">
-            <dt>Aceito</dt>
-            <dd>{{ detalhe.aceitoEm ? `${formatDateTime(detalhe.aceitoEm)} · ${detalhe.aceitoPor}` : '—' }}</dd>
-          </div>
-          <div class="marco">
-            <dt>Concluído pelo técnico</dt>
-            <dd>{{ detalhe.concluidoEm ? formatDateTime(detalhe.concluidoEm) : '—' }}</dd>
-          </div>
-          <div class="marco">
-            <dt>Conferido pela escola</dt>
-            <dd>
-              <template v-if="detalhe.conferidoEm">
-                {{ formatDateTime(detalhe.conferidoEm) }} · {{ detalhe.conferidoPor }}
-              </template>
-              <template v-else>—</template>
-            </dd>
-          </div>
-        </div>
+        <!--
+               Marcos com horário: respondem de cara às perguntas que se faz de
+               um chamado ("aceito quando?", "quem confirmou que terminou?").
 
-        <!-- ===== Ações da MATRIZ (ADMIN/TECNICO) ===== -->
-        <template v-if="ehMatriz">
-          <!-- Encaminhar para técnico: categoria errada na abertura, equipamento,
-               ou qualquer chamado que precise chegar a um técnico específico. -->
-          <div class="acao-box acao-encaminhar">
+               O nome vai guardado em campo separado e é null em chamado aceito
+               antes do campo existir — daí o teste, senão a tela mostra a
+               palavra "null" ao lado da data.
+          -->
+          <div class="marcos">
+            <div class="marco">
+              <dt>Aceito</dt>
+              <dd>
+                <template v-if="detalhe.aceitoEm">
+                  {{ formatDateTime(detalhe.aceitoEm) }}<template v-if="detalhe.aceitoPor"> · {{ detalhe.aceitoPor }}</template>
+                </template>
+                <template v-else>—</template>
+              </dd>
+            </div>
+            <div class="marco">
+              <dt>Concluído pelo técnico</dt>
+              <dd>{{ detalhe.concluidoEm ? formatDateTime(detalhe.concluidoEm) : '—' }}</dd>
+            </div>
+            <div class="marco">
+              <dt>Conferido pela escola</dt>
+              <dd>
+                <template v-if="detalhe.conferidoEm">
+                  {{ formatDateTime(detalhe.conferidoEm) }}<template v-if="detalhe.conferidoPor"> · {{ detalhe.conferidoPor }}</template>
+                </template>
+                <template v-else>—</template>
+              </dd>
+            </div>
+          </div>
+
+
+          <!--
+               Registrar o que foi feito. Fica dentro da seção "Atendimento" (e não
+               em "Ações da matriz") porque é o trabalho do dia a dia do técnico,
+               não uma correção.
+          -->
+          <div v-if="podeRegistrar" class="acao-box acao-fluxo">
+            <h4><ClipboardPen :size="15" /> Registrar o serviço</h4>
+            <p class="acao-dica">
+              Registre cada etapa do serviço. Pode repetir quantas vezes quiser — cada registro guarda
+              data e hora.
+            </p>
+            <button v-if="!registroAberto" class="btn btn-outline btn-largo" type="button" @click="abrirRegistro">
+              <Paperclip :size="15" />
+              Registrar o que foi feito
+            </button>
+            <template v-else>
+              <textarea
+                v-model="textoAtividade"
+                class="input textarea"
+                placeholder="Ex.: troquei o cabo de rede da sala 3 e o sinal normalizou."
+              />
+              <label class="anexo-label">
+                <Paperclip :size="14" /> Fotos (opcional — ficam guardadas como prova do serviço)
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  class="anexo-input"
+                  @change="(e) => onAnexosChange(e, anexosAtividade)"
+                />
+              </label>
+              <ul v-if="anexosAtividade.length" class="anexo-lista">
+                <li v-for="(a, i) in anexosAtividade" :key="i">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosAtividade.splice(i, 1)">
+                    <X :size="13" />
+                  </button>
+                </li>
+              </ul>
+              <div class="acao-linha">
+                <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoAtividade.trim()" @click="salvarRegistro">
+                  Salvar registro
+                </button>
+                <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="registroAberto = false">
+                  Cancelar
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <!--
+               Concluir entrega o serviço para a escola conferir: quem encerra o
+               chamado é a unidade, não o técnico.
+          -->
+          <div v-if="podeConcluir" class="acao-box acao-fluxo">
+            <h4><CheckCircle2 :size="15" /> Concluir atendimento</h4>
+            <p class="acao-dica">
+              Terminou? Escreva o que foi feito — é este texto que a escola lê para conferir.
+            </p>
+            <button v-if="!conclusaoAberta" class="btn btn-primary btn-largo" type="button" @click="abrirConclusao">
+              <CheckCircle2 :size="15" />
+              Concluir atendimento
+            </button>
+            <template v-else>
+              <textarea
+                v-model="textoConclusao"
+                class="input textarea"
+                placeholder="O que foi feito de verdade? A escola lê este texto para conferir."
+              />
+              <label class="anexo-label">
+                <Paperclip :size="14" /> Fotos (opcional)
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  class="anexo-input"
+                  @change="(e) => onAnexosChange(e, anexosConclusao)"
+                />
+              </label>
+              <ul v-if="anexosConclusao.length" class="anexo-lista">
+                <li v-for="(a, i) in anexosConclusao" :key="i">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosConclusao.splice(i, 1)">
+                    <X :size="13" />
+                  </button>
+                </li>
+              </ul>
+              <div class="acao-linha">
+                <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoConclusao.trim()" @click="salvarConclusao">
+                  Enviar para conferência
+                </button>
+                <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="conclusaoAberta = false">
+                  Cancelar
+                </button>
+              </div>
+            </template>
+          </div>
+
+          <p v-if="detalhe.status === 'AGUARDANDO_CONFERENCIA'" class="acao-dica">
+            Aguardando a <strong>escola</strong> conferir o serviço. Ela pode confirmar ou reabrir o
+            chamado.
+          </p>
+
+          <!--
+               Conferência da escola: os dois botões ficam aqui, dentro da seção
+               "Atendimento", porque a escola não pode decidir antes de ler o que
+               o técnico registrou — e o registro fica logo acima.
+          -->
+          <div v-if="ehEscola && podeConferir" class="acao-box acao-conferencia">
+            <h4><ClipboardPen :size="15" /> Conferência do atendimento</h4>
+            <p class="acao-dica">
+              A equipe concluiu o serviço em
+              <strong>{{ detalhe.concluidoEm ? formatDateTime(detalhe.concluidoEm) : '—' }}</strong>.
+              Confira os registros acima e diga se ficou tudo certo.
+            </p>
+
+            <div v-if="!conferenciaAberta" class="conferencia-botoes">
+              <button class="btn btn-primary btn-largo" type="button" :disabled="acaoFluxo" @click="abrirConferencia('aprovado')">
+                <ThumbsUp :size="15" />
+                Ficou tudo certo
+              </button>
+              <button class="btn btn-perigo btn-largo" type="button" :disabled="acaoFluxo" @click="abrirConferencia('contestar')">
+                <ThumbsDown :size="15" />
+                Ficou faltando
+              </button>
+            </div>
+
+            <template v-else>
+              <label class="ava-label" for="texto-conferencia">
+                <template v-if="modalidadeConferencia === 'aprovado'">
+                  Comentário <span class="ava-opcional">opcional</span>
+                </template>
+                <template v-else>O que ficou faltando <span class="ava-obrigatorio">obrigatório</span></template>
+              </label>
+              <textarea
+                id="texto-conferencia"
+                v-model="textoConferencia"
+                class="input textarea"
+                :placeholder="
+                  modalidadeConferencia === 'aprovado'
+                    ? 'Tudo certo por aqui, obrigado.'
+                    : 'Ex.: a impressora continua sem imprimir, só ligou e piscou.'
+                "
+              />
+              <label class="anexo-label">
+                <Paperclip :size="14" /> Fotos (opcional — comprovam o que ficou faltando)
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf"
+                  class="anexo-input"
+                  @change="(e) => onAnexosChange(e, anexosConferencia)"
+                />
+              </label>
+              <ul v-if="anexosConferencia.length" class="anexo-lista">
+                <li v-for="(a, i) in anexosConferencia" :key="i">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosConferencia.splice(i, 1)">
+                    <X :size="13" />
+                  </button>
+                </li>
+              </ul>
+              <div class="acao-linha">
+                <button
+                  class="btn btn-primary btn-largo"
+                  type="button"
+                  :disabled="acaoFluxo || (modalidadeConferencia === 'contestar' && !textoConferencia.trim())"
+                  @click="salvarConferencia"
+                >
+                  <Loader2 v-if="acaoFluxo" class="spin" :size="15" />
+                  <template v-else-if="modalidadeConferencia === 'aprovado'">Confirmar e encerrar</template>
+                  <template v-else>Reabrir chamado</template>
+                </button>
+                <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="conferenciaAberta = false">
+                  Cancelar
+                </button>
+              </div>
+              <p v-if="modalidadeConferencia === 'contestar'" class="acao-dica enc-aviso">
+                Ao reabrir, o chamado volta para a fila e o <strong>administrador</strong> e o
+                <strong>técnico responsável</strong> recebem um aviso.
+              </p>
+            </template>
+          </div>
+          </BaseAccordion>
+
+        <!--
+             Ações em exceção da matriz (ADMIN/TECNICO): encaminhar, corrigir
+             status, comentar. Fora da seção "Atendimento" de propósito — quem
+             trabalha no chamado não deveria ter que rolar até aqui para registrar
+             o serviço.
+        -->
+        <BaseAccordion
+          class="secao"
+          titulo="Ações da matriz"
+          tom="yellow"
+          :aberto="secaoAberta === 'matriz'"
+          @alternar="alternarSecao('matriz')"
+        >
+          <template #icone><Settings :size="16" /></template>
+
+          <template v-if="ehMatriz">
+            <!-- Encaminhar para técnico: categoria errada na abertura, equipamento,
+                 ou qualquer chamado que precise chegar a um técnico específico. -->
+            <div class="acao-box acao-encaminhar">
             <h4><Wrench :size="15" /> Encaminhar para técnico</h4>
             <div v-if="!encaminharAberto" class="acao-linha">
               <p class="acao-dica">
@@ -1683,141 +2147,6 @@ useAutoRefresh(async () => {
             </template>
           </div>
 
-          <!--
-               Barra do fluxo: aceitar → registrar → concluir. Fica no topo das
-               ações porque é o caminho que todo chamado da matriz percorre.
-          -->
-          <div v-if="souDaMatriz" class="acao-box acao-fluxo">
-            <h4><Wrench :size="15" /> Atendimento</h4>
-
-            <div class="fluxo-passos">
-              <span class="passo" :class="{ feito: detalhe.aceitoEm, atual: podeAceitar }">
-                <CheckCheck :size="13" /> Aceito
-              </span>
-              <span class="passo-seta">→</span>
-              <span class="passo" :class="{ feito: atividades.some((a) => a.tipo === 'REGISTRO'), atual: podeRegistrar }">
-                <ClipboardPen :size="13" /> Registro
-              </span>
-              <span class="passo-seta">→</span>
-              <span class="passo" :class="{ feito: detalhe.concluidoEm, atual: podeConcluir }">
-                <Send :size="13" /> Concluído
-              </span>
-              <span class="passo-seta">→</span>
-              <span
-                class="passo"
-                :class="{ feito: detalhe.conferidoEm, atual: detalhe.status === 'AGUARDANDO_CONFERENCIA' }"
-              >
-                <School :size="13" /> Conferência
-              </span>
-            </div>
-
-            <!-- Passo 1: aceite -->
-            <div v-if="podeAceitar" class="acao-linha">
-              <p class="acao-dica">
-                Este chamado está com <strong>{{ detalhe.responsavel || 'você' }}</strong> e ainda não foi aceito.
-              </p>
-              <button class="btn btn-primary" type="button" :disabled="acaoFluxo" @click="aceitarMeuChamado">
-                <Loader2 v-if="acaoFluxo" class="spin" :size="15" />
-                <CheckCheck v-else :size="15" />
-                Aceitar chamado
-              </button>
-            </div>
-            <p v-else-if="!detalhe.responsavel && ehMatriz" class="acao-dica enc-aviso">
-              Sem responsável: encaminhe para um técnico antes de aceitar.
-            </p>
-
-            <!-- Passo 2: registrar o que foi feito (repetível) -->
-            <div v-if="podeRegistrar" class="acao-linha">
-              <p class="acao-dica">
-                Registre cada etapa do serviço. Cada registro guarda data e hora.
-              </p>
-              <button v-if="!registroAberto" class="btn btn-outline" type="button" @click="abrirRegistro">
-                <Paperclip :size="15" />
-                Registrar o que foi feito
-              </button>
-              <template v-else>
-                <textarea
-                  v-model="textoAtividade"
-                  class="input textarea"
-                  placeholder="Ex.: troquei o cabo de rede da sala 3 e o sinal normalizou."
-                />
-                <label class="anexo-label">
-                  <Paperclip :size="14" /> Fotos (opcional — ficam guardadas como prova do serviço)
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf"
-                    class="anexo-input"
-                    @change="(e) => onAnexosChange(e, anexosAtividade)"
-                  />
-                </label>
-                <ul v-if="anexosAtividade.length" class="anexo-lista">
-                  <li v-for="(a, i) in anexosAtividade" :key="i">
-                    <Paperclip :size="13" /> {{ a.nome }}
-                    <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosAtividade.splice(i, 1)">
-                      <X :size="13" />
-                    </button>
-                  </li>
-                </ul>
-                <div class="acao-linha">
-                  <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoAtividade.trim()" @click="salvarRegistro">
-                    Salvar registro
-                  </button>
-                  <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="registroAberto = false">
-                    Cancelar
-                  </button>
-                </div>
-              </template>
-            </div>
-
-            <!-- Passo 3: concluir e passar para a conferência da escola -->
-            <div v-if="podeConcluir" class="acao-linha">
-              <p class="acao-dica">
-                Terminou? Registre a conclusão — a escola confere antes de fechar o chamado.
-              </p>
-              <button v-if="!conclusaoAberta" class="btn btn-primary" type="button" @click="abrirConclusao">
-                <CheckCircle2 :size="15" />
-                Concluir atendimento
-              </button>
-              <template v-else>
-                <textarea
-                  v-model="textoConclusao"
-                  class="input textarea"
-                  placeholder="O que foi feito de verdade? A escola lê este texto para conferir."
-                />
-                <label class="anexo-label">
-                  <Paperclip :size="14" /> Fotos (opcional)
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf"
-                    class="anexo-input"
-                    @change="(e) => onAnexosChange(e, anexosConclusao)"
-                  />
-                </label>
-                <ul v-if="anexosConclusao.length" class="anexo-lista">
-                  <li v-for="(a, i) in anexosConclusao" :key="i">
-                    <Paperclip :size="13" /> {{ a.nome }}
-                    <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosConclusao.splice(i, 1)">
-                      <X :size="13" />
-                    </button>
-                  </li>
-                </ul>
-                <div class="acao-linha">
-                  <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoConclusao.trim()" @click="salvarConclusao">
-                    Enviar para conferência
-                  </button>
-                  <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="conclusaoAberta = false">
-                    Cancelar
-                  </button>
-                </div>
-              </template>
-            </div>
-
-            <p v-if="detalhe.status === 'AGUARDANDO_CONFERENCIA'" class="acao-dica">
-              Aguardando a <strong>escola</strong> conferir o serviço. Ela pode confirmar ou reabrir o chamado.
-            </p>
-          </div>
 
           <div class="acao-box">
             <h4><RefreshCcw :size="15" /> Alterar status</h4>
@@ -1831,7 +2160,7 @@ useAutoRefresh(async () => {
             </div>
             <p class="acao-dica">
               Correção para casos fora do fluxo (erro de encaminhamento, chamado encerrado por
-              decisão da matriz). O caminho normal é usar os botões acima.
+              decisão da matriz). O caminho normal é o botão da barra de ação acima.
             </p>
 
             <!-- Ao pedir retorno da escola, a pergunta (e os anexos) vão junto -->
@@ -1878,10 +2207,32 @@ useAutoRefresh(async () => {
               </button>
             </div>
           </div>
-        </template>
+          </template>
+        </BaseAccordion>
 
-        <!-- ===== Ações da ESCOLA (GESTOR/VISUALIZADOR): responder e conferir ===== -->
-        <template v-else-if="ehEscola && detalhe.status !== 'RESOLVIDO'">
+        <!--
+             Ações da ESCOLA (GESTOR/VISUALIZADOR) que não são a conferência: o
+             aviso de que a equipe está com o chamado e o formulário de resposta
+             à pergunta da matriz. A conferência em si mora na seção
+             "Atendimento", porque a escola precisa ler os registros antes de
+             decidir.
+
+             `v-if` e não `v-else-if`: o `v-if` da matriz está dentro do accordion
+             dela, e um `v-else-if` aqui procuraria um irmão com `v-if` — que não
+             existe, porque o irmão é o próprio accordion. Os dois perfis são
+             mutuamente exclusivos de qualquer forma.
+        -->
+        <BaseAccordion
+          v-if="ehEscola && detalhe.status !== 'RESOLVIDO'"
+          class="secao"
+          titulo="Ações da escola"
+          tom="purple"
+          :aberto="secaoAberta === 'escola'"
+          @alternar="alternarSecao('escola')"
+        >
+          <template #icone><School :size="16" /></template>
+
+        <template>
           <!-- Enquanto a equipe trabalha não há nada a fazer aqui: dizer isso
                explicitamente evita a impressão de que a tela quebrou. -->
           <div v-if="!podeConferir && detalhe.status !== 'COMUNICADO'" class="acao-box acao-aguardando">
@@ -1934,87 +2285,8 @@ useAutoRefresh(async () => {
             </template>
           </div>
 
-          <!--
-               Conferência: a escola olha o que o técnico registrou e decide.
-               Confirmar encerra o chamado; contestar reabre e avisa a matriz e o
-               técnico — é o caminho de volta do fluxo.
-          -->
-          <div v-if="podeConferir" class="acao-box acao-conferencia">
-            <h4><ClipboardPen :size="15" /> Conferência do atendimento</h4>
-            <p class="acao-dica">
-              A equipe concluiu o serviço em
-              <strong>{{ detalhe.concluidoEm ? formatDateTime(detalhe.concluidoEm) : '—' }}</strong>.
-              Confira os registros acima e diga se ficou tudo certo.
-            </p>
-
-            <div v-if="!conferenciaAberta" class="conferencia-botoes">
-              <button class="btn btn-primary" type="button" :disabled="acaoFluxo" @click="abrirConferencia('aprovado')">
-                <ThumbsUp :size="15" />
-                Ficou tudo certo
-              </button>
-              <button class="btn btn-perigo" type="button" :disabled="acaoFluxo" @click="abrirConferencia('contestar')">
-                <ThumbsDown :size="15" />
-                Ficou faltando
-              </button>
-            </div>
-
-            <template v-else>
-              <label class="ava-label" for="texto-conferencia">
-                <template v-if="modalidadeConferencia === 'aprovado'">
-                  Comentário <span class="ava-opcional">opcional</span>
-                </template>
-                <template v-else>O que ficou faltando <span class="ava-obrigatorio">obrigatório</span></template>
-              </label>
-              <textarea
-                id="texto-conferencia"
-                v-model="textoConferencia"
-                class="input textarea"
-                :placeholder="
-                  modalidadeConferencia === 'aprovado'
-                    ? 'Tudo certo por aqui, obrigado.'
-                    : 'Ex.: a impressora continua sem imprimir, só ligou e piscou.'
-                "
-              />
-              <label class="anexo-label">
-                <Paperclip :size="14" /> Fotos (opcional — comprovam o que ficou faltando)
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,.pdf"
-                  class="anexo-input"
-                  @change="(e) => onAnexosChange(e, anexosConferencia)"
-                />
-              </label>
-              <ul v-if="anexosConferencia.length" class="anexo-lista">
-                <li v-for="(a, i) in anexosConferencia" :key="i">
-                  <Paperclip :size="13" /> {{ a.nome }}
-                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosConferencia.splice(i, 1)">
-                    <X :size="13" />
-                  </button>
-                </li>
-              </ul>
-              <div class="acao-linha">
-                <button
-                  class="btn btn-primary"
-                  type="button"
-                  :disabled="acaoFluxo || (modalidadeConferencia === 'contestar' && !textoConferencia.trim())"
-                  @click="salvarConferencia"
-                >
-                  <Loader2 v-if="acaoFluxo" class="spin" :size="15" />
-                  <template v-else-if="modalidadeConferencia === 'aprovado'">Confirmar e encerrar</template>
-                  <template v-else>Reabrir chamado</template>
-                </button>
-                <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="conferenciaAberta = false">
-                  Cancelar
-                </button>
-              </div>
-              <p v-if="modalidadeConferencia === 'contestar'" class="acao-dica enc-aviso">
-                Ao reabrir, o chamado volta para a fila e o <strong>administrador</strong> e o
-                <strong>técnico responsável</strong> recebem um aviso.
-              </p>
-            </template>
-          </div>
         </template>
+        </BaseAccordion>
 
         <!-- ===== Avaliação do atendimento (escola, chamado concluído) ===== -->
         <template v-if="ehEscola && detalhe.status === 'RESOLVIDO'">
@@ -2415,7 +2687,44 @@ tr.selecionado td {
 .detalhe {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+}
+
+/*
+ * Cabeçalho do modal: o resumo que dispensa abrir qualquer seção. Fica colado
+ * no topo de propósito — com a barra de ação logo abaixo, quem abre o chamado
+ * no celular vê "o que é" e "o que eu faço" sem rolar uma linha.
+ */
+.detalhe-cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detalhe-cabecalho-linha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detalhe-unidade {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.detalhe-solicitante {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* Espaçamento entre a seção e a barra de ação, sem abrir um cartão novo. */
+.secao + .secao,
+.secao + .acao-tecnico {
+  margin-top: 2px;
 }
 
 .detalhe-grid {
@@ -2991,6 +3300,58 @@ tr.selecionado td {
   .detalhe-grid {
     grid-template-columns: 1fr;
   }
+
+  /*
+   * No celular o modal de chamado é a tela inteira, então tudo que era uma
+   * linha vira uma coluna e nenhum botão fica com alvo de toque pequeno.
+   */
+  .detalhe {
+    gap: 10px;
+  }
+
+  .detalhe-unidade {
+    font-size: 14.5px;
+  }
+
+  .marcos {
+    grid-template-columns: 1fr;
+  }
+
+  .conferencia-botoes {
+    flex-direction: column;
+  }
+
+  .conferencia-botoes .btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px;
+  }
+
+  .acao-linha {
+    flex-wrap: wrap;
+  }
+
+  /* Botões lado a lado num modal estreito saem da tela; empilhados, não */
+  .acao-linha .btn {
+    flex: 1 1 140px;
+    justify-content: center;
+    min-height: 46px;
+  }
+
+  /* A linha do tempo inteira: no celular, rolar dentro de dois eixos atrapalha */
+  .timeline,
+  .msgs {
+    max-height: none;
+  }
+
+  .anexo-remover {
+    padding: 6px;
+  }
+
+  .btn-copy {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 /* ---------- Ação rápida do técnico (aceitar/concluir) ---------- */
@@ -3044,18 +3405,48 @@ tr.selecionado td {
 }
 
 /*
- * Bloco no topo do modal de detalhes — é a ação principal do técnico e precisa
- * ser impossível de não ver no celular: botão de largura total e alvo de
- * toque alto (52px+).
+ * Barra de ação no topo do modal — a ação do momento, e só ela. Precisa ser
+ * impossível de não ver no celular: botão de largura total e alvo de toque alto
+ * (52px+). A borda acompanha a cor da ação para que o tom se leia antes do
+ * texto (é a conferência da escola ou o aceite do técnico?).
  */
 .acao-tecnico {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 14px;
   border-radius: var(--radius-md);
   background: var(--surface-muted);
   border: 1.5px solid var(--border);
+}
+
+.acao-tecnico.acao-blue {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.acao-tecnico.acao-purple {
+  border-color: var(--purple);
+  background: var(--purple-soft);
+}
+
+.acao-tecnico.acao-yellow {
+  border-color: var(--yellow);
+  background: var(--yellow-soft);
+}
+
+.acao-tecnico.acao-green {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+/* O que está para ser feito, em destaque: é o rótulo da caixa toda. */
+.acao-tecnico-titulo {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  text-align: center;
 }
 
 .acao-tecnico-info {
@@ -3066,10 +3457,48 @@ tr.selecionado td {
   text-align: center;
 }
 
+.btn-verde {
+  background: var(--green);
+}
+
+.btn-verde:hover {
+  background: #15803d;
+}
+
+.btn-ambar {
+  background: var(--yellow);
+}
+
+.btn-ambar:hover {
+  background: #b45309;
+}
+
 .btn-acao-grande {
   width: 100%;
   min-height: 52px;
   font-size: 16px;
+}
+
+/*
+ * Botão que ocupa a largura do cartão dentro das seções. Mesmo alvo de toque do
+ * botão grande, para as ações de dentro (registrar, concluir, conferir) não
+ * ficarem menores que o cabeçalho que as contém.
+ */
+.btn-largo {
+  width: 100%;
+  justify-content: center;
+  min-height: 48px;
+}
+
+/* Seção sem registro: a linha do tempo é o destaque, o vazio é o que pesa. */
+.secao-vazia {
+  margin: 4px 0 0;
+  padding: 18px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .spin {
