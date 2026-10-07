@@ -27,12 +27,14 @@ O portal precisa dos **dois backends** no ar:
 |---|---|---|
 | Backend de chamados (identidade, chamados, usuários) | `10000` | `~/Desktop/chamados` |
 | SCE (equipamentos, manutenção, catálogo) | `3000` | `~/Desktop/sce` |
+| **Monitor de câmeras DVR** (ping dos DVRs das escolas) | `4000` | `monitor/` |
 
 Ajuste as URLs em `.env`:
 
 ```bash
 VITE_API_CHAMADOS_URL=http://localhost:10000/api
 VITE_API_SCE_URL=http://localhost:3000/api
+VITE_API_MONITOR_URL=http://localhost:4000
 ```
 
 ## Scripts
@@ -50,7 +52,7 @@ npm run preview   # serve o dist/ localmente
 ## Primeiro passo se algo não funcionar
 
 1. **Configurações → Integrações → "Testar agora"** — diz exatamente qual
-   backend está fora.
+   serviço está fora (chamados, SCE ou monitor de DVRs).
 2. **Configurações → Logs do sistema** — mostra o erro real, com método, rota,
    status e mensagem.
 3. Se nada disso responder: [capítulo 9 da documentação](./docs/09-tratamento-de-erros.md).
@@ -60,6 +62,7 @@ npm run preview   # serve o dist/ localmente
 ```
 src/
   api/         clientes HTTP (um módulo por backend/recurso)
+monitor/      serviço de ping dos DVRs (roda na máquina da rede privada)
   components/  layout, ui, config, equipamentos, tutoriais, publico
   composables/ useAutoRefresh, useSidebar, useEquipamentos
   router/      rotas + guard de autenticação/permissão

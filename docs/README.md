@@ -27,6 +27,8 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | Fazer uma manutenção comum | [11 · Manutenção e checklists](./11-manutencao-e-checklists.md) |
 | Decifrar siglas e nomes próprios | [12 · Glossário](./12-glossario.md) |
 | **Entender a avaliação de atendimento** (do fechamento à nota) | **[13 · Avaliação de atendimento](./13-avaliacao-de-atendimento.md)** |
+
+| **Saber se as câmeras DVR estão ligadas** | **[14 · Monitor de câmeras DVR](./14-monitor-de-cameras-dvr.md)** |
 | **Entender o aceite e a conclusão pelo técnico** (carimbos de horário) | **[14 · Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md)** |
 | **Ver o fluxo do chamado inteiro** (da abertura até a conferência da escola) | **[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)** |
 
