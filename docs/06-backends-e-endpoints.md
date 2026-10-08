@@ -137,7 +137,30 @@ Duas consequências que afetam o tratamento de erro:
 | POST | `/auth/logout` | menu do usuário › "Sair" |
 | GET | `/auth/me` | `initialize()` ao recarregar a página |
 | POST | `/auth/change-password` | `TrocarSenhaView` |
-| POST | `/auth/admin/gerar-senha-temporaria` | `UsuariosView` (só ADMIN) |
+| POST | `/auth/admin/gerar-codigo-primeiro-acesso` | `UsuariosView` (só ADMIN) |
+
+> Era `/auth/admin/gerar-senha-temporaria` e foi **substituído**: o ADMIN
+> passou a gerar um **código de 6 dígitos**, não uma senha. A pessoa cria a
+> própria senha no primeiro acesso.
+
+#### Primeiro acesso (código gerado pela Matriz)
+
+Rotas **públicas** (sem token). **Não há envio de e-mail** — o código é gerado
+pelo ADMIN e repassado em mão. Detalhes em
+[Autenticação e permissões](./04-autenticacao-e-permissoes.md).
+
+| Método | Rota | Rate limit | Uso na tela |
+|---|---|---|---|
+| POST | `/auth/verificar-email` | 20/min | `LoginView` etapa ① (debounce de 600 ms) |
+| POST | `/auth/primeiro-acesso/confirmar` | 20/15 min | `LoginView` etapa ② → devolve o `token` |
+| POST | `/auth/primeiro-acesso/definir-senha` | 20/15 min | `LoginView` etapa ③ → devolve a sessão pronta |
+
+Cliente: `src/api/primeiroAcesso.ts`. `/verificar-email` e `/confirmar`
+respondem **sem dizer se o e-mail está cadastrado** — ver a tabela de defesas
+no doc 04.
+
+O `POST /usuarios` (criação de usuário) também devolve
+`codigoPrimeiroAcesso` — o código já sai pronto junto com a conta.
 
 #### Chamados
 

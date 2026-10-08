@@ -2,7 +2,21 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import axios from 'axios'
 import { CHAMADOS_BASE, chamadosApi, configureAuthHooks } from '@/api/http'
-import type { ChangePasswordRequest, LoginRequest, LoginResponse, Nivel, User } from '@/types'
+import {
+  confirmarCodigo,
+  definirSenhaPrimeiroAcesso,
+  verificarEmail as verificarEmailRequest,
+} from '@/api/primeiroAcesso'
+import type {
+  ChangePasswordRequest,
+  ConfirmarCodigoResponse,
+  DefinirSenhaPrimeiroAcessoRequest,
+  LoginRequest,
+  LoginResponse,
+  Nivel,
+  User,
+  VerificarEmailResponse,
+} from '@/types'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -148,6 +162,57 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = data
   }
 
+  /* ------------------------------------------------------------------
+   * Primeiro acesso: código do ADMIN → criação da senha
+   * ------------------------------------------------------------------ */
+
+  /**
+   * Consulta o que a tela precisa saber sobre um e-mail.
+   *
+   * `null` é devolvido quando a consulta falha (rede, rate limit) — a tela
+   * trata como "não deu para verificar" e segue para a etapa de senha, em vez
+   * de trancar a pessoa por causa de uma falha de rede.
+   */
+  async function verificarEmail(email: string): Promise<VerificarEmailResponse | null> {
+    try {
+      return await verificarEmailRequest(email)
+    } catch {
+      return null
+    }
+  }
+
+  async function confirmarCodigoPrimeiroAcesso(
+    email: string,
+    codigo: string,
+  ): Promise<ConfirmarCodigoResponse> {
+    isLoading.value = true
+    try {
+      return await confirmarCodigo(email, codigo)
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * Cria a senha e assume a sessão.
+   *
+   * Mesmo caminho do `login()`: o access token fica em memória e o refresh
+   * viaja num cookie httpOnly, então a pessoa entra direto no painel.
+   */
+  async function criarSenhaPrimeiroAcesso(
+    payload: DefinirSenhaPrimeiroAcessoRequest,
+  ): Promise<LoginResponse> {
+    isLoading.value = true
+    try {
+      const data = await definirSenhaPrimeiroAcesso(payload)
+      setAccessToken(data.accessToken)
+      user.value = data.user
+      return data
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   async function changePassword(payload: ChangePasswordRequest) {
     isLoading.value = true
     try {
@@ -188,5 +253,8 @@ export const useAuthStore = defineStore('auth', () => {
     fetchMe,
     changePassword,
     logout,
+    verificarEmail,
+    confirmarCodigoPrimeiroAcesso,
+    criarSenhaPrimeiroAcesso,
   }
 })

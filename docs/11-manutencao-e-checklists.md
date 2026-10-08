@@ -128,9 +128,9 @@ A lista é salva como texto separado por vírgula:
 | Unidade | Para os demais perfis |
 | Status | Só aparece na edição |
 
-Ao salvar, aparece um modal com a **senha temporária** e o botão "Copiar
-senha". Comunique esse valor ao usuário — ele será obrigado a definir uma senha
-definitiva no primeiro acesso.
+Ao salvar, aparece um modal com o **código de primeiro acesso** (6 dígitos) e o
+botão "Copiar código". Entregue esse valor ao usuário — é com ele que a pessoa
+cria a senha dela em `/login`. O código vale 24 h e só funciona uma vez.
 
 **Limites:** um Gestor pode ter no máximo **2 usuários ativos** na própria
 escola, e só pode criar Visualizadores. A tela mostra a cota no topo de
@@ -155,11 +155,13 @@ Um usuário não pode se desativar a si mesmo.
 ## Perdi a senha de um usuário
 
 1. **Usuários → busque o e-mail**
-2. **⋮ → Nova senha temporária** (só ADMIN)
-3. Copie e comunique ao usuário
-4. O usuário entra e **tem que** definir uma senha nova
+2. **⋮ → Novo código de acesso** (só ADMIN)
+3. Copie o código e comunique ao usuário
+4. O usuário entra em `/login` com e-mail + código e **cria a senha que quiser**
 
-> Isso também **derruba as sessões** do usuário.
+> ⚠️ O backend recusa gerar código para quem **já** tem senha
+> (`Este usuário já definiu a senha`). Nesse caso a opção é pedir ao usuário
+> que use "Trocar senha" no próprio menu, ou desativar e criar a conta de novo.
 
 ---
 

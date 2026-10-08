@@ -213,7 +213,7 @@ Requisição ao SCE
 | **Sintoma** | Tela de login com `Credenciais inválidas` |
 | **Causa** | E-mail ou senha errados; **ou** usuário com `status = INATIVO`; **ou** e-mail digitado com acento/espaço diferente |
 | **Diagnóstico** | O frontend faz `trim()` e `toLowerCase()` no e-mail — se o problema persiste, é senha ou status.<br>Pedir ao ADMIN: "Usuários → busque o usuário → veja se está **Ativo**". |
-| **Solução** | Conferir status; sePrecisar, gerar senha temporária ("Nova senha temporária"). |
+| **Solução** | Conferir status; se precisar de reiniciar o acesso, gerar um **código de primeiro acesso** ("Novo código de acesso") e Entregar à pessoa — ela cria a própria senha. |
 
 ### B2. Volta para o login sozinho, do nada
 
@@ -251,21 +251,34 @@ Requisição ao SCE
 | | |
 |---|---|
 | **Sintoma** | Qualquer rota redireciona para `/trocar-senha`, mesmo as públicas |
-| **Causa** | `user.primeiroLogin === true` |
+| **Causa** | `user.primeiroLogin === true` — só possível em conta antiga, criada antes do fluxo de código existir |
 | **Diagnóstico** | `GET /auth/me` → campo `primeiroLogin`. |
-| **Solução** | Concluir a troca. Se for indevido (senha já definida), o ADMIN gera senha temporária — isso redefine o usuário para primeiro acesso. |
+| **Solução** | Concluir a troca na tela. Se for indevido (senha já definida), o ADMIN gera um **código de primeiro acesso** ("Novo código de acesso") e a pessoa refaz o acesso pelo `/login`. |
 
 ### B5. Falha ao trocar a senha
 
 | | |
 |---|---|
-| **Mensagens possíveis** | `Mínimo de 8 caracteres.` · `Inclua pelo menos uma letra maiúscula.` · `… minúscula.` · `… um número.` · `… um caractere especial.` · `A confirmação não confere com a nova senha.` · `Informe a senha temporária recebida.` |
+| **Mensagens possíveis** | `Mínimo de 8 caracteres.` · `Inclua pelo menos uma letra maiúscula.` · `… minúscula.` · `… um número.` · `… um caractere especial.` · `A confirmação não confere com a nova senha.` |
 | **Causa** | Política não cumprida (avaliada **no cliente**, na ordem — a primeira falha vence). |
 | **Solução** | Corrigir a senha. Se o erro vier do backend (não aparece na lista), ver `apiError()` no console. |
 
-> Detalhe: no **primeiro acesso** o campo "senha temporária" continua
-> obrigatório no formulário, mas o backend **não confere** o valor. É
-> proposital: evita que uma senha temporária já expirada trave o primeiro acesso.
+> A tela `/trocar-senha` agora é só para **troca voluntária** (menu "Trocar
+> senha"). O primeiro acesso passou a ser o caminho do código, onde a pessoa já
+> entra com a senha que escolheu — não existe mais "senha temporária recebida".
+
+### B6. "Código inválido ou expirado"
+
+| | |
+|---|---|
+| **Sintoma** | A pessoa digita o código da Matriz e recebe `Código inválido ou expirado. Peça um novo código à Matriz.` |
+| **Causa** | O código confere mas foi **invalidado** por outro mais novo; **ou** passou das 24 h; **ou** a pessoa já usou este (é de uso único); **ou** passou das 5 tentativas erradas. |
+| **Diagnóstico** | No banco, tabela `CodigoPrimeiroAcesso`: se houver mais de uma linha sem `usadoEm` para o usuário, é porque foi gerado outro depois.<br>Também vale checar: o código foi digitado **errado** (a tentativa foi contada). |
+| **Solução** | ADMIN → *Usuários* → linha do usuário → **"Novo código de acesso"**. Isso apaga o anterior e entrega um novo. |
+
+> O mesmo código **não** pode ser reusado depois de criar a senha: o
+> `/definir-senha` consome o token. Se a pessoa já criou a senha e está
+> tentando de novo com o mesmo código, o certo é o login normal.
 
 ---
 

@@ -54,6 +54,131 @@ então não existe "flash" de tela protegida para quem não tem sessão.
 
 ---
 
+## Primeiro acesso: código gerado pela Matriz
+
+A tela `/login` tem **três etapas** em vez de duas. A pessoa digita o e-mail, o
+portal descobre se aquela conta ainda está em primeiro acesso e, se estiver,
+pede o código de 6 dígitos que a **Matriz entregou** antes de deixar criar a
+senha.
+
+```
+                     ADMIN: cria o usuário na tela Usuários
+                                  │
+                                  ▼
+                    POST /usuarios  →  { codigoPrimeiroAcesso: "367834" }
+                    (o código JÁ SAI pronto na criação)
+                                  │
+                      Matriz repassa o código à pessoa
+                                  │
+┌─────────────────────────────────┘
+│
+▼  ① e-mail ──POST /auth/verificar-email──▶ primeiroAcesso?
+                                              │
+                        não ──────────────────┴────────────── sim
+                        │                                       │
+                   etapa ③ senha             etapa ② código
+                   (login normal)            (digita os 6 dígitos)
+                                                        │
+                                                        ▼
+                                        POST /auth/primeiro-acesso/confirmar
+                                        (→ token de uso único, 10 min)
+                                                        │
+                                                        ▼
+                                        POST /auth/primeiro-acesso/definir-senha
+                                        (token + senha ×2)
+                                                        │
+                                                        ▼
+                                          accessToken + cookie de refresh
+                                          → entra direto no painel
+```
+
+A consulta do e-mail acontece **enquanto a pessoa digita** (debounce de 600 ms).
+Se a rota falhar por rede ou rate limit, a tela **não tranca ninguém** — segue
+para a etapa de senha e tenta o login normal.
+
+> ⚠️ **Não há envio de e-mail em lugar nenhum.** O e-mail do usuário é apenas
+> identificador/login. O código é gerado pelo ADMIN e repassado em mão (no
+> mesmo modal que antes mostrava a senha temporária) ou pela ação **"Novo
+> código de acesso"** na lista de usuários. Isso foi uma decisão conscious: a
+> rede de ensino ainda não tem serviço de e-mail transacional configurado
+> (`BREVO_API_KEY` está ausente), então um fluxo que dependesse de e-mail
+> simplesmente não funcionaria.
+
+### Por que um código, e não só o e-mail
+
+O SCE antigo (`sce/server.js`, `/api/definir-senha`) aceitava **e-mail +
+senha nova, sem prova nenhuma**. Quem soubesse o endereço institucional de um
+colega que ainda não tinha senha definia a senha e tomava a conta. A própria
+equipe do SCE registrou isso em `sce/security.js`:
+
+> *"O SCE aceitava 6 caracteres sem nenhuma exigência de classe, e
+> `/api/definir-senha` não exigia prova de posse do e-mail."*
+
+Aqui o e-mail é só o **identificador de login**. Sem o código, a senha não é
+criada: o `/definir-senha` exige o `token` emitido pelo `/confirmar`, e um teste
+trava exatamente isso — `POST /definir-senha` sem token devolve `401` e **não
+grava nada**.
+
+### As três defesas
+
+| Defesa | Como funciona |
+|---|---|
+| **Prova de autorização** | O código só sai para o ADMIN, que decide a quem entregar. O `/definir-senha` exige o token do `/confirmar`; e-mail + senha sozinhos não criam nada. |
+| **E-mail não é erro de resposta** | E-mail **inexistente**, **inativo** e **que já tem senha** respondem **o mesmo objeto**: `{ existe: true, primeiroAcesso: false, ativo: true }`. Só quem está em primeiro acesso diverge. Sem isso, a tela virava um enumerador de quem usa o portal. |
+| **Rate limit** | `/confirmar` + `/definir-senha` = 20 por 15 min; `/verificar-email` = 20 por min. Mais o limite de **5 tentativas por código**, dentro do serviço. |
+
+### Validade e consumo
+
+| Objeto | Validade | Regra |
+|---|---|---|
+| Código de 6 dígitos | 24 h | 5 tentativas erradas e ele é apagado; gerar outro **invalida** o anterior |
+| Token de criação | 10 min | Uso único — a senha criada consome o token |
+
+Só o **SHA-256** do código vai para o banco (`codigoHash`), nunca o código em
+claro — o mesmo cuidado do `refreshTokenHash`. Gerar um código novo apaga o
+anterior e revoga o token dele: duas janelas abertas ao mesmo tempo não podem
+acontecer.
+
+> **Por que 24 h e não 10 min:** o código não chega por e-mail, ele é anotado
+> ouditado em papel e entregue em mão. 10 minutos forçaria a Matriz a gerar
+> outro a cada tentativa.
+
+### Se a pessoa não tiver o código
+
+1. A Matriz abre **Usuários** e usa **"Novo código de acesso"** na linha do
+   usuário. Um novo código sai, o anterior morre.
+2. Quem já tem senha definitiva não precisa de código nenhum: a tela do código
+   oferece **"Já tenho senha — entrar"**, e o login normal segue igual.
+3. O backend diz ao ADMIN **por que** não gerou (`usuário inexistente`,
+   `inativo`, ou `já definiu a senha`) — para ele não ficar adivinhando.
+
+### O que substituiu a senha temporária
+
+A senha temporária **saiu de cena**. Antes, o ADMIN gerava uma senha e a
+entregava; a pessoa entrava com ela e era obrigada a trocá-la. Agora o ADMIN
+entrega um **código**, e a pessoa cria a senha dela direto — ela nunca chega a
+possuir uma senha que não escolheu.
+
+`POST /auth/admin/gerar-senha-temporaria` foi removido e virou
+`POST /auth/admin/gerar-codigo-primeiro-acesso` (mesma restrição: só ADMIN).
+
+> O `TrocarSenhaView` continua existindo, mas agora **só** para troca voluntária
+> (o menu "Trocar senha"). O caminho de primeiro acesso é o novo, porque
+> primeiroLogin vira `false` já no `/definir-senha`.
+
+### O token é o mesmo para o portal e para o SCE
+
+O `/definir-senha` monta a sessão com a **mesma função** do `/login`
+(`buildLoginResponse`), então emite o mesmo JWT: `type: "access"` + `email`.
+É exatamente o que o SCE valida em `trySsoSession` (`sce/server.js`) para
+aceitar a sessão por SSO. Ou seja: quem cria a senha pelo portal entra nos
+equipamentos sem fazer login de novo.
+
+Tabela nova (2 tabelas, ambas cascade de `Usuario`):
+`CodigoPrimeiroAcesso` e `CodigoConfirmado`.
+
+---
+
 ## Os quatro níveis
 
 | Nível | Rótulo na interface | Alcance | O que pode fazer |
@@ -196,7 +321,7 @@ Três decisões importantes:
 
 > **Sobre `/usuarios` e o GESTOR.** As três camadas: a rota e o item de menu
 > abrem para `ADMIN` e `GESTOR`; a tela trava *Perfil* e *Unidade escolar* e
-> esconde *Nova senha temporária*; e o backend restringe tudo à própria filial,
+> esconde *Novo código de acesso*; e o backend restringe tudo à própria filial,
 > ignorando o `?filial=` da consulta e qualquer `nivel`/`filial` do corpo. São
 > **2 vagas** por unidade, com aviso na tela — os prints
 > [`42`](./screenshots/42-usuarios-gestor-unidade.png),
@@ -245,10 +370,9 @@ Ao salvar, o backend **derruba todas as sessões** do usuário e o portal limpa 
 estado em memória e volta para `/login`. É por isso que o botão diz
 "Salvar nova senha" e não "Salvar" — você vai precisar entrar de novo.
 
-> Curiosidade do formulário: no primeiro acesso o campo de senha atual é
-> obrigatório no frontend, mas o backend **não confere** a senha temporária
-> (só exige o campo preenchido). Isso evita que uma senha temporária expirada
-> trave o primeiro acesso.
+> ⚠️ Esta tela é **só troca voluntária** (menu "Trocar senha"). O primeiro
+> acesso tem caminho próprio — e melhor: a pessoa digita e-mail + código, e já
+> entra com a senha que escolheu, sem passar por cá.
 
 ---
 

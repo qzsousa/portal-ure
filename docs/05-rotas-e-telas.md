@@ -274,11 +274,47 @@ Atualiza a cada 60 s.
 
 Cartão centralizado com brasão, e-mail e senha. Erro de credencial aparece em
 vermelho abaixo dos campos. Sem link de "esqueci a senha" — a recuperação é
-feita pelo ADMIN, que gera uma senha temporária.
+feita pelo ADMIN, que gera um código de primeiro acesso.
 
 ![Tela de login](screenshots/13-login.png)
 
 ![Login com erro](screenshots/12-login-erro-credenciais.png)
+
+### As três etapas
+
+O formulário não tem dois campos: ele tem **três etapas**, e o título muda em
+cada uma.
+
+| Etapa | Quando aparece | Campos |
+|---|---|---|
+| ① **E-mail** | Sempre, ao abrir | Só o e-mail. A verificação acontece **enquanto digita** (debounce de 600 ms) |
+| ② **Código** | Se a conta está em primeiro acesso | 6 dígitos entregues pela Matriz |
+| ③ **Senha** | Login normal, **ou** criação da senha depois do código | Senha — ou senha nova + confirmação |
+
+Etapas ② e ③ **do primeiro acesso** mostram uma trilha no topo
+(*1 Verificar e-mail → 2 Criar senha*). No login normal ela não aparece — lá
+não há "criar senha" para acompanhar. O botão "Continuar" da etapa ① só libera
+com um e-mail plausível.
+
+O que a etapa ① decide: `POST /auth/verificar-email` diz se a conta ainda está
+em primeiro acesso. Se estiver, a tela **pula sozinha** para o código (é o
+mesmo comportamento do SCE antigo). Se a consulta falhar por rede ou rate
+limit, a tela **não tranca ninguém** — segue para a etapa ③ e tenta o login
+normal.
+
+> **Não há e-mail neste fluxo.** O código vem da Matriz, que o gera em
+> *Usuários* (ele já sai pronto na criação do usuário, ou pelo item de menu
+> **"Novo código de acesso"**). A tela da etapa ② diz *"Digite o código de 6
+> dígitos que a Matriz entregou para…"*.
+
+Na etapa ② há duas saídas: **"Usar outro e-mail"** e **"Já tenho senha —
+entrar"** (para quem já tem senha definitiva e foi parar aqui por engano).
+
+O campo do código é numérico: digitar letra, espaço ou traço não cola
+(`somenteDigitos`), e o `maxlength="6"` trava o tamanho.
+
+O raciocínio de segurança e as três defesas estão em
+[Autenticação e permissões](./04-autenticacao-e-permissoes.md).
 
 ---
 
@@ -581,7 +617,7 @@ trazer tudo, e só então filtra localmente.
 ## `/usuarios` — Usuários *(ADMIN, GESTOR)*
 
 Tabela com busca, filtro por status e paginação de 10. Ações por linha: "Editar",
-"Nova senha temporária" (só ADMIN) e "Desativar".
+"Novo código de acesso" (só ADMIN) e "Desativar".
 
 O botão "Desativar" **não apaga** — marca como `INATIVO` e derruba as sessões. O
 usuário não pode se desativar a si mesmo.
@@ -593,8 +629,10 @@ usuário não pode se desativar a si mesmo.
 - **GESTOR** só pode criar **Visualizador** da própria escola, e o perfil vem
   travado. O backend limita a 2 usuários ativos por unidade.
 
-Ao criar, um segundo modal mostra a **senha temporária** com botão "Copiar
-senha".
+Ao criar, um segundo modal mostra o **código de primeiro acesso** (6 dígitos)
+com botão "Copiar código". O texto do modal é explícito: entregar o código à
+pessoa, que cria a própria senha — o ADMIN não gera nem anota senha nenhuma.
+O código vale 24 h, é de uso único, e gerar outro anula o anterior.
 
 ![Tela de usuários](screenshots/23-usuarios.png)
 

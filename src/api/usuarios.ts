@@ -1,5 +1,5 @@
 import { chamadosApi } from './http'
-import type { Nivel, User } from '@/types'
+import type { CodigoPrimeiroAcesso, Nivel, User } from '@/types'
 import type { Paginado } from './chamados'
 
 /** Gestão de usuários (somente ADMIN) — backend de chamados. */
@@ -28,7 +28,7 @@ export interface NovoUsuario {
   filial: string
 }
 
-export type UsuarioCriado = User & { senhaTemporaria: string }
+export type UsuarioCriado = User & { codigoPrimeiroAcesso: string }
 
 export async function criarUsuario(payload: NovoUsuario): Promise<UsuarioCriado> {
   const { data } = await chamadosApi.post<UsuarioCriado>('/usuarios', payload)
@@ -51,12 +51,18 @@ export async function desativarUsuario(id: string): Promise<void> {
   await chamadosApi.delete(`/usuarios/${id}`)
 }
 
-export async function gerarSenhaTemporaria(email: string): Promise<string> {
-  const { data } = await chamadosApi.post<{ senhaTemporaria: string }>(
-    '/auth/admin/gerar-senha-temporaria',
-    { email },
-  )
-  return data.senhaTemporaria
+/**
+ * Gera um novo código de primeiro acesso para um usuário.
+ *
+ * Só ADMIN (e só para quem ainda não criou senha). O código é devolvido em
+ * claro porque o ADMIN precisa LER para repassar — quem define a senha é a
+ * pessoa, no acesso dela.
+ */
+export async function gerarCodigoPrimeiroAcesso(email: string): Promise<CodigoPrimeiroAcesso> {
+  const { data } = await chamadosApi.post<CodigoPrimeiroAcesso>('/auth/admin/gerar-codigo-primeiro-acesso', {
+    email,
+  })
+  return data
 }
 
 /** Aceita tanto `["E.E. X"]` quanto `[{ nome: "E.E. X" }]`. */

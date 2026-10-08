@@ -1,21 +1,54 @@
 <script setup lang="ts">
-import { nextTick, onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
-import { CheckCircle2, Clock, Eye, EyeOff, Laptop, Loader2, Lock, Mail, Wrench } from '@lucide/vue'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Laptop,
+  Loader2,
+  Lock,
+  Mail,
+  ShieldCheck,
+  Wrench,
+} from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
-const form = reactive({ email: '', senha: '' })
+/**
+ * Etapas da tela de acesso.
+ *
+ * `email`  → confirma o endereço e pergunta ao backend se a pessoa está em
+ *             primeiro acesso.
+ * `codigo` → primeiro acesso: o código de 6 dígitos que a Matriz entregou.
+ * `senha`  → login normal (e também a criação da senha, quando a pessoa
+ *             prefere usar a senha temporária que a Matriz lhe entregou).
+ */
+const etapa = ref<'email' | 'codigo' | 'senha'>('email')
+
+const form = reactive({ email: '', codigo: '', senha: '', novaSenha: '', confirmarSenha: '' })
 const erro = ref('')
 const carregando = ref(false)
+const verificandoEmail = ref(false)
 const mostrarSenha = ref(false)
+const mostrarNovaSenha = ref(false)
+const mostrarConfirmacao = ref(false)
 const capsAtivo = ref(false)
 const emailInput = ref<HTMLInputElement | null>(null)
+const codigoInput = ref<HTMLInputElement | null>(null)
 const senhaInput = ref<HTMLInputElement | null>(null)
+
+/** Token de uso único que autoriza criar a senha (10 min). */
+const tokenCriacaoSenha = ref('')
+/** Verdadeiro quando a senha a ser criada é a primeira da conta. */
+const criandoSenha = ref(false)
 
 /* Tremor do cartão quando o login falha: a classe precisa sair e voltar para
  * a animação recomeçar (trocá-la direto não reinicia o @keyframes). */
@@ -36,39 +69,215 @@ function checarCaps(e: KeyboardEvent) {
   capsAtivo.value = e.getModifierState?.('CapsLock') ?? false
 }
 
-async function alternarSenha() {
-  mostrarSenha.value = !mostrarSenha.value
+async function alternarSenha(alvo: 'atual' | 'nova' | 'confirmar') {
+  if (alvo === 'atual') mostrarSenha.value = !mostrarSenha.value
+  else if (alvo === 'nova') mostrarNovaSenha.value = !mostrarNovaSenha.value
+  else mostrarConfirmacao.value = !mostrarConfirmacao.value
+
   await nextTick()
-  senhaInput.value?.focus()
+  if (alvo === 'atual') senhaInput.value?.focus()
 }
 
-async function submit() {
+function mensagemErro(e: unknown, padrao: string): string {
+  const err = e as AxiosError<{ message?: string }>
+  return err.response?.data?.message || padrao
+}
+
+async function focar(refEl: { value: HTMLInputElement | null }) {
+  await nextTick()
+  refEl.value?.focus()
+}
+
+/* ------------------------------------------------------------------
+ * Etapa 1 — e-mail
+ * ------------------------------------------------------------------ */
+
+let timerDebounce: number | undefined
+
+/**
+ * Pergunta ao backend o que fazer com este e-mail, enquanto a pessoa digita.
+ *
+ * Debounce de 600 ms: chamar a cada tecla gastaria o rate limit da rota sem
+ * ganho — ninguém digita um e-mail completo em menos de meio segundo.
+ */
+function agendarVerificacao() {
+  window.clearTimeout(timerDebounce)
+  const email = form.email.trim()
+  if (!email || !email.includes('@')) {
+    verificandoEmail.value = false
+    return
+  }
+
+  timerDebounce = window.setTimeout(async () => {
+    verificandoEmail.value = true
+    const info = await auth.verificarEmail(email)
+    verificandoEmail.value = false
+    // `null` = a consulta falhou (rede/rate limit). Não tranca ninguém: a
+    // pessoa segue para a etapa de senha e tenta o login normal.
+    if (info?.primeiroAcesso) entrarModoPrimeiroAcesso()
+  }, 600)
+}
+
+/** Saiu do campo: cancela a consulta pendente (já não interessa o resultado). */
+function cancelarVerificacao() {
+  window.clearTimeout(timerDebounce)
+}
+
+/** Volta para a etapa de e-mail. */
+function voltarParaEmail() {
+  etapa.value = 'email'
+  form.codigo = ''
+  form.senha = ''
+  form.novaSenha = ''
+  form.confirmarSenha = ''
+  tokenCriacaoSenha.value = ''
+  criandoSenha.value = false
   erro.value = ''
-  if (!form.email.trim() || !form.senha) {
-    erro.value = 'Informe e-mail e senha.'
-    sacudirErro()
+  void focar(emailInput)
+}
+
+/** Login normal, a partir da tela de e-mail. */
+function irParaLogin() {
+  etapa.value = 'senha'
+  criandoSenha.value = false
+  tokenCriacaoSenha.value = ''
+  form.novaSenha = ''
+  form.confirmarSenha = ''
+  erro.value = ''
+  void focar(senhaInput)
+}
+
+/** Primeiro acesso detectado: mostra a etapa do código. */
+function entrarModoPrimeiroAcesso() {
+  etapa.value = 'codigo'
+  erro.value = ''
+  void focar(codigoInput)
+}
+
+/** Volta para a etapa do código (trocar de código). */
+function voltarParaCodigo() {
+  etapa.value = 'codigo'
+  criandoSenha.value = false
+  tokenCriacaoSenha.value = ''
+  form.novaSenha = ''
+  form.confirmarSenha = ''
+  erro.value = ''
+  void focar(codigoInput)
+}
+
+/* ------------------------------------------------------------------
+ * Etapa 2 — código (primeiro acesso)
+ * ------------------------------------------------------------------ */
+
+async function confirmarCodigoEnviado() {
+  erro.value = ''
+  if (!/^\d{6}$/.test(form.codigo.trim())) {
+    erro.value = 'Digite os 6 dígitos do código.'
     return
   }
   carregando.value = true
   try {
+    const res = await auth.confirmarCodigoPrimeiroAcesso(form.email, form.codigo)
+    tokenCriacaoSenha.value = res.token
+    etapa.value = 'senha'
+    criandoSenha.value = true
+  } catch (e) {
+    erro.value = mensagemErro(e, 'Código inválido ou expirado. Peça um novo código à Matriz.')
+    sacudirErro()
+    form.codigo = ''
+    void focar(codigoInput)
+  } finally {
+    carregando.value = false
+  }
+}
+
+/** Só dígitos: copiar e colar um código com espaço ou traço não deve falhar. */
+function somenteDigitos(e: Event) {
+  const alvo = e.target as HTMLInputElement
+  form.codigo = alvo.value.replace(/\D/g, '').slice(0, 6)
+}
+
+/* ------------------------------------------------------------------
+ * Etapa 3 — senha (login) ou criação de senha (primeiro acesso)
+ * ------------------------------------------------------------------ */
+
+function validarForca(senha: string): string | null {
+  if (senha.length < 8) return 'Mínimo de 8 caracteres.'
+  if (!/[A-Z]/.test(senha)) return 'Inclua pelo menos uma letra maiúscula.'
+  if (!/[a-z]/.test(senha)) return 'Inclua pelo menos uma letra minúscula.'
+  if (!/[0-9]/.test(senha)) return 'Inclua pelo menos um número.'
+  if (!/[^A-Za-z0-9]/.test(senha)) return 'Inclua pelo menos um caractere especial.'
+  return null
+}
+
+async function submit() {
+  erro.value = ''
+  carregando.value = true
+  try {
+    if (criandoSenha.value) {
+      if (form.novaSenha !== form.confirmarSenha) {
+        erro.value = 'A confirmação não confere com a nova senha.'
+        sacudirErro()
+        return
+      }
+      const problema = validarForca(form.novaSenha)
+      if (problema) {
+        erro.value = problema
+        sacudirErro()
+        return
+      }
+
+      await auth.criarSenhaPrimeiroAcesso({
+        token: tokenCriacaoSenha.value,
+        novaSenha: form.novaSenha,
+        confirmarSenha: form.confirmarSenha,
+      })
+      // A senha acabou de ser criada e a sessão já vem pronta: vai direto ao
+      // destino que a pessoa tentava alcançar.
+      const destino = (route.query.redirect as string) || '/painel'
+      router.push(destino)
+      return
+    }
+
+    if (!form.senha) {
+      erro.value = 'Informe sua senha.'
+      sacudirErro()
+      return
+    }
+
     const res = await auth.login({ email: form.email.trim().toLowerCase(), senha: form.senha })
     if (res.primeiroLogin) {
+      // Entrou com a senha temporária da Matriz: a troca é obrigatória.
       router.push({ name: 'trocar-senha' })
       return
     }
     const redirect = (route.query.redirect as string) || '/painel'
     router.push(redirect)
   } catch (e) {
-    const err = e as AxiosError<{ message?: string }>
-    erro.value = err.response?.data?.message || 'Não foi possível entrar. Tente novamente.'
+    erro.value = mensagemErro(e, 'Não foi possível entrar. Tente novamente.')
     sacudirErro()
+    form.senha = ''
   } finally {
     carregando.value = false
   }
 }
 
 // Evita o primeiro "clique" do usuário cair num campo vazio.
-onMounted(() => emailInput.value?.focus())
+onMounted(() => {
+  void focar(emailInput)
+  // Recarga com ?email=... (link de convite/primeiro acesso) já pula para a
+  // verificação sem a pessoa redigitar o endereço.
+  const emailDaUrl = (route.query.email as string) || ''
+  if (emailDaUrl.includes('@')) {
+    form.email = emailDaUrl.trim().toLowerCase()
+    entrarModoPrimeiroAcesso()
+  }
+})
+
+onBeforeUnmount(() => {
+  window.clearTimeout(timerDebounce)
+  window.clearTimeout(timerTremer)
+})
 </script>
 
 <template>
@@ -115,7 +324,7 @@ onMounted(() => emailInput.value?.focus())
 
       <!-- Coluna do formulário. -->
       <div class="login-col">
-        <div class="login-card" :class="{ 'treme': tremerErro }">
+        <div class="login-card" :class="{ treme: tremerErro }">
           <!-- Marca compacta: só aparece quando a coluna hero some. -->
           <div class="card-marca">
             <img class="card-logo" src="/logo-ure.png" alt="Brasão da URE Leste 3" />
@@ -125,7 +334,50 @@ onMounted(() => emailInput.value?.focus())
             </div>
           </div>
 
-          <form class="login-form" @submit.prevent="submit">
+          <!-- Cabeçalho: o título muda com a etapa. -->
+          <header class="login-head">
+            <h1>
+              <template v-if="etapa === 'codigo'">Primeiro acesso</template>
+              <template v-else-if="etapa === 'senha' && criandoSenha">Criar sua senha</template>
+              <template v-else>Entrar</template>
+            </h1>
+            <p>
+              <template v-if="etapa === 'email'">Use seu e-mail institucional e senha.</template>
+              <template v-else-if="etapa === 'codigo'">
+                Digite o código de 6 dígitos que a <strong>Matriz</strong> entregou para
+                <strong>{{ form.email }}</strong>.
+              </template>
+              <template v-else-if="criandoSenha">Escolha uma senha para acessar o portal.</template>
+              <template v-else>Digite sua senha para continuar.</template>
+            </p>
+          </header>
+
+          <!-- Trilha do primeiro acesso: só nas etapas desse fluxo. No login normal
+               (etapa de senha sem `criandoSenha`) não aparece — lá não há
+               "criar senha" para acompanhar. -->
+          <ol
+            v-if="etapa === 'codigo' || (etapa === 'senha' && criandoSenha)"
+            class="trilha"
+            aria-label="Etapas do primeiro acesso"
+          >
+            <li :class="{ ativo: etapa === 'codigo', feito: etapa === 'senha' && criandoSenha }">
+              <span class="trilha-num">
+                <CheckCircle2 v-if="etapa === 'senha' && criandoSenha" :size="13" />
+                <template v-else>1</template>
+              </span>
+              Verificar e-mail
+            </li>
+            <span class="trilha-linha" />
+            <li :class="{ ativo: etapa === 'senha' && criandoSenha }">
+              <span class="trilha-num">2</span>
+              Criar senha
+            </li>
+          </ol>
+
+          <!-- ============================================================
+               Etapa 1 — e-mail
+               ============================================================ -->
+          <form v-if="etapa === 'email'" class="login-form" @submit.prevent="irParaLogin">
             <div class="field">
               <label for="email">E-mail</label>
               <div class="input-icon">
@@ -139,48 +391,183 @@ onMounted(() => emailInput.value?.focus())
                   placeholder="seu.email@educacao.sp.gov.br"
                   autocomplete="username"
                   required
+                  @input="agendarVerificacao"
+                  @blur="cancelarVerificacao"
                 />
+                <span v-if="verificandoEmail" class="input-status">
+                  <Loader2 class="spin" :size="15" />
+                </span>
               </div>
+              <small class="field-hint">
+                Se for seu primeiro acesso, a Matriz precisa ter gerado um código para você.
+              </small>
             </div>
 
+            <button class="btn btn-gold login-submit" type="submit" :disabled="!form.email.includes('@')">
+              <span class="submit-conteudo">
+                Continuar
+                <ArrowLeft :size="16" class="seta-continuar" />
+              </span>
+            </button>
+          </form>
+
+          <!-- ============================================================
+               Etapa 2 — código do e-mail
+               ============================================================ -->
+          <form v-else-if="etapa === 'codigo'" class="login-form" @submit.prevent="confirmarCodigoEnviado">
             <div class="field">
-              <label for="senha">Senha</label>
+              <label for="codigo">Código de primeiro acesso</label>
               <div class="input-icon">
-                <Lock :size="16" />
+                <ShieldCheck :size="16" />
                 <input
-                  id="senha"
-                  ref="senhaInput"
-                  v-model="form.senha"
-                  class="input input-senha"
-                  :type="mostrarSenha ? 'text' : 'password'"
-                  placeholder="••••••••"
-                  autocomplete="current-password"
+                  id="codigo"
+                  ref="codigoInput"
+                  v-model="form.codigo"
+                  class="input input-codigo"
+                  type="text"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  placeholder="000000"
+                  maxlength="6"
                   required
-                  @keydown="checarCaps"
-                  @keyup="checarCaps"
-                  @blur="capsAtivo = false"
+                  @input="somenteDigitos"
                 />
-                <button
-                  type="button"
-                  class="btn-olho"
-                  :aria-label="mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'"
-                  :aria-pressed="mostrarSenha"
-                  :title="mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'"
-                  @click="alternarSenha"
-                >
-                  <span class="olho-icone" :class="{ visivel: mostrarSenha }">
-                    <EyeOff v-if="mostrarSenha" :size="16" />
-                    <Eye v-else :size="16" />
-                  </span>
-                </button>
               </div>
-              <Transition name="aviso">
-                <p v-if="capsAtivo" class="login-caps">
-                  <Clock :size="13" />
-                  Caps Lock está ligado
-                </p>
-              </Transition>
+              <small class="field-hint">
+                O código vale por 24 horas e só pode ser usado uma vez. Se tiver expirado,
+                peça outro à Matriz.
+              </small>
             </div>
+
+            <Transition name="erro">
+              <p v-if="erro" class="login-error">{{ erro }}</p>
+            </Transition>
+
+            <button class="btn btn-gold login-submit" type="submit" :disabled="carregando || form.codigo.length < 6">
+              <span class="submit-conteudo">
+                <Loader2 v-if="carregando" class="spin" :size="17" />
+                <KeyRound v-else :size="16" />
+                {{ carregando ? 'Verificando...' : 'Confirmar código' }}
+              </span>
+            </button>
+
+            <div class="login-rodape">
+              <button type="button" class="link-btn" :disabled="carregando" @click="voltarParaEmail">
+                <ArrowLeft :size="13" />
+                Usar outro e-mail
+              </button>
+            </div>
+
+            <!-- Quem já tem senha (a Matriz também gera código para quem já
+                 entrou antes): vai direto para o login normal. -->
+            <button type="button" class="alternativa" :disabled="carregando" @click="irParaLogin">
+              Já tenho senha — entrar
+            </button>
+          </form>
+
+          <!-- ============================================================
+               Etapa 3 — senha (login) ou criação de senha
+               ============================================================ -->
+          <form v-else class="login-form" @submit.prevent="submit">
+            <!-- Login normal -->
+            <template v-if="!criandoSenha">
+              <div class="field">
+                <label for="senha">Senha</label>
+                <div class="input-icon">
+                  <Lock :size="16" />
+                  <input
+                    id="senha"
+                    ref="senhaInput"
+                    v-model="form.senha"
+                    class="input input-senha"
+                    :type="mostrarSenha ? 'text' : 'password'"
+                    placeholder="••••••••"
+                    autocomplete="current-password"
+                    required
+                    @keydown="checarCaps"
+                    @keyup="checarCaps"
+                    @blur="capsAtivo = false"
+                  />
+                  <button
+                    type="button"
+                    class="btn-olho"
+                    :aria-label="mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'"
+                    :aria-pressed="mostrarSenha"
+                    :title="mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'"
+                    @click="alternarSenha('atual')"
+                  >
+                    <span class="olho-icone" :class="{ visivel: mostrarSenha }">
+                      <EyeOff v-if="mostrarSenha" :size="16" />
+                      <Eye v-else :size="16" />
+                    </span>
+                  </button>
+                </div>
+                <Transition name="aviso">
+                  <p v-if="capsAtivo" class="login-caps">
+                    <Clock :size="13" />
+                    Caps Lock está ligado
+                  </p>
+                </Transition>
+              </div>
+            </template>
+
+            <!-- Primeiro acesso: senha nova + confirmação -->
+            <template v-else>
+              <div class="field">
+                <label for="nova">Nova senha</label>
+                <div class="input-icon">
+                  <Lock :size="16" />
+                  <input
+                    id="nova"
+                    v-model="form.novaSenha"
+                    class="input input-senha"
+                    :type="mostrarNovaSenha ? 'text' : 'password'"
+                    placeholder="••••••••"
+                    autocomplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="btn-olho"
+                    :aria-label="mostrarNovaSenha ? 'Ocultar senha' : 'Mostrar senha'"
+                    @click="alternarSenha('nova')"
+                  >
+                    <span class="olho-icone" :class="{ visivel: mostrarNovaSenha }">
+                      <EyeOff v-if="mostrarNovaSenha" :size="16" />
+                      <Eye v-else :size="16" />
+                    </span>
+                  </button>
+                </div>
+                <small class="field-hint">Mín. 8 caracteres, com maiúscula, minúscula, número e símbolo.</small>
+              </div>
+
+              <div class="field">
+                <label for="confirmar">Confirmar nova senha</label>
+                <div class="input-icon">
+                  <Lock :size="16" />
+                  <input
+                    id="confirmar"
+                    v-model="form.confirmarSenha"
+                    class="input input-senha"
+                    :type="mostrarConfirmacao ? 'text' : 'password'"
+                    placeholder="••••••••"
+                    autocomplete="new-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="btn-olho"
+                    :aria-label="mostrarConfirmacao ? 'Ocultar senha' : 'Mostrar senha'"
+                    @click="alternarSenha('confirmar')"
+                  >
+                    <span class="olho-icone" :class="{ visivel: mostrarConfirmacao }">
+                      <EyeOff v-if="mostrarConfirmacao" :size="16" />
+                      <Eye v-else :size="16" />
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </template>
 
             <Transition name="erro">
               <p v-if="erro" class="login-error">{{ erro }}</p>
@@ -189,12 +576,29 @@ onMounted(() => emailInput.value?.focus())
             <button class="btn btn-gold login-submit" type="submit" :disabled="carregando">
               <span class="submit-conteudo">
                 <Loader2 v-if="carregando" class="spin" :size="17" />
-                {{ carregando ? 'Entrando...' : 'Entrar' }}
+                <template v-if="criandoSenha">
+                  <KeyRound v-if="!carregando" :size="16" />
+                  {{ carregando ? 'Criando senha...' : 'Criar senha e entrar' }}
+                </template>
+                <template v-else>
+                  {{ carregando ? 'Entrando...' : 'Entrar' }}
+                </template>
               </span>
             </button>
+
+            <div class="login-rodape">
+              <button v-if="criandoSenha" type="button" class="link-btn" @click="voltarParaCodigo">
+                <ArrowLeft :size="13" />
+                Voltar para o código
+              </button>
+              <button v-else type="button" class="link-btn" @click="voltarParaEmail">
+                <ArrowLeft :size="13" />
+                Usar outro e-mail
+              </button>
+            </div>
           </form>
 
-          <footer class="login-footer">
+          <footer v-if="etapa !== 'codigo'" class="login-footer">
             <em>Tecnologia a serviço da educação</em>
           </footer>
         </div>
@@ -435,6 +839,84 @@ onMounted(() => emailInput.value?.focus())
   margin-top: 1px;
 }
 
+/* ---------- Cabeçalho da etapa ---------- */
+
+.login-head {
+  margin-bottom: 20px;
+}
+
+.login-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 5px;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.login-head p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.login-head strong {
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+/* ---------- Trilha do primeiro acesso ---------- */
+
+.trilha {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 22px;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.trilha li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.2s ease;
+}
+
+.trilha li.ativo {
+  color: var(--blue);
+}
+
+.trilha li.feito {
+  color: var(--green);
+}
+
+.trilha-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  font-size: 10.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.trilha-linha {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ---------- Formulário ---------- */
+
 .login-form {
   display: flex;
   flex-direction: column;
@@ -465,6 +947,24 @@ onMounted(() => emailInput.value?.focus())
   padding-left: 38px;
 }
 
+/* Código: centralizado e espaçado — parece o campo de um app de banco. */
+.input-codigo {
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  text-align: center;
+  padding-left: 42px;
+}
+
+.input-status {
+  position: absolute;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+}
+
 .input-senha {
   padding-right: 42px;
 }
@@ -473,7 +973,14 @@ onMounted(() => emailInput.value?.focus())
   padding-right: 42px;
 }
 
-/* Botão do olho: a troca de ícone gira e entrana em vez de piscar. */
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* Botão do olho: a troca de ícone gira e entra em vez de piscar. */
 .btn-olho {
   position: absolute;
   right: 6px;
@@ -593,6 +1100,11 @@ onMounted(() => emailInput.value?.focus())
   box-shadow: 0 6px 20px rgb(245 185 33 / 0.42);
 }
 
+.login-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* Brilho que atravessa o botão ao passar o mouse. */
 .login-submit::after {
   content: '';
@@ -616,6 +1128,64 @@ onMounted(() => emailInput.value?.focus())
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* A seta do "Continuar" aponta para a direita (a leitura é LTR). */
+.seta-continuar {
+  transform: scaleX(-1);
+}
+
+/* ---------- Ações secundárias ---------- */
+
+.login-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: -4px;
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+
+.link-btn:hover:not(:disabled) {
+  color: var(--blue);
+}
+
+.link-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Válvula de escape do primeiro acesso — discreta, mas clicável. */
+.alternativa {
+  margin: -6px 0 0;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: center;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease;
+}
+
+.alternativa:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.alternativa:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .login-footer {
@@ -671,6 +1241,16 @@ onMounted(() => emailInput.value?.focus())
 
   .hero-titulo {
     font-size: 27px;
+  }
+
+  .input-codigo {
+    font-size: 19px;
+    letter-spacing: 0.3em;
+  }
+
+  .login-rodape {
+    flex-direction: column;
+    gap: 8px;
   }
 }
 

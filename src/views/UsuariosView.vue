@@ -10,7 +10,7 @@ import {
   atualizarUsuario,
   criarUsuario,
   desativarUsuario,
-  gerarSenhaTemporaria,
+  gerarCodigoPrimeiroAcesso,
   listarEscolas,
   listarUsuarios,
 } from '@/api/usuarios'
@@ -193,8 +193,14 @@ const unidadePreenchida = computed(() => {
   return !!form.filial
 })
 
-/** Senha temporária exibida após criar usuário / gerar nova senha */
-const senhaTempModal = ref<{ email: string; senha: string } | null>(null)
+/**
+ * Código de primeiro acesso exibido ao ADMIN para repassar.
+ *
+ * Não é senha: é o que autoriza a pessoa a criar a senha dela. Por isso o
+ * modal diz "compartilhe o código" e não "anote a senha" — a senha nunca
+ * existe até a pessoa escolher.
+ */
+const codigoModal = ref<{ email: string; codigo: string } | null>(null)
 
 function abrirCriar() {
   editando.value = null
@@ -244,7 +250,7 @@ async function salvar() {
         filial: filialDoFormulario(),
       })
       modalAberto.value = false
-      senhaTempModal.value = { email: criado.email, senha: criado.senhaTemporaria }
+      codigoModal.value = { email: criado.email, codigo: criado.codigoPrimeiroAcesso }
     }
     await carregar()
     await carregarVagas()
@@ -255,12 +261,19 @@ async function salvar() {
   }
 }
 
-async function novaSenhaTemporaria(u: User) {
+/**
+ * Gera um novo código para quem ainda não criou senha.
+ *
+ * Só faz sentido no primeiro acesso: se a pessoa já tem senha definitiva, o
+ * backend recusa — trocar a senha dela é outro caminho (ela mesma, em
+ * "Trocar senha").
+ */
+async function novoCodigoPrimeiroAcesso(u: User) {
   try {
-    const senha = await gerarSenhaTemporaria(u.email)
-    senhaTempModal.value = { email: u.email, senha }
-  } catch {
-    ui.error('Não foi possível gerar a senha temporária.')
+    const resultado = await gerarCodigoPrimeiroAcesso(u.email)
+    codigoModal.value = { email: u.email, codigo: resultado.codigo }
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível gerar o código de acesso.'))
   }
 }
 
@@ -407,7 +420,7 @@ onMounted(async () => {
                   :itens="[
                     { rotulo: 'Editar', icone: Pencil, acao: () => abrirEditar(u) },
                     ...(isAdmin
-                      ? [{ rotulo: 'Nova senha temporária', icone: KeyRound, acao: () => novaSenhaTemporaria(u) }]
+                      ? [{ rotulo: 'Novo código de acesso', icone: KeyRound, acao: () => novoCodigoPrimeiroAcesso(u) }]
                       : []),
                     { rotulo: 'Desativar', icone: UserX, perigo: true, acao: () => desativar(u) },
                   ]"
@@ -519,24 +532,29 @@ onMounted(async () => {
       </template>
     </BaseModal>
 
-    <!-- Modal senha temporária -->
+    <!-- Modal do código de primeiro acesso -->
     <BaseModal
-      :aberto="!!senhaTempModal"
-      titulo="Senha temporária gerada"
-      @fechar="senhaTempModal = null"
+      :aberto="!!codigoModal"
+      titulo="Código de primeiro acesso"
+      @fechar="codigoModal = null"
     >
-      <div v-if="senhaTempModal" class="senha-temp">
+      <div v-if="codigoModal" class="senha-temp">
         <p>
-          Compartilhe com o usuário <strong>{{ senhaTempModal.email }}</strong>.
-          Ele será obrigado a definir uma senha própria no primeiro acesso.
+          Entregue este código a <strong>{{ codigoModal.email }}</strong>.
+          Com ele, a pessoa cria a própria senha na tela de acesso — você
+          não precisa gerar nem anotar senha nenhuma.
         </p>
-        <div class="senha-box">{{ senhaTempModal.senha }}</div>
+        <div class="senha-box">{{ codigoModal.codigo }}</div>
+        <p class="senha-temp-nota">
+          Vale por 24 horas e só pode ser usado uma vez. Gerar um novo código
+          anula o anterior.
+        </p>
         <button
           class="btn btn-outline"
           type="button"
-          @click="copiarSenha(senhaTempModal.senha)"
+          @click="copiarSenha(codigoModal.codigo)"
         >
-          Copiar senha
+          Copiar código
         </button>
       </div>
     </BaseModal>
@@ -719,6 +737,14 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
+.senha-temp-nota {
+  margin-top: 10px !important;
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+}
+
+/* O código tem 6 dígitos: o espaçamento largo do `senha-box` (pensado para
+   senha temporária) deixaria o número pequeno e solto no meio da caixa. */
 .senha-box {
   font-family: 'Courier New', monospace;
   font-size: 18px;

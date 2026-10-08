@@ -51,6 +51,47 @@ export interface ChangePasswordRequest {
   novaSenha: string
 }
 
+/* ---------- Primeiro acesso (código gerado pelo ADMIN) ---------- */
+
+/**
+ * Resposta da verificação de e-mail da tela de acesso.
+ *
+ * `primeiroAcesso` é o único campo que muda de verdade entre os casos, e é o
+ * único que a interface usa. O backend responde o mesmo objeto para e-mail
+ * inexistente e para quem já tem senha, justamente para não permitir listar
+ * quem usa o portal — por isso aqui não existe um "não cadastrado" separado
+ * de "cadastrado".
+ */
+export interface VerificarEmailResponse {
+  existe: boolean
+  primeiroAcesso: boolean
+  ativo: boolean
+}
+
+export interface ConfirmarCodigoResponse {
+  /** Token de uso único (10 min) que libera a criação da senha. */
+  token: string
+  expiraEm: string
+}
+
+export interface DefinirSenhaPrimeiroAcessoRequest {
+  token: string
+  novaSenha: string
+  confirmarSenha: string
+}
+
+/**
+ * Código de primeiro acesso emitido pelo ADMIN.
+ *
+ * Não é senha: é o que autoriza a pessoa a **criar** a senha dela. O ADMIN
+ * lê na tela de Usuários e repassa.
+ */
+export interface CodigoPrimeiroAcesso {
+  codigo: string
+  nome?: string
+  expiraEm: string
+}
+
 /* ---------- Chamados ---------- */
 
 /**
