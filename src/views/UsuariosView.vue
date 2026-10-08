@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { apiError } from '@/utils/apiError'
 import { KeyRound, Pencil, Plus, Search, UserPlus, UserX, X } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -14,10 +14,10 @@ import {
   listarEscolas,
   listarUsuarios,
 } from '@/api/usuarios'
-import { rotuloPerfil, type Nivel, type User } from '@/types'
+import { getFormularioPublico, type FormularioCategoria } from '@/api/publico'
+import { montarEscopo, rotuloPerfil, type Nivel, type User } from '@/types'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
-import { computed } from 'vue'
 
 const ui = useUiStore()
 const auth = useAuthStore()
@@ -140,6 +140,63 @@ function limparFiltros() {
   aplicarFiltros()
 }
 
+/* ---------- Escopo de tipos de chamado ---------- */
+
+/**
+ * Uma caixa por TIPO de chamado, agrupada por categoria.
+ *
+ * O tipo de um chamado é `<Categoria> - <1ª resposta>` (ver `tipoFinal()` no
+ * formulário público), então os tipos que o usuário pode receber são as OPÇÕES
+ * da PRIMEIRA pergunta de cada categoria. Se a 1ª pergunta não for de opções
+ * (o "E-mail institucional" começa pelo CIE da escola), não há tipo a
+ * listar — a categoria inteira entra como uma única caixa.
+ */
+interface GrupoTipos {
+  chave: string
+  nome: string
+  /** Rótulo da 1ª opção; vazio = a categoria inteira. */
+  tipos: { rotulo: string; valor: string }[]
+}
+
+const categoriasFormulario = ref<FormularioCategoria[]>([])
+
+const gruposTipos = computed<GrupoTipos[]>(() =>
+  categoriasFormulario.value.map((cat) => {
+    const primeiraOpcoes = (cat.perguntas ?? [])
+      .filter((p) => p.tipo === 'OPCOES' && p.ativa)
+      .sort((a, b) => a.ordem - b.ordem)[0]
+    const rotulos = (primeiraOpcoes?.opcoes ?? []).map((o) => o.rotulo).filter(Boolean)
+    return {
+      chave: cat.chave,
+      nome: cat.nome,
+      tipos: rotulos.length
+        ? rotulos.map((rotulo) => ({ rotulo, valor: montarEscopo(cat.chave, rotulo) }))
+        : // Categoria sem tipos: marcar a categoria é o que existe.
+          [{ rotulo: `Todos os chamados de ${cat.nome}`, valor: montarEscopo(cat.chave, '') }],
+    }
+  }),
+)
+
+/** Tipos marcados no formulário (o que vai no `escopoTipos`). */
+const escopoMarcado = ref<string[]>([])
+
+/** O escopo só existe para quem ATENDE chamado: Gestor e Visualizador não. */
+const podeDefinirEscopo = computed(
+  () => isAdmin.value && (form.nivel === 'TECNICO' || form.nivel === 'ADMIN'),
+)
+
+const escopoAtivo = computed(() => escopoMarcado.value.length > 0)
+
+function alternarTipo(valor: string) {
+  escopoMarcado.value = escopoMarcado.value.includes(valor)
+    ? escopoMarcado.value.filter((v) => v !== valor)
+    : [...escopoMarcado.value, valor]
+}
+
+const tiposPorCategoria = computed(() =>
+  Object.fromEntries(gruposTipos.value.map((g) => [g.chave, g.tipos.filter((t) => escopoMarcado.value.includes(t.valor)).length])),
+)
+
 /* ---------- Criar / Editar ---------- */
 
 const modalAberto = ref(false)
@@ -210,6 +267,7 @@ function abrirCriar() {
   form.filial = isGestor.value ? auth.user?.filial || '' : ''
   form.status = 'ATIVO'
   unidades.value = ['']
+  escopoMarcado.value = []
   modalAberto.value = true
 }
 
@@ -221,8 +279,17 @@ function abrirEditar(u: User) {
   form.filial = u.filial
   form.status = u.status === 'ATIVO' ? 'ATIVO' : 'INATIVO'
   unidades.value = u.nivel === 'TECNICO' ? separarUnidades(u.filial) : ['']
+  escopoMarcado.value = [...(u.escopoTipos ?? [])]
   modalAberto.value = true
 }
+
+/** Trocar o perfil tem que limpar o escopo: só Técnico/Admin o aceita. */
+watch(
+  () => form.nivel,
+  () => {
+    if (!podeDefinirEscopo.value) escopoMarcado.value = []
+  },
+)
 
 /** Divide o texto de `filial` em unidades ("A, B" → ["A", "B"]). */
 function separarUnidades(filial: string): string[] {
@@ -233,12 +300,17 @@ function separarUnidades(filial: string): string[] {
 async function salvar() {
   salvando.value = true
   try {
+    // `undefined` no PATCH = não mexer no escopo; aqui sempre mandamos, porque
+    // o checkbox "sem restrição" é um estado legítimo que precisa ser gravado
+    // como lista vazia. No POST a lista vazia é o default de qualquer forma.
+    const escopo = podeDefinirEscopo.value ? escopoMarcado.value : undefined
     if (editando.value) {
       await atualizarUsuario(editando.value.id, {
         nome: form.nome,
         nivel: form.nivel,
         filial: filialDoFormulario(),
         status: form.status,
+        ...(escopo ? { escopoTipos: escopo } : {}),
       })
       ui.success('Usuário atualizado.')
       modalAberto.value = false
@@ -248,6 +320,7 @@ async function salvar() {
         nome: form.nome.trim(),
         nivel: form.nivel,
         filial: filialDoFormulario(),
+        ...(escopo ? { escopoTipos: escopo } : {}),
       })
       modalAberto.value = false
       codigoModal.value = { email: criado.email, codigo: criado.codigoPrimeiroAcesso }
@@ -289,9 +362,10 @@ async function desativar(u: User) {
   }
 }
 
-function copiarSenha(senha: string) {
-  void navigator.clipboard.writeText(senha)
-  ui.success('Senha copiada.')
+/** Copia o código de primeiro acesso (não é senha — quem define a senha é a pessoa). */
+function copiarCodigo(codigo: string) {
+  void navigator.clipboard.writeText(codigo)
+  ui.success('Código copiado.')
 }
 
 onMounted(async () => {
@@ -301,6 +375,14 @@ onMounted(async () => {
     escolas.value = await listarEscolas()
   } catch {
     escolas.value = []
+  }
+  // Rota PÚBLICA do backend de chamados: as checkboxes de tipo não podem
+  // depender de autenticação nem travar o cadastro se falhar — o usuário ainda
+  // consegue criar a conta, só sem restrição.
+  try {
+    categoriasFormulario.value = await getFormularioPublico()
+  } catch {
+    categoriasFormulario.value = []
   }
 })
 </script>
@@ -412,6 +494,18 @@ onMounted(async () => {
                   <span v-for="un in separarUnidades(u.filial)" :key="un" class="unidade-chip">{{ un }}</span>
                 </template>
                 <template v-else>{{ u.filial || '—' }}</template>
+                <!--
+                  Quantos tipos o usuário atende, sem o ADMIN precisar abrir o
+                  cadastro: é a informação que explica por que a pessoa não vê
+                  (nem recebe) chamado de rede/equipamento.
+                -->
+                <span
+                  v-if="u.escopoTipos?.length"
+                  class="escopo-chip"
+                  :title="`Restrito a ${u.escopoTipos.length} tipo(s) de chamado, de todas as escolas`"
+                >
+                  {{ u.escopoTipos.length }} {{ u.escopoTipos.length === 1 ? 'tipo' : 'tipos' }}
+                </span>
               </td>
               <td><StatusPill :status="u.status === 'ATIVO' ? 'Ativo' : 'Inativo'" /></td>
               <td class="td-acoes">
@@ -517,6 +611,49 @@ onMounted(async () => {
             <option value="INATIVO">Inativo</option>
           </select>
         </div>
+
+        <!--
+          Escopo de tipos: quem atende só alguns tipos de chamado, de qualquer
+          escola. Só Técnico/Administrador — Gestor e Visualizador cuidam da
+          unidade dela e não recebem chamado.
+        -->
+        <div v-if="podeDefinirEscopo" class="field field-linha escopo-box">
+          <label>Tipos de chamado que este usuário atende</label>
+
+          <p v-if="escopoAtivo" class="escopo-ativo">
+            <strong>Restrito a {{ escopoMarcado.length }}
+              {{ escopoMarcado.length === 1 ? 'tipo' : 'tipos' }}.</strong>
+            Vai ver e receber chamado destes tipos em <strong>todas as escolas</strong> —
+            a unidade escolhida acima deixa de valer para chamados. Os demais tipos
+            ficam ocultos e ele não entra na fila de encaminhamento deles.
+          </p>
+          <p v-else class="escopo-ativo escopo-ativo-off">
+            <strong>Sem restrição.</strong> Vai ver chamado de qualquer tipo, das escolas
+            do campo Unidade.
+          </p>
+
+          <div v-if="!gruposTipos.length" class="perfil-hint perfil-hint-erro">
+            Não foi possível carregar os tipos do formulário — o usuário ficará sem
+            restrição. Recarregue a página para tentar de novo.
+          </div>
+
+          <div v-for="grupo in gruposTipos" :key="grupo.chave" class="escopo-grupo">
+            <span class="escopo-grupo-nome">
+              {{ grupo.nome }}
+              <span v-if="tiposPorCategoria[grupo.chave]" class="escopo-grupo-conta">
+                {{ tiposPorCategoria[grupo.chave] }}
+              </span>
+            </span>
+            <label v-for="tipo in grupo.tipos" :key="tipo.valor" class="escopo-item">
+              <input
+                type="checkbox"
+                :checked="escopoMarcado.includes(tipo.valor)"
+                @change="alternarTipo(tipo.valor)"
+              />
+              <span>{{ tipo.rotulo }}</span>
+            </label>
+          </div>
+        </div>
       </div>
 
       <template #footer>
@@ -552,7 +689,7 @@ onMounted(async () => {
         <button
           class="btn btn-outline"
           type="button"
-          @click="copiarSenha(codigoModal.codigo)"
+          @click="copiarCodigo(codigoModal.codigo)"
         >
           Copiar código
         </button>
@@ -709,6 +846,92 @@ onMounted(async () => {
   align-self: flex-start;
   padding: 8px 14px;
   font-size: 13px;
+}
+
+/* ---------- Escopo de tipos ---------- */
+
+.escopo-box {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  background: var(--surface-muted);
+}
+
+.escopo-ativo {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  background: var(--blue-soft);
+}
+
+.escopo-ativo-off {
+  background: transparent;
+  padding-left: 0;
+  padding-top: 0;
+}
+
+.escopo-grupo {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 8px 0;
+}
+
+.escopo-grupo + .escopo-grupo {
+  border-top: 1px solid var(--border);
+}
+
+.escopo-grupo-nome {
+  flex: 0 0 100%;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+/* Quantos tipos da categoria estão marcados — evita reler a lista inteira. */
+.escopo-grupo-conta {
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  letter-spacing: 0;
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.escopo-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.escopo-item input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--blue);
+}
+
+.escopo-chip {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--blue-soft);
+  border: 1px solid transparent;
+  color: var(--blue);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 /* Unidades múltiplas na tabela */

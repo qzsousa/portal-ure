@@ -75,6 +75,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import {
   ROTULO_TIPO_ATIVIDADE,
+  montarEscopo,
   type Chamado,
   type ChamadoAtividade,
   type ChamadoMensagem,
@@ -489,8 +490,27 @@ function aplicarFiltros() {
 const categorias = ref<FormularioCategoria[]>([])
 const tecnicosFiltro = ref<string[]>([])
 
-/** Só as ativas, na ordem em que aparecem para quem abre chamado. */
-const opcoesCategoria = computed(() => categorias.value.filter((c) => c.ativa))
+/**
+ * Só as ativas, na ordem em que aparecem para quem abre chamado — e só as que
+ * o usuário logado PODE VER.
+ *
+ * Usuário com escopo de tipos não tem nenhum chamado das outras categorias,
+ * então oferecer a categoria no filtro só produziria lista vazia. A
+ * autorização é do servidor (a lista já vem filtrada); aqui é para o select
+ * não oferecer atalho para o nada.
+ */
+const opcoesCategoria = computed(() =>
+  categorias.value.filter((c) => c.ativa && categoriaVisivel(c.chave)),
+)
+
+/** A categoria está dentro do escopo do usuário? Escopo vazio = tudo visível. */
+function categoriaVisivel(chave: string): boolean {
+  const escopo = auth.user?.escopoTipos ?? []
+  if (!escopo.length) return true
+  // O escopo guarda o TIPO (`chave::rótulo`); "a categoria tem algum tipo
+  // liberado" é o que interessa para o filtro.
+  return escopo.some((v) => v === montarEscopo(chave, '') || v.startsWith(`${chave}::`))
+}
 
 /**
  * Falha ao carregar as opções NÃO pode derrubar a tela: os dois selects ficam
@@ -1473,6 +1493,7 @@ useAutoRefresh(async () => {
           Só urgentes
         </button>
         <button
+          v-if="!auth.temEscopoTipos || categoriaVisivel('sistemas')"
           class="chip"
           :class="{ ativo: filtros.categoria === 'PortalNet' }"
           type="button"

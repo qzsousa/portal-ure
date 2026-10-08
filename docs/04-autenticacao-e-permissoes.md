@@ -202,6 +202,69 @@ o botão "Adicionar mais uma unidade" cria a próxima linha.
 
 ---
 
+## Escopo de tipos de chamado (eixo independente do nível)
+
+Além do nível e da unidade, um Técnico ou Administrador pode ser **restrito a
+certos tipos de chamado**, de **qualquer escola**. É o caso de quem é da área de
+sistemas e não da rede: a pessoa atende PortalNet e SEI, e não deve ver — nem
+receber — chamado de equipamento.
+
+No *Cadastro de usuários* é um bloco de checkboxes que só aparece para
+Administradores, em cadastro de Técnico ou Administrador.
+
+### Como é gravado
+
+```
+escopoTipos = ["sistemas::PortalNet", "sistemas::SEI"]
+```
+
+O formato é `<chaveDaCategoria>::<rótulo da 1ª opção>`. **Lista vazia = sem
+restrição**: o usuário se comporta exatamente como antes, respeitando só a
+`filial`. É por isso que o campo é uma lista com default vazio e não uma coluna
+nullable — nenhuma conta já cadastrada muda de comportamento.
+
+### A unidade deixa de valer
+
+Com escopo preenchido, a trava de unidade é **substituída** pela trava de tipo:
+
+| | Sem escopo | Com escopo |
+|---|---|---|
+| Quais chamados aparecem | Das escolas do `filial` | De **todas** as escolas, só dos tipos marcados |
+| Encaminhamento automático | Técnico da unidade | O especialista do tipo **tem prioridade** |
+| Filtro "Categoria" da tela | Todas as categorias | Só as que têm tipo liberado |
+| Menu lateral | Completo | Só *Painel* e *Chamados* |
+| Sino de notificações | Broadcast da unidade | Só o que é pessoal (ele é o responsável) |
+
+O campo **Unidade** continua obrigatório no cadastro — o SCE e o inventário
+dependem dele. O texto do bloco de escopo avisa que, com escopo marcado, a
+unidade deixa de valer **para chamados**.
+
+### Como o tipo é comparado
+
+O backend monta o `tipo` do chamado como `"<Categoria> - <1ª resposta>"`, então
+o escopo casa pelo texto com duas alternativas: igualdade, ou `startsWith` com
+`" - "` à frente. O separador é o que impede o erro clássico — sem ele, o escopo
+`sistemas::SEI` também traria um tipo `"Sistemas - SEIplus"`.
+
+Categorias cuja **primeira pergunta não é de opções** (o "E-mail institucional"
+começa pelo CIE da escola) não geram tipo: para elas a checkbox marca a
+**categoria inteira** (`email::`).
+
+### Quem pode definir
+
+Só o **Administrador**. Para o Gestor o campo é descartado, igual já acontece
+com `nivel` e `filial`. Definir escopo é um *aumento* de acesso — quem o tem vê
+chamado de qualquer escola.
+
+### Renomear a opção no formulário
+
+A chave da categoria sobrevive a renomear a categoria; o **rótulo da opção não**.
+Renomear "PortalNet" em *Configurações → Formulário* deixa o escopo órfão, e o
+`PATCH /usuarios` passa a recusar o valor com 400 informando o tipo inválido —
+melhor do que o usuário voltar a ver tudo achando que ainda estava restrito.
+
+---
+
 ## Papel de unidade: MÃE e FILHA
 
 Independente do nível, uma escola tem um papel dentro do grupo que divide o

@@ -15,6 +15,29 @@ export type Nivel = 'ADMIN' | 'TECNICO' | 'GESTOR' | 'VISUALIZADOR'
  */
 export type PapelUnidade = 'MAE' | 'FILHA'
 
+/**
+ * Separador do escopo de tipos: `<chaveDaCategoria>::<rótulo da 1ª opção>`.
+ * Rótulo vazio = a categoria inteira (é o caso das categorias cuja 1ª
+ * pergunta não é de opções, como o "E-mail institucional").
+ */
+export const SEPARADOR_ESCOPO = '::'
+
+/** Monta o valor gravado no `escopoTipos` de um usuário. */
+export function montarEscopo(categoriaChave: string, rotulo?: string | null): string {
+  return `${categoriaChave}${SEPARADOR_ESCOPO}${rotulo ? rotulo.trim() : ''}`
+}
+
+/**
+ * Escopo de TIPOS de chamado que este usuário atende.
+ *
+ * `[]` (ou ausente) = SEM RESTRIÇÃO: o usuário respeita só a unidade, como
+ * sempre. Preenchido, a unidade deixa de valer para CHAMADOS e o que limita é
+ * o tipo — a pessoa atende todas as escolas, mas só destes chamados.
+ *
+ * A autorização em si é toda do servidor; o portal usa este campo só para
+ * ESCONDER o que não pode ser aberto (menu de equipamentos, opções do filtro
+ * de categoria), evitando oferecer atalho para algo que responderia 403.
+ */
 export interface User {
   id: string
   email: string
@@ -26,6 +49,7 @@ export interface User {
   papelUnidade?: PapelUnidade | null
   status?: string
   primeiroLogin?: boolean
+  escopoTipos?: string[]
 }
 
 export interface LoginRequest {

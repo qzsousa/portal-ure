@@ -25,6 +25,14 @@ interface MenuItem {
   gestorTambem?: boolean
   /** Visível apenas para a matriz (ADMIN/TECNICO) */
   matrizOnly?: boolean
+  /**
+   * Esconde para usuário com ESCOPO DE TIPOS — a conta criada para atender só
+   * alguns tipos de chamado, que não tem inventário nem manutenção sob
+   * responsabilidade. Some do menu, não do servidor: digitar a URL ainda
+   * abriria a tela (o SCE tem authz própria, e as telas de manutenção só
+   * leem o SCE).
+   */
+  semEscopoTipos?: boolean
 }
 
 const route = useRoute()
@@ -33,20 +41,21 @@ const { menuAberto, fechar } = useSidebar()
 
 const items: MenuItem[] = [
   { to: '/painel', label: 'Painel', icon: LayoutDashboard },
-  { to: '/equipamentos', label: 'Equipamentos', icon: Monitor },
-  { to: '/manutencao', label: 'Manutenção', icon: Wrench },
+  { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, semEscopoTipos: true },
+  { to: '/manutencao', label: 'Manutenção', icon: Wrench, semEscopoTipos: true },
   { to: '/chamados', label: 'Chamados', icon: Headset },
-  { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen },
-  { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true },
-  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, matrizOnly: true },
-  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, matrizOnly: true },
-  { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen, semEscopoTipos: true },
+  { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true, semEscopoTipos: true },
+  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, matrizOnly: true, semEscopoTipos: true },
+  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, matrizOnly: true, semEscopoTipos: true },
+  { to: '/relatorios', label: 'Relatórios', icon: BarChart3, semEscopoTipos: true },
   { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true },
   { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true },
 ]
 
 const visibleItems = computed(() =>
   items.filter((i) => {
+    if (i.semEscopoTipos && auth.temEscopoTipos) return false
     if (i.adminOnly) return auth.user?.nivel === 'ADMIN'
     if (i.gestorTambem) return ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || '')
     if (i.matrizOnly) return ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || '')

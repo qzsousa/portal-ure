@@ -46,6 +46,22 @@ export const useAuthStore = defineStore('auth', () => {
    */
   const somenteLeituraEquipamentos = computed(() => user.value?.papelUnidade === 'FILHA')
 
+  /**
+   * Conta RESTRITA a certos tipos de chamado (ver "Escopo de tipos" em
+   * `docs/04-autenticacao-e-permissoes.md`).
+   *
+   * Lista vazia = sem restrição, e a pessoa vive no portal inteiro. Preenchida,
+   * a unidade deixa de valer para CHAMADOS e a pessoa atende todas as escolas,
+   * mas só destes tipos — e não tem inventário, manutenção nem relatório sob
+   * responsabilidade, então esses itens somem do menu.
+   *
+   * A autorização é toda do servidor; este sinalizador serve para a tela não
+   * oferecer atalho para o que responderia 403. Como a sessão é reconstruída
+   * por `/auth/refresh` + `/auth/me` a cada carregamento, o campo nunca fica
+   * velho em cache.
+   */
+  const temEscopoTipos = computed(() => (user.value?.escopoTipos?.length ?? 0) > 0)
+
   /*
    * Simulação de perfil (abas Configurações → Testes de acesso).
    *
@@ -243,6 +259,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     mustChangePassword,
     somenteLeituraEquipamentos,
+    temEscopoTipos,
     simulacaoAtivavel,
     simulando,
     nivelSimulado,

@@ -26,6 +26,12 @@ export interface NovoUsuario {
   nome: string
   nivel: Nivel
   filial: string
+  /**
+   * Tipos de chamado que este usuário atende ("<categoria>::<rótulo>"). Lista
+   * vazia = sem restrição. Só o ADMIN pode enviar — o backend recusa com 403
+   * se vier de um Gestor.
+   */
+  escopoTipos?: string[]
 }
 
 export type UsuarioCriado = User & { codigoPrimeiroAcesso: string }
@@ -40,6 +46,11 @@ export interface AtualizarUsuario {
   nivel?: Nivel
   filial?: string
   status?: 'ATIVO' | 'INATIVO'
+  /**
+   * OMITIR o campo deixa o escopo como está; `[]` limpa (o usuário volta a ver
+   * tudo). A distinção importa — por isso não é padrão aqui.
+   */
+  escopoTipos?: string[]
 }
 
 export async function atualizarUsuario(id: string, payload: AtualizarUsuario): Promise<User> {
