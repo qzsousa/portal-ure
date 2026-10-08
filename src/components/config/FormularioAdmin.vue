@@ -13,6 +13,7 @@ import {
   ArrowUp,
   ChevronDown,
   ChevronRight,
+  ListOrdered,
   Loader2,
   Pencil,
   Plus,
@@ -30,9 +31,17 @@ import {
   type FormularioPerguntaTipo,
 } from '@/api/formulario'
 import { apiError } from '@/utils/apiError'
+import { condicoesDe, rotuloDaOrigem } from '@/utils/formulario'
 import { useUiStore } from '@/stores/ui'
 
 const ui = useUiStore()
+
+/** Texto do title da badge: todas as condições em uma frase. */
+function resumoCondicoes(cat: FormularioCategoria, p: FormularioPergunta): string {
+  return condicoesDe(p)
+    .map((c) => `«${rotuloDaOrigem(cat.perguntas ?? [], c.perguntaId)}» = «${c.opcao}»`)
+    .join(' ou ')
+}
 
 /* ---------- Carga ---------- */
 const categorias = ref<FormularioCategoria[]>([])
@@ -55,19 +64,27 @@ const categoriasOrdenadas = computed(() =>
   [...categorias.value].sort((a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome)),
 )
 
+/**
+ * Perguntas na ordem em que aparecem para o usuário. O desempate por `id` é
+ * essencial: `ordem` pode vir repetida (perguntas antigas, importadas) e sem
+ * isso o Vue passa a intercalar perguntas a cada refetch.
+ */
 function perguntasDe(cat: FormularioCategoria): FormularioPergunta[] {
-  return [...(cat.perguntas ?? [])].sort((a, b) => a.ordem - b.ordem)
+  return [...(cat.perguntas ?? [])].sort((a, b) => a.ordem - b.ordem || a.id.localeCompare(b.id))
+}
+
+/** Próxima `ordem` livre: sempre `max(ordem) + 1`, nunca a quantidade de perguntas. */
+function proximaOrdem(cat: FormularioCategoria): number {
+  const maior = (cat.perguntas ?? []).reduce((max, p) => Math.max(max, p.ordem), 0)
+  return maior + 1
 }
 
 const ROTULOS_TIPO: Record<FormularioPerguntaTipo, string> = {
   OPCOES: 'Opções',
   TEXTO: 'Texto',
   TEXTO_LONGO: 'Texto longo',
-}
-
-/** Rótulo de uma pergunta da mesma categoria (para a descrição "se «pergunta» = «opção»"). */
-function rotuloPergunta(cat: FormularioCategoria, id: string): string {
-  return cat.perguntas?.find((p) => p.id === id)?.rotulo ?? 'pergunta removida'
+  ESCOLA: 'Escola',
+  ARQUIVO: 'Anexo',
 }
 
 /* ---------- Expansão ---------- */
@@ -134,26 +151,52 @@ async function excluirPergunta(p: FormularioPergunta) {
   }
 }
 
-/** Reordena trocando a `ordem` entre vizinhas (dois PATCHs) e recarrega. */
 const reordenando = ref(false)
 
-async function moverPergunta(cat: FormularioCategoria, idx: number, delta: number) {
-  const lista = perguntasDe(cat)
-  const alvo = idx + delta
-  if (alvo < 0 || alvo >= lista.length) return
-  const atual = lista[idx]
-  const vizinha = lista[alvo]
-  if (!atual || !vizinha || atual.ordem === vizinha.ordem) return
+/**
+ * Grava `ordem` = 1..N na ordem visual desejada, enviando apenas as perguntas
+ * cuja `ordem` realmente muda. Renumerar tudo (em vez de trocar duas vizinhas)
+ * é o que conserta lacunas e `ordem` repetida: a troca simples saía sem fazer
+ * nada quando as duas perguntas tinham o mesmo número.
+ */
+async function aplicarOrdens(listaOrdenada: FormularioPergunta[]) {
+  const mudancas = listaOrdenada
+    .map((p, i) => ({ id: p.id, ordem: i + 1, atual: p.ordem }))
+    .filter((c) => c.atual !== c.ordem)
+  if (!mudancas.length) return
   reordenando.value = true
   try {
-    await atualizarPerguntaFormulario(atual.id, { ordem: vizinha.ordem })
-    await atualizarPerguntaFormulario(vizinha.id, { ordem: atual.ordem })
+    for (const m of mudancas) {
+      await atualizarPerguntaFormulario(m.id, { ordem: m.ordem })
+    }
     await carregar()
   } catch (e) {
     ui.error(apiError(e, 'Falha ao reordenar as perguntas.'))
   } finally {
     reordenando.value = false
   }
+}
+
+async function moverPergunta(cat: FormularioCategoria, idx: number, delta: number) {
+  const lista = perguntasDe(cat)
+  const alvo = idx + delta
+  if (alvo < 0 || alvo >= lista.length) return
+  const movida = lista[idx]
+  if (!movida) return
+  const nova = [...lista]
+  nova.splice(idx, 1)
+  nova.splice(alvo, 0, movida)
+  await aplicarOrdens(nova)
+}
+
+/** Reescreve `ordem` = 1..N na ordem já exibida, apagando lacunas e repetições. */
+async function renumerarPerguntas(cat: FormularioCategoria) {
+  await aplicarOrdens(perguntasDe(cat))
+}
+
+/** Só oferece a renumeração quando há `ordem` fora da sequência 1..N. */
+function foraDaSequencia(cat: FormularioCategoria): boolean {
+  return perguntasDe(cat).some((p, i) => p.ordem !== i + 1)
 }
 
 onMounted(() => {
@@ -232,23 +275,26 @@ onMounted(() => {
         <div v-if="expandidas.has(c.id)" class="perguntas">
           <ul v-if="perguntasDe(c).length" class="perg-lista">
             <li v-for="(p, i) in perguntasDe(c)" :key="p.id" class="perg-item">
-              <span class="perg-ordem">{{ p.ordem }}</span>
+              <span class="perg-ordem">{{ i + 1 }}</span>
               <div class="perg-info">
                 <div class="perg-titulo-linha">
                   <strong class="perg-rotulo">{{ p.rotulo }}</strong>
                   <span class="tipo-chip">{{ ROTULOS_TIPO[p.tipo] }}</span>
-                  <span v-if="p.obrigatoria" class="badge badge-info">Obrigatória</span>
+<span v-if="p.obrigatoria" class="badge badge-info">Obrigatória</span>
                   <span
-                    v-if="p.dependeDePerguntaId"
+                    v-if="condicoesDe(p).length"
                     class="badge badge-cond"
-                    :title="`Exibida se «${rotuloPergunta(c, p.dependeDePerguntaId)}» = «${p.dependeDeOpcao ?? '—'}»`"
+                    :title="resumoCondicoes(c, p)"
                   >
-                    Condicional
+                    {{ condicoesDe(p).length > 1 ? `${condicoesDe(p).length} condições` : 'Condicional' }}
                   </span>
                   <span v-if="!p.ativa" class="badge badge-off">Inativa</span>
                 </div>
-                <p v-if="p.dependeDePerguntaId" class="perg-cond">
-                  Exibida se «{{ rotuloPergunta(c, p.dependeDePerguntaId) }}» = «{{ p.dependeDeOpcao ?? '—' }}»
+                <p v-if="condicoesDe(p).length" class="perg-cond">
+                  Exibida se
+                  <template v-for="(cd, i) in condicoesDe(p)" :key="cd.perguntaId + cd.opcao">
+                    <span v-if="i > 0"> ou </span>«{{ rotuloDaOrigem(c.perguntas ?? [], cd.perguntaId) }}» = «{{ cd.opcao }}»
+                  </template>
                 </p>
               </div>
               <div class="perg-acoes">
@@ -280,10 +326,23 @@ onMounted(() => {
             </li>
           </ul>
           <p v-else class="perg-vazia">Nenhuma pergunta nesta categoria ainda.</p>
-          <button class="btn btn-outline btn-nova-perg" type="button" @click="abrirNovaPergunta(c)">
-            <Plus :size="15" />
-            Nova pergunta
-          </button>
+          <div class="perg-rodape">
+            <button
+              v-if="foraDaSequencia(c)"
+              class="btn btn-outline btn-renumerar"
+              type="button"
+              :disabled="reordenando"
+              title="Reescrever a ordem das perguntas como 1, 2, 3..."
+              @click="renumerarPerguntas(c)"
+            >
+              <ListOrdered :size="15" />
+              Corrigir ordem
+            </button>
+            <button class="btn btn-outline btn-nova-perg" type="button" @click="abrirNovaPergunta(c)">
+              <Plus :size="15" />
+              Nova pergunta
+            </button>
+          </div>
         </div>
       </li>
     </ul>
@@ -299,7 +358,7 @@ onMounted(() => {
       v-if="pergModalAberto && pergCategoria"
       :categoria="pergCategoria"
       :pergunta="pergEditando"
-      :ordem-sugerida="(pergCategoria.perguntas?.length ?? 0) + 1"
+      :ordem-sugerida="proximaOrdem(pergCategoria)"
       @fechar="pergModalAberto = false"
       @salvo="carregar"
     />
@@ -558,10 +617,24 @@ onMounted(() => {
   color: var(--text-muted);
 }
 
+.perg-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .btn-nova-perg {
   padding: 7px 12px;
   font-size: 13px;
   border-style: dashed;
+}
+
+.btn-renumerar {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-style: dashed;
+  color: var(--yellow);
 }
 
 /* ---------- Ícones / util ---------- */

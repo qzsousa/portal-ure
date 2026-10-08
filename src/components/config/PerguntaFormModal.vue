@@ -12,10 +12,12 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ArrowDown, ArrowUp, Loader2, MessageSquareWarning, Plus, X } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { apiError } from '@/utils/apiError'
+import { condicoesDe, podeSerOrigem } from '@/utils/formulario'
 import {
   atualizarPerguntaFormulario,
   criarPerguntaFormulario,
   type AtualizarPerguntaFormularioPayload,
+  type FormularioCondicao,
   type FormularioCategoria,
   type FormularioOpcao,
   type FormularioOpcaoAlerta,
@@ -57,21 +59,38 @@ const form = reactive({
 })
 
 /* ---------- Exibição condicional ---------- */
-const condicional = ref(false)
-const dependeDePerguntaId = ref('')
-const dependeDeOpcao = ref('')
+/**
+ * Uma condição = par (pergunta de origem, opção). A pergunta é exibida quando
+ * QUALQUER uma delas for satisfeita (OU). Lista vazia = sempre exibir.
+ */
+interface CondicaoEdicao {
+  perguntaId: string
+  opcao: string
+}
+
+const condicoes = ref<CondicaoEdicao[]>([])
 
 /** Somente perguntas de OPÇÕES da mesma categoria podem ser "base" (nunca ela mesma). */
 const perguntasCondicionaveis = computed(() =>
-  [...(props.categoria.perguntas ?? [])]
-    .filter((p) => p.tipo === 'OPCOES' && p.id !== props.pergunta?.id)
-    .sort((a, b) => a.ordem - b.ordem),
+  podeSerOrigem(props.categoria.perguntas ?? [], props.categoria.id, props.pergunta?.id ?? null),
 )
 
-const perguntaBase = computed(
-  () => perguntasCondicionaveis.value.find((p) => p.id === dependeDePerguntaId.value) ?? null,
-)
-const opcoesDaBase = computed(() => perguntaBase.value?.opcoes ?? [])
+function opcoesDa(perguntaId: string) {
+  return perguntasCondicionaveis.value.find((p) => p.id === perguntaId)?.opcoes ?? []
+}
+
+function adicionarCondicao() {
+  condicoes.value.push({ perguntaId: '', opcao: '' })
+}
+
+function removerCondicao(idx: number) {
+  condicoes.value.splice(idx, 1)
+}
+
+/** Trocar a pergunta de origem invalida a opção: as opções são de outra lista. */
+function trocarOrigem(c: CondicaoEdicao) {
+  c.opcao = ''
+}
 
 /* ---------- Opções (tipo OPCOES) ---------- */
 const opcoes = ref<OpcaoEdicao[]>([])
@@ -116,9 +135,16 @@ function validar(): string | null {
       return 'Preencha o rótulo de todas as opções (ou remova as vazias).'
     }
   }
-  if (condicional.value) {
-    if (!dependeDePerguntaId.value) return 'Escolha a pergunta da qual esta depende.'
-    if (!dependeDeOpcao.value) return 'Escolha a opção que faz esta pergunta aparecer.'
+  for (const [i, c] of condicoes.value.entries()) {
+    if (!c.perguntaId) return `Escolha a pergunta de origem da condição ${i + 1}.`
+    if (!c.opcao) return `Escolha a opção da condição ${i + 1}.`
+  }
+  // Duas condições iguais não mudam nada e só confundem quem lê a lista.
+  const vistas = new Set<string>()
+  for (const c of condicoes.value) {
+    const chave = `${c.perguntaId}::${c.opcao}`
+    if (vistas.has(chave)) return 'Há condições repetidas — remova a duplicada.'
+    vistas.add(chave)
   }
   return null
 }
@@ -141,6 +167,13 @@ function montarOpcoes(): FormularioOpcao[] {
   })
 }
 
+/** Condições limpas: descarta linha abandonada (origem ou opção vazia). */
+function montarCondicoes(): FormularioCondicao[] {
+  return condicoes.value
+    .filter((c) => c.perguntaId && c.opcao)
+    .map((c) => ({ perguntaId: c.perguntaId, opcao: c.opcao }))
+}
+
 async function salvar() {
   const problema = validar()
   if (problema) {
@@ -158,11 +191,8 @@ async function salvar() {
     ordem: Number.isFinite(form.ordem) ? form.ordem : 0,
     // Na EDIÇÃO, enviar null/[] limpa vínculos/opções antigos; na criação, omite.
     ...(form.tipo === 'OPCOES' ? { opcoes: montarOpcoes() } : editando.value ? { opcoes: [] } : {}),
-    ...(condicional.value
-      ? { dependeDePerguntaId: dependeDePerguntaId.value, dependeDeOpcao: dependeDeOpcao.value }
-      : editando.value
-        ? { dependeDePerguntaId: null, dependeDeOpcao: null }
-        : {}),
+    // `condicoes` é a fonte da verdade; o backend espelha o par legado sozinho.
+    ...(condicoes.value.length || editando.value ? { condicoes: montarCondicoes() } : {}),
   }
   try {
     if (editando.value && props.pergunta) {
@@ -194,9 +224,7 @@ onMounted(() => {
     form.obrigatoria = p.obrigatoria
     form.ativa = p.ativa
     form.ordem = p.ordem
-    condicional.value = !!p.dependeDePerguntaId
-    dependeDePerguntaId.value = p.dependeDePerguntaId || ''
-    dependeDeOpcao.value = p.dependeDeOpcao || ''
+    condicoes.value = condicoesDe(p).map((c) => ({ perguntaId: c.perguntaId, opcao: c.opcao }))
     opcoes.value = (p.opcoes ?? []).map((o) => ({
       rotulo: o.rotulo,
       alerta: o.alerta ? { ...o.alerta } : null,
@@ -231,6 +259,8 @@ onMounted(() => {
             <option value="OPCOES">Opções (escolha única)</option>
             <option value="TEXTO">Texto (linha única)</option>
             <option value="TEXTO_LONGO">Texto longo (parágrafo)</option>
+            <option value="ESCOLA">Escola (lista de unidades)</option>
+            <option value="ARQUIVO">Anexo (foto ou PDF)</option>
           </select>
         </div>
         <div class="field">
@@ -238,6 +268,15 @@ onMounted(() => {
           <input v-model.number="form.ordem" type="number" class="input" min="0" step="1" />
         </div>
       </div>
+
+      <p v-if="form.tipo === 'ESCOLA'" class="dica">
+        Aparece uma lista com todas as escolas cadastradas. A resposta vai junto do chamado como texto
+        e também pode ser usada como condição de outras perguntas.
+      </p>
+      <p v-else-if="form.tipo === 'ARQUIVO'" class="dica">
+        Aparece um campo para anexar foto ou PDF. Cada pergunta de anexo tem o seu próprio arquivo, e o
+        anexo é permanente — diferente do anexo do atendimento, que expira em 7 dias.
+      </p>
 
       <div class="checks-linha">
         <label class="check-linha">
@@ -250,36 +289,61 @@ onMounted(() => {
         </label>
       </div>
 
-      <!-- Exibição condicional -->
+      <!-- Exibição condicional: sempre, ou quando qualquer uma das condições for satisfeita -->
       <div class="field">
         <label>Exibição</label>
-        <select
-          class="select-input"
-          :value="condicional ? 'condicional' : 'sempre'"
-          @change="condicional = ($event.target as HTMLSelectElement).value === 'condicional'"
-        >
-          <option value="sempre">Sempre exibir</option>
-          <option value="condicional">Exibir quando...</option>
-        </select>
+        <ul v-if="condicoes.length === 0" class="cond-opcoes">
+          <li>
+            <button class="cond-opcao ativa" type="button" disabled>
+              <strong>Sempre exibir</strong>
+              <span>A pergunta aparece para todo mundo.</span>
+            </button>
+          </li>
+          <li>
+            <button class="cond-opcao" type="button" @click="adicionarCondicao">
+              <strong>Exibir quando...</strong>
+              <span>Só aparece se a resposta for uma das opções marcadas.</span>
+            </button>
+          </li>
+        </ul>
 
-        <div v-if="condicional" class="cond-bloco">
-          <div class="grid-2">
-            <select v-model="dependeDePerguntaId" class="select-input" @change="dependeDeOpcao = ''">
-              <option value="" disabled>Pergunta de origem...</option>
-              <option v-for="p in perguntasCondicionaveis" :key="p.id" :value="p.id">{{ p.rotulo }}</option>
-            </select>
-            <select v-model="dependeDeOpcao" class="select-input" :disabled="!perguntaBase">
-              <option value="" disabled>Opção que a libera...</option>
-              <option v-for="(o, i) in opcoesDaBase" :key="i" :value="o.rotulo">{{ o.rotulo }}</option>
-            </select>
+        <div v-else class="cond-bloco">
+          <p class="dica">
+            A pergunta aparece quando <strong>qualquer uma</strong> das condições abaixo for verdadeira.
+          </p>
+
+          <ul class="cond-lista">
+            <li v-for="(c, i) in condicoes" :key="i" class="cond-item">
+              <div class="cond-linha">
+                <select v-model="c.perguntaId" class="select-input" @change="trocarOrigem(c)">
+                  <option value="" disabled>Pergunta de origem...</option>
+                  <option v-for="p in perguntasCondicionaveis" :key="p.id" :value="p.id">{{ p.rotulo }}</option>
+                </select>
+                <select v-model="c.opcao" class="select-input" :disabled="!c.perguntaId">
+                  <option value="" disabled>Opção que a libera...</option>
+                  <option v-for="(o, j) in opcoesDa(c.perguntaId)" :key="j" :value="o.rotulo">{{ o.rotulo }}</option>
+                </select>
+                <button class="ico-btn perigo" type="button" title="Remover condição" @click="removerCondicao(i)">
+                  <X :size="15" />
+                </button>
+              </div>
+            </li>
+          </ul>
+
+          <div class="cond-rodape">
+            <button class="btn btn-outline cond-add" type="button" @click="adicionarCondicao">
+              <Plus :size="14" />
+              Adicionar condição
+            </button>
+            <button class="btn btn-outline cond-limpar" type="button" @click="condicoes = []">
+              Exibir sempre
+            </button>
           </div>
-          <p v-if="perguntasCondicionaveis.length === 0" class="dica">
-            Nenhuma pergunta de opções nesta categoria para usar como condição.
-          </p>
-          <p v-else class="dica">
-            A pergunta só aparece quando a resposta escolhida for exatamente essa opção.
-          </p>
         </div>
+
+        <p v-if="condicoes.length > 0 && perguntasCondicionaveis.length === 0" class="dica">
+          Nenhuma pergunta de opções nesta categoria para usar como condição.
+        </p>
       </div>
 
       <!-- Editor de opções -->
@@ -420,12 +484,81 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+/* Escolha inicial entre "sempre" e "condicionada". */
+.cond-opcoes {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cond-opcao {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.cond-opcao span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cond-opcao.ativa {
+  border-color: var(--brand-gold);
+  background: var(--surface-muted);
+  cursor: default;
+}
+
 .cond-bloco {
   margin-top: 10px;
   padding: 12px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
+}
+
+.cond-lista {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cond-item {
+  display: flex;
+  align-items: center;
+}
+
+.cond-linha {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.cond-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cond-add,
+.cond-limpar {
+  padding: 6px 10px;
+  font-size: 12.5px;
+  border-style: dashed;
 }
 
 /* ---------- Opções ---------- */

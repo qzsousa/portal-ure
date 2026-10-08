@@ -37,6 +37,18 @@ export interface NovoChamadoPayload {
   anexoBase64?: string
   anexoNome?: string
   anexoTipo?: string
+  /**
+   * Anexos das perguntas do formulário (tipo ARQUIVO). Um arquivo por pergunta.
+   * `pergunta` é o rótulo, enviado para o arquivo continuar identificado mesmo
+   * que a pergunta seja renomeada no formulário depois.
+   */
+  anexosPergunta?: Array<{
+    perguntaId: string
+    pergunta: string
+    nome: string
+    tipo: string
+    base64: string
+  }>
 }
 
 export async function listarEscolasPublico(): Promise<string[]> {
@@ -269,7 +281,16 @@ export interface FormularioOpcao {
   alerta?: FormularioOpcaoAlerta
 }
 
-export type FormularioPerguntaTipo = 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+export type FormularioPerguntaTipo = 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO' | 'ESCOLA' | 'ARQUIVO'
+
+/**
+ * Uma condição de exibição: a pergunta aparece quando a resposta de
+ * `perguntaId` for `opcao`. Várias condições formam uma OU.
+ */
+export interface FormularioCondicao {
+  perguntaId: string
+  opcao: string
+}
 
 export interface FormularioPergunta {
   id: string
@@ -280,9 +301,10 @@ export interface FormularioPergunta {
   obrigatoria: boolean
   ordem: number
   ativa: boolean
-  /** Condicional: só exibe quando a pergunta referenciada... */
+  /** Condições de exibição (OU). Vazio = sempre exibir. */
+  condicoes: FormularioCondicao[]
+  /** Legado: par único de condição, anterior às condicionais múltiplas. */
   dependeDePerguntaId: string | null
-  /** ...tiver EXATAMENTE este rótulo de opção selecionado. */
   dependeDeOpcao: string | null
   /** [] salvo em OPCOES. */
   opcoes: FormularioOpcao[]

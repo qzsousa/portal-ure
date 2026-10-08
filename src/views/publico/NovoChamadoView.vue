@@ -21,9 +21,11 @@ import {
   Search,
   Send,
   Wifi,
+  X,
 } from '@lucide/vue'
 import { useUiStore } from '@/stores/ui'
 import { apiError } from '@/utils/apiError'
+import { condicoesDe } from '@/utils/formulario'
 import {
   criarChamadoPublico,
   getFormularioPublico,
@@ -97,6 +99,11 @@ const erroFormulario = ref('')
 const respostas = reactive<Record<string, string>>({})
 /** Texto livre quando a resposta é a pseudo-opção "Outro (descrever)". */
 const outrosTextos = reactive<Record<string, string>>({})
+/**
+ * Arquivo escolhido em cada pergunta de anexo, indexado por pergunta.id.
+ * Vive fora de `respostas` porque o valor é um File e vira base64 só no submit.
+ */
+const anexosPergunta = reactive<Record<string, File | null>>({})
 
 /** Texto da resposta como aparece para o usuário (traduz a sentinela Outro). */
 function rotuloResposta(p: FormularioPergunta): string | null {
@@ -150,10 +157,15 @@ function voltarHome() {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-/** Visibilidade condicional: só exibe se a pergunta-pai tiver EXATAMENTE o rótulo esperado. */
+/**
+ * Visibilidade condicional. A pergunta aparece quando **qualquer uma** das
+ * condições é satisfeita (OU) — basta a pergunta-pai ter o rótulo esperado.
+ * Sem condição, sempre visível.
+ */
 function perguntaVisivel(p: FormularioPergunta): boolean {
-  if (!p.dependeDePerguntaId) return true
-  return respostas[p.dependeDePerguntaId] === p.dependeDeOpcao
+  const condicoes = condicoesDe(p)
+  if (!condicoes.length) return true
+  return condicoes.some((c) => respostas[c.perguntaId] === c.opcao)
 }
 
 const perguntasVisiveis = computed<FormularioPergunta[]>(() => {
@@ -161,7 +173,7 @@ const perguntasVisiveis = computed<FormularioPergunta[]>(() => {
   if (!cat) return []
   return (cat.perguntas ?? [])
     .filter((p) => p.ativa && perguntaVisivel(p))
-    .sort((a, b) => a.ordem - b.ordem)
+    .sort((a, b) => a.ordem - b.ordem || a.id.localeCompare(b.id))
 })
 
 function selecionada(p: FormularioPergunta): FormularioOpcao | null {
@@ -179,9 +191,7 @@ function alertaDaPergunta(p: FormularioPergunta): FormularioOpcaoAlerta | null {
 const opcoesEscolhidas = computed<FormularioOpcao[]>(() => {
   const cat = categoriaSelecionada.value
   if (!cat) return []
-  return (cat.perguntas ?? [])
-    .filter((p) => perguntaVisivel(p))
-    .sort((a, b) => a.ordem - b.ordem)
+  return perguntasVisiveis.value
     .map((p) => selecionada(p))
     .filter((o): o is FormularioOpcao => !!o)
 })
@@ -295,6 +305,11 @@ const podeAvancarPerguntas = computed(() => {
   if (temEncerra.value) return false
   for (const p of perguntasVisiveis.value) {
     if (!p.obrigatoria) continue
+    // Anexo obrigatório não passa por `respostas`: o File fica em `anexosPergunta`.
+    if (p.tipo === 'ARQUIVO') {
+      if (!anexosPergunta[p.id]) return false
+      continue
+    }
     const resp = (respostas[p.id] ?? '').trim()
     if (p.tipo === 'OPCOES') {
       // "Outro (descrever)" exige o texto livre preenchido
@@ -322,6 +337,11 @@ function voltarPerguntas() {
 
 /* ==================== identificação ==================== */
 
+/**
+ * Escolas para a pergunta do tipo ESCOLA. Reaproveita o mesmo endpoint do
+ * select de identificação (`/escolas/nomes`), então as duas listas nunca
+ * divergem.
+ */
 const escolas = ref<string[]>([])
 const carregandoEscolas = ref(false)
 
@@ -360,6 +380,32 @@ function onAnexoChange(e: Event) {
 function removerAnexo() {
   anexo.value = null
   const input = document.getElementById('anexo') as HTMLInputElement | null
+  if (input) input.value = ''
+}
+
+/* ---------- Anexo de pergunta (tipo ARQUIVO) ---------- */
+
+/**
+ * Um arquivo por pergunta de anexo — diferente do `anexo` da etapa de
+ * identificação, que é o anexo geral do chamado. Cada pergunta tem o seu,
+ * porque a pergunta é o que diz a que o arquivo se refere.
+ */
+function onAnexoPerguntaChange(p: FormularioPergunta, e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0] ?? null
+  if (file && file.size > TAMANHO_MAX_ANEXO) {
+    anexosPergunta[p.id] = null
+    input.value = ''
+    erros[`anexo-${p.id}`] = 'Arquivo muito grande. O tamanho máximo é 10 MB.'
+    return
+  }
+  erros[`anexo-${p.id}`] = ''
+  anexosPergunta[p.id] = file
+}
+
+function removerAnexoPergunta(p: FormularioPergunta) {
+  anexosPergunta[p.id] = null
+  const input = document.getElementById(`anexo-${p.id}`) as HTMLInputElement | null
   if (input) input.value = ''
 }
 
@@ -404,6 +450,12 @@ function tipoFinal(): string {
 function descricaoFinal(): string {
   const linhas: string[] = []
   for (const p of perguntasVisiveis.value) {
+    if (p.tipo === 'ARQUIVO') {
+      // O arquivo vai no campo `anexosPergunta`; aqui só fica o registro de que
+      // a pergunta foi respondida, senão o técnico não sabe o que olhar.
+      if (anexosPergunta[p.id]) linhas.push(`[${p.rotulo}] arquivo anexado`)
+      continue
+    }
     const bruta = respostas[p.id] ?? ''
     const r = bruta === OUTRO_PERGUNTA ? `Outro: ${(outrosTextos[p.id] ?? '').trim()}` : bruta.trim()
     if (r) linhas.push(`[${p.rotulo}] ${r}`)
@@ -442,6 +494,19 @@ async function enviar() {
       payload.anexoNome = anexo.value.name
       payload.anexoTipo = anexo.value.type
     }
+    // Um anexo por pergunta do tipo ARQUIVO. Convertidos em paralelo porque
+    // cada leitura é independente e o submit já é a etapa mais lenta.
+    const anexos = perguntasVisiveis.value
+      .filter((p) => p.tipo === 'ARQUIVO' && anexosPergunta[p.id])
+      .map(async (p) => ({
+        perguntaId: p.id,
+        pergunta: p.rotulo,
+        nome: (anexosPergunta[p.id] as File).name,
+        tipo: (anexosPergunta[p.id] as File).type,
+        base64: await fileToBase64(anexosPergunta[p.id] as File),
+      }))
+    if (anexos.length) payload.anexosPergunta = await Promise.all(anexos)
+
     const chamado = await criarChamadoPublico(payload)
     protocolo.value = chamado.protocolo
     passo.value = 3
@@ -771,6 +836,40 @@ onMounted(() => {
               placeholder="Digite sua resposta"
               :aria-label="p.rotulo"
             ></textarea>
+
+            <!-- ESCOLA: lista de unidades do backend -->
+            <select
+              v-if="p.tipo === 'ESCOLA'"
+              :id="`p-${p.id}`"
+              v-model="respostas[p.id]"
+              class="select-input"
+              :disabled="carregandoEscolas"
+              :aria-label="p.rotulo"
+            >
+              <option value="" disabled>— Selecione —</option>
+              <option v-for="e in escolas" :key="e" :value="e">{{ e }}</option>
+            </select>
+            <p v-if="p.tipo === 'ESCOLA' && carregandoEscolas" class="bloco-ajuda">Carregando escolas...</p>
+
+            <!-- ARQUIVO: um anexo por pergunta -->
+            <div v-if="p.tipo === 'ARQUIVO'" class="perg-anexo">
+              <input
+                :id="`anexo-${p.id}`"
+                type="file"
+                accept="image/*,.pdf"
+                class="input"
+                :aria-label="p.rotulo"
+                @change="onAnexoPerguntaChange(p, $event)"
+              />
+              <p v-if="anexosPergunta[p.id]" class="perg-anexo-nome">
+                {{ anexosPergunta[p.id]?.name }} ({{ formatarTamanho(anexosPergunta[p.id]?.size ?? 0) }})
+                <button type="button" class="btn-ghost perg-anexo-x" @click="removerAnexoPergunta(p)">
+                  <X :size="13" />
+                  Remover
+                </button>
+              </p>
+              <p v-if="erros[`anexo-${p.id}`]" class="campo-erro">{{ erros[`anexo-${p.id}`] }}</p>
+            </div>
           </section>
 
           <!-- Cascata de equipamento (somente categoria 'equipamento') -->
@@ -1218,6 +1317,34 @@ onMounted(() => {
 .bloco-ajuda {
   margin: 0;
   color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* Anexo de pergunta (tipo ARQUIVO): um bloco por pergunta. */
+.perg-anexo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.perg-anexo-nome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.perg-anexo-x {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.campo-erro {
+  margin: 0;
+  color: var(--red);
   font-size: 12.5px;
 }
 

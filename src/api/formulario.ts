@@ -20,7 +20,16 @@ export interface FormularioOpcao {
   alerta?: FormularioOpcaoAlerta
 }
 
-export type FormularioPerguntaTipo = 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+export type FormularioPerguntaTipo = 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO' | 'ESCOLA' | 'ARQUIVO'
+
+/**
+ * Uma condição de exibição: a pergunta aparece quando a resposta da pergunta
+ * `perguntaId` for igual a `opcao`. Várias condições formam uma OU.
+ */
+export interface FormularioCondicao {
+  perguntaId: string
+  opcao: string
+}
 
 export interface FormularioPergunta {
   id: string
@@ -31,6 +40,9 @@ export interface FormularioPergunta {
   obrigatoria: boolean
   ordem: number
   ativa: boolean
+  /** Condições de exibição (OU). Vazio = sempre exibir. */
+  condicoes: FormularioCondicao[]
+  /** Legado: par único de condição, anterior às condicionais múltiplas. Só é lido como fallback. */
   dependeDePerguntaId: string | null
   dependeDeOpcao: string | null
   opcoes: FormularioOpcao[]
@@ -99,6 +111,7 @@ export interface CriarPerguntaFormularioPayload {
   obrigatoria?: boolean
   ordem?: number
   ativa?: boolean
+  condicoes?: FormularioCondicao[]
   dependeDePerguntaId?: string | null
   dependeDeOpcao?: string | null
   opcoes?: FormularioOpcao[]
