@@ -1,10 +1,14 @@
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import {
+  listarCatalogoCompleto,
   listarEquipamentosDaFilial,
   listarEquipamentosGlobal,
   resumirStatus,
+  escolasDoAgregado,
   type EquipStats,
+  type ItemLista,
   type ModeloCategoria,
+  type UnidadeQuantidade,
 } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
 import type { Equipamento } from '@/types'
@@ -20,6 +24,9 @@ export interface EquipFiltros {
   unidade: string
   categoria: string
   status: string
+  /** Marca e modelo: no modo global são aplicados pelo SCE, não no navegador. */
+  marca: string
+  modelo: string
 }
 
 function filtrarLocal(todos: Equipamento[], f: EquipFiltros): Equipamento[] {
@@ -28,12 +35,27 @@ function filtrarLocal(todos: Equipamento[], f: EquipFiltros): Equipamento[] {
     if (f.status && e.status !== f.status) return false
     if (f.unidade && e.unidade !== f.unidade) return false
     if (f.categoria && e.categoria !== f.categoria) return false
+    if (f.marca && (e.marca || '') !== f.marca) return false
+    if (f.modelo && (e.modelo || '') !== f.modelo) return false
     if (busca) {
       const alvo = `${e.modelo || ''} ${e.patrimonio || ''} ${e.numeroSerie || ''} ${e.unidade || ''}`.toLowerCase()
       if (!alvo.includes(busca)) return false
     }
     return true
   })
+}
+
+/** Sem repetidos e sem vazio, em ordem alfabética pt-BR. */
+function semVazios(valores: string[]): string[] {
+  return [...new Set(valores.filter((v) => !!v))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+}
+
+/**
+ * O valor escolhido continua na lista de opções mesmo que a fonte ainda não o
+ * conheça — sem isso o select apareceria "em branco" com um filtro ativo.
+ */
+function comSelecionado(lista: string[], selecionado: string): string[] {
+  return selecionado && !lista.includes(selecionado) ? [...lista, selecionado] : lista
 }
 
 /**
@@ -83,14 +105,98 @@ export function useEquipamentos(pageSize = 10) {
     cacheCarregado: false,
   })
 
-  const filtros = reactive<EquipFiltros>({ busca: '', unidade: '', categoria: '', status: '' })
+  const filtros = reactive<EquipFiltros>({
+    busca: '',
+    unidade: '',
+    categoria: '',
+    status: '',
+    marca: '',
+    modelo: '',
+  })
   /** Instante da última baixa da lista completa (ver `TTL_CACHE_MS`). */
   let cacheEm = 0
+
+  /* ---------- Opções dos selects de marca e modelo ---------- */
+
+  /** Catálogo categoria/marca/modelo do SCE (gerenciado ∪ o que existe em campo). */
+  const catalogoOpcoes = ref<ItemLista[]>([])
+  const carregandoOpcoes = ref(false)
+
+  /**
+   * Fonte das opções dos selects: o catálogo do SCE, que **não encolhe** quando
+   * um filtro é aplicado, e — enquanto ele não chega, ou se a chamada falhar —
+   * os agregados que a tela já tem em memória (`state.porModelo`).
+   */
+  const itensConhecidos = computed<ItemLista[]>(() =>
+    catalogoOpcoes.value.length ? catalogoOpcoes.value : state.porModelo,
+  )
+
+  const marcasOpcoes = computed(() => {
+    const marcas = itensConhecidos.value
+      .filter((i) => !filtros.categoria || i.categoria === filtros.categoria)
+      .map((i) => i.marca)
+    return comSelecionado(semVazios(marcas), filtros.marca)
+  })
+
+  /** Modelos da marca selecionada (e da categoria, quando houver). */
+  const modelosOpcoes = computed(() => {
+    const modelos = itensConhecidos.value
+      .filter(
+        (i) =>
+          (!filtros.categoria || i.categoria === filtros.categoria) &&
+          (!filtros.marca || i.marca === filtros.marca),
+      )
+      .map((i) => i.modelo)
+    return comSelecionado(semVazios(modelos), filtros.modelo)
+  })
+
+  /** Este par marca/modelo existe? É o que decide manter ou limpar o modelo. */
+  function parMarcaModeloExiste(marca: string, modelo: string): boolean {
+    return itensConhecidos.value.some((i) => i.modelo === modelo && i.marca === marca)
+  }
+
+  /**
+   * Catálogo de marcas/modelos, carregado **uma vez**. Falhar aqui não é falha
+   * de tela: as opções passam a sair dos agregados já carregados e o filtro
+   * continua funcionando.
+   */
+  async function carregarOpcoesMarcaModelo() {
+    if (catalogoOpcoes.value.length || carregandoOpcoes.value) return
+    carregandoOpcoes.value = true
+    try {
+      catalogoOpcoes.value = await listarCatalogoCompleto()
+    } catch {
+      /* sem catálogo — as opções vêm dos agregados */
+    } finally {
+      carregandoOpcoes.value = false
+    }
+  }
+
+  /**
+   * Trocar de marca pode invalidar o modelo escolhido: o select de modelos é
+   * filtrado pela marca, e um modelo que não pertence à marca nova devolveria
+   * uma lista vazia sem explicação na tela.
+   */
+  function aoTrocarMarca() {
+    if (filtros.modelo && !parMarcaModeloExiste(filtros.marca, filtros.modelo)) {
+      filtros.modelo = ''
+    }
+    aplicarFiltros()
+  }
 
   const stats = computed<EquipStats>(() => resumirStatus(state.porStatus))
   const unidadesOpcoes = computed(() => Object.keys(state.porUnidade).sort())
   const categoriasOpcoes = computed(() => Object.keys(state.porCategoria).sort())
   const statsCarregadas = computed(() => Object.keys(state.porStatus).length > 0)
+  /**
+   * Escolas que possuem o modelo filtrado, com a quantidade de cada uma. Sai do
+   * agregado `porUnidade` que o SCE já devolve **recortado pelos filtros** (no
+   * modo global) e do `agregar()` local nos demais perfis — nada é recalculado
+   * aqui. Vazio enquanto nenhum modelo está selecionado.
+   */
+  const escolasComModelo = computed<UnidadeQuantidade[]>(() =>
+    filtros.modelo.trim() ? escolasDoAgregado(state.porUnidade) : [],
+  )
 
   /** Lista completa do escopo do usuário, reaproveitando o cache em memória. */
   async function listaCompleta(atualizar = false): Promise<Equipamento[]> {
@@ -111,6 +217,8 @@ export function useEquipamentos(pageSize = 10) {
       status: filtros.status,
       unidade: filtros.unidade,
       categoria: filtros.categoria,
+      marca: filtros.marca,
+      modelo: filtros.modelo,
       ordem: 'modelo',
     })
     state.items = data
@@ -121,17 +229,16 @@ export function useEquipamentos(pageSize = 10) {
     /* O drilldown já vem no payload da página: nenhuma requisição extra e
      * nenhuma contagem no cliente (que não fecharia, paginando). */
     state.porModelo = s.porModelo || []
-    /* SCE ainda sem `porModelo`: deriva da lista completa, que é o mesmo caminho
-     * do modo filial. Some assim que o SCE novo estiver no ar. */
-    if (!s.porModelo) await porModeloDaListaCompleta()
-  }
-
-  /** Compatibilidade com SCE antigo: conta os modelos sobre a lista inteira. */
-  async function porModeloDaListaCompleta() {
-    try {
-      state.porModelo = agregar(filtrarLocal(await listaCompleta(), filtros)).porModelo
-    } catch {
-      /* sem drilldown — a tela segue funcionando */
+    /* SCE ainda sem `porModelo`: recompila o estado inteiro da lista completa —
+     * o mesmo caminho do modo filial — para os filtros de marca/modelo valerem
+     * na tabela e na visão de escolas também com SCE antigo. Some assim que o
+     * SCE novo estiver no ar. */
+    if (!s.porModelo) {
+      try {
+        await carregarLocal()
+      } catch {
+        /* sem lista completa: a página do servidor segue valendo, sem drilldown */
+      }
     }
   }
 
@@ -189,9 +296,14 @@ export function useEquipamentos(pageSize = 10) {
     isGlobal,
     unidadesOpcoes,
     categoriasOpcoes,
+    marcasOpcoes,
+    modelosOpcoes,
+    escolasComModelo,
     statsCarregadas,
     carregar,
     aplicarFiltros,
+    aoTrocarMarca,
+    carregarOpcoesMarcaModelo,
     irParaPagina,
   }
 }

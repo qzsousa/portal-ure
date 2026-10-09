@@ -150,8 +150,26 @@ function alternarCategoria(categoria: string) {
   categoriaAberta.value = categoriaAberta.value === categoria ? null : categoria
 }
 
+/* ---------- Visão: escolas que possuem o modelo filtrado ---------- */
+
+/** "Marca Modelo" do filtro ativo, para o título do cartão. */
+const rotuloModeloFiltrado = computed(() => {
+  const marca = eq.filtros.marca.trim()
+  const modelo = eq.filtros.modelo.trim()
+  return [marca, modelo].filter(Boolean).join(' ') || 'modelo filtrado'
+})
+
+/** Escolas com quantidade — o composable já recorta pelo modelo selecionado. */
+const escolasDoModelo = computed(() => eq.escolasComModelo.value)
+const totalEscolasModelo = computed(() => escolasDoModelo.value.length)
+const totalEquipamentosModelo = computed(() =>
+  escolasDoModelo.value.reduce((soma, e) => soma + e.qtd, 0),
+)
+
 onMounted(() => {
   void eq.carregar()
+  /* Opções dos selects de marca/modelo: uma vez, e a tela não depende delas. */
+  void eq.carregarOpcoesMarcaModelo()
 })
 
 /* Atualização automática: equipamentos recém-registrados no SCE aparecem sozinhos
@@ -182,6 +200,14 @@ useAutoRefresh(async () => {
           <option value="">Status: Todos</option>
           <option v-for="s in Object.keys(eq.state.porStatus)" :key="s" :value="s">{{ s }}</option>
         </select>
+        <select v-model="eq.filtros.marca" class="select-input slim" @change="eq.aoTrocarMarca()">
+          <option value="">Marca: Todas</option>
+          <option v-for="m in eq.marcasOpcoes.value" :key="m" :value="m">{{ m }}</option>
+        </select>
+        <select v-model="eq.filtros.modelo" class="select-input slim" @change="eq.aplicarFiltros()">
+          <option value="">Modelo: Todos</option>
+          <option v-for="m in eq.modelosOpcoes.value" :key="m" :value="m">{{ m }}</option>
+        </select>
         <select v-if="!ehGestor" v-model="eq.filtros.unidade" class="select-input slim" @change="eq.aplicarFiltros()">
           <option value="">Unidade: Todas</option>
           <option v-for="u in eq.unidadesOpcoes.value" :key="u" :value="u">{{ u }}</option>
@@ -208,6 +234,27 @@ useAutoRefresh(async () => {
         escola principal.
       </span>
     </p>
+
+    <!-- Visão: escolas que possuem o modelo filtrado, com a quantidade de cada uma.
+         Sai do agregado porUnidade que o SCE já devolve sobre o conjunto filtrado. -->
+    <div v-if="eq.filtros.modelo.trim()" class="card escolas-card">
+      <div class="escolas-head">
+        <h4 class="escolas-titulo">Escolas com {{ rotuloModeloFiltrado }}</h4>
+        <span class="escolas-resumo">
+          {{ totalEscolasModelo }} escola(s) · {{ totalEquipamentosModelo }} equipamento(s)
+        </span>
+      </div>
+      <p v-if="eq.state.loading" class="escolas-vazio">Carregando...</p>
+      <p v-else-if="escolasDoModelo.length === 0" class="escolas-vazio">
+        Nenhuma escola possui este modelo com os filtros atuais.
+      </p>
+      <ul v-else class="escolas-lista">
+        <li v-for="esc in escolasDoModelo" :key="esc.nome">
+          <span class="escolas-nome">{{ esc.nome }}</span>
+          <span class="escolas-qtd">{{ esc.qtd }}</span>
+        </li>
+      </ul>
+    </div>
 
     <!-- Gráfico compacto: quantidade por categoria; clique abre os modelos -->
     <GraficoCategorias
@@ -394,6 +441,78 @@ useAutoRefresh(async () => {
   flex-shrink: 0;
   margin-top: 1px;
   color: var(--blue);
+}
+
+/* ---------- Escolas que possuem o modelo selecionado ---------- */
+.escolas-card {
+  padding: 12px 16px;
+}
+
+.escolas-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.escolas-titulo {
+  font-size: 13px;
+  margin: 0;
+}
+
+.escolas-resumo {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.escolas-vazio {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.escolas-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  /* Contido: muitas escolas rolam dentro do próprio cartão */
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.escolas-lista li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 20px;
+  font-size: 12.5px;
+}
+
+.escolas-nome {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.escolas-qtd {
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.escolas-qtd::after {
+  content: ' equip.';
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .table-card {

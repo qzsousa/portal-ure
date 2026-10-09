@@ -39,6 +39,13 @@ export interface EquipamentosQuery {
   status?: string
   unidade?: string
   categoria?: string
+  /**
+   * Marca e modelo do filtro da tela. Vão como parâmetro da própria consulta do
+   * SCE — quem filtra é o servidor (e os agregados vêm filtrados também), então
+   * o navegador não baixa a lista inteira para filtrar depois.
+   */
+  marca?: string
+  modelo?: string
   ordem?: 'modelo' | 'patrimonio' | 'numeroSerie' | 'unidade' | 'status'
   direcao?: 'asc' | 'desc'
 }
@@ -282,4 +289,27 @@ export function resumirStatus(porStatus: Record<string, number>): EquipStats {
 export function pct(parte: number, total: number): string {
   if (!total) return '0,0%'
   return ((parte / total) * 100).toFixed(1).replace('.', ',') + '%'
+}
+
+/* ---------- Agregado porUnidade ---------- */
+
+/** Linha da visão "escolas que possuem o modelo": unidade → quantidade. */
+export interface UnidadeQuantidade {
+  nome: string
+  qtd: number
+}
+
+/**
+ * Converte o agregado `stats.porUnidade` na lista de escolas com a quantidade de
+ * equipamentos de cada uma.
+ *
+ * O mapa **já vem do SCE recortado pelos filtros aplicados** (modelo, marca,
+ * categoria...): é a mesma resposta que trouxe a página da tabela, sem requisição
+ * extra e sem o cliente recontar nada. Ordenado pela maior quantidade, com
+ * desempate alfabético para a lista não trocar de ordem entre atualizações.
+ */
+export function escolasDoAgregado(porUnidade: Record<string, number>): UnidadeQuantidade[] {
+  return Object.entries(porUnidade)
+    .map(([nome, qtd]) => ({ nome, qtd }))
+    .sort((a, b) => b.qtd - a.qtd || a.nome.localeCompare(b.nome, 'pt-BR'))
 }
