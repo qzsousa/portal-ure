@@ -1419,13 +1419,29 @@ async function responderAoChamado() {
   }
 }
 
-/* Toque na célula de descrição expande/recolhe o texto completo (mobile não tem tooltip) */
-const descExpandida = ref<string | null>(null)
-
-function alternarDescricao(id: string) {
-  descExpandida.value = descExpandida.value === id ? null : id
+/**
+ * Clique na LINHA abre o detalhe do chamado.
+ *
+ * A tabela e a tela de trabalho: o tecnico chega nela para agir em um chamado
+ * especifico, e obrigar-lo a abrir o menu de tres pontinhos para isso e um
+ * atrito que nao existe no resto do sistema (no painel, os cards ja sao
+ * clicaveis).
+ *
+ * Tres coisas que o clique tem que NOTAR:
+ *
+ * - Arrastar para selecionar o texto do chamado nao e abrir o chamado. So
+ *   dispara quando nao sobrou selecao depois do clique - senao copiar o
+ *   protocolo da tela abre o modal por cima.
+ * - Checkbox e botoes de acao (Aceitar/Concluir, menu) param a propagacao na
+ *   propria celula: aceitar um chamado nao pode tambem abrir a janela dele.
+ * - O teclado tem caminho proprio: o protocolo e um <button> de verdade, entao
+ *   Tab alcanca e Enter abre, sem inventar um role="button" numa linha de
+ *   tabela - que quebraria a semantica da tabela para o leitor de tela.
+ */
+function abrirDetalheAoClicarLinha(c: Chamado) {
+  if (window.getSelection()?.toString()) return
+  abrirDetalhe(c)
 }
-
 async function excluirChamado(c: Chamado) {
   if (!window.confirm(`Excluir o chamado #${c.protocolo}? Essa ação não pode ser desfeita.`)) return
   try {
@@ -1595,22 +1611,28 @@ useAutoRefresh(async () => {
             <tr v-else-if="estado.items.length === 0">
               <td :colspan="podeLote ? 8 : 7" class="td-center">Nenhum chamado encontrado.</td>
             </tr>
-            <tr v-for="c in estado.items" :key="c.id" :class="{ selecionado: selecionados.has(c.id) }">
-              <td v-if="podeLote" class="td-check">
+            <tr
+              v-for="c in estado.items"
+              :key="c.id"
+              class="linha"
+              :class="{ selecionado: selecionados.has(c.id) }"
+              @click="abrirDetalheAoClicarLinha(c)"
+            >
+              <td v-if="podeLote" class="td-check" @click.stop>
                 <input type="checkbox" :checked="selecionados.has(c.id)" @change="alternar(c.id)" />
               </td>
-              <td class="nowrap"><strong>#{{ c.protocolo }}</strong></td>
+              <td class="nowrap">
+                <!-- Botão de verdade: é o caminho do teclado para abrir o detalhe -->
+                <button class="link-protocolo" type="button" @click.stop="abrirDetalhe(c)">
+                  #{{ c.protocolo }}
+                </button>
+              </td>
               <td class="nowrap">{{ formatDate(c.timestamp) }}</td>
               <td>{{ c.unidade }}</td>
               <td>{{ c.tipo }}</td>
-              <td
-                class="desc-cell"
-                :class="{ expandida: descExpandida === c.id }"
-                :title="c.descricao"
-                @click="alternarDescricao(c.id)"
-              >{{ c.descricao }}</td>
+              <td class="desc-cell" :title="c.descricao">{{ c.descricao }}</td>
               <td><StatusPill :status="rotuloStatusChamado(c.status)" /></td>
-              <td class="td-acoes">
+              <td class="td-acoes" @click.stop>
                 <div class="acoes-linha">
                   <!-- Ação rápida do técnico: botão grande e visível, pensado para o celular -->
                   <button
@@ -2718,9 +2740,33 @@ tr.selecionado td {
   white-space: nowrap;
 }
 
-/* Toque na célula mostra o texto completo (útil no mobile, onde não há tooltip) */
-.desc-cell.expandida {
-  white-space: normal;
+/*
+ * A linha inteira abre o detalhe. O cursor precisa dizer isso — sem ele, dá
+ * para passar o mouse pelas linhas sem notar que elas são clicáveis.
+ */
+.linha {
+  cursor: pointer;
+}
+
+/*
+ * Protocolo como link: é o alvo de toque do teclado (Tab alcança, Enter abre) e
+ * o ponto óbvio da linha. Mantido com a mesma cor do texto para não competir com
+ * o status; o sublinhado só aparece no hover, como nos links do resto do app.
+ */
+.link-protocolo {
+  font-weight: 700;
+  color: inherit;
+  text-align: left;
+}
+
+.link-protocolo:hover {
+  text-decoration: underline;
+}
+
+.link-protocolo:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .td-center {
