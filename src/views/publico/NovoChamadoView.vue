@@ -26,6 +26,7 @@ import {
 import { useUiStore } from '@/stores/ui'
 import { apiError } from '@/utils/apiError'
 import { condicoesDe } from '@/utils/formulario'
+import { validarArquivo, validarArquivos, ACCEPT_ANEXO, LIMITE_ANEXO_TEXTO } from '@/utils/anexos'
 import {
   criarChamadoPublico,
   getFormularioPublico,
@@ -74,7 +75,14 @@ function consultarProtocolo() {
 const OUTRO = '__OUTRO__'
 /** Sentinela da pseudo-opção "Outro (descrever)" adicionada a toda pergunta OPCOES. */
 const OUTRO_PERGUNTA = '__OUTRO_PERGUNTA__'
-const TAMANHO_MAX_ANEXO = 10 * 1024 * 1024 // 10 MB
+/**
+ * Limite e allowlist vêm de `utils/anexos`, que espelha o contrato do backend.
+ *
+ * Este arquivo tinha 10MB contra os 5MB do servidor: o usuário escolhia um
+ * `.jpg` de 8MB, o navegador aceitava, e a resposta era um 400
+ * VALIDATION_ERROR sem dizer qual era o problema. Agora os dois lados contam a
+ * mesma história.
+ */
 const URGENCIAS = ['Baixa', 'Média', 'Alta'] as const
 const CARGOS = [
   'Diretor',
@@ -368,11 +376,14 @@ function onAnexoChange(e: Event) {
   erros.anexo = ''
   const input = e.target as HTMLInputElement
   const file = input.files?.[0] || null
-  if (file && file.size > TAMANHO_MAX_ANEXO) {
-    anexo.value = null
-    input.value = ''
-    erros.anexo = 'Arquivo muito grande. O tamanho máximo é 10 MB.'
-    return
+  if (file) {
+    const problema = validarArquivo(file)[0]
+    if (problema) {
+      anexo.value = null
+      input.value = ''
+      erros.anexo = problema
+      return
+    }
   }
   anexo.value = file
 }
@@ -393,11 +404,14 @@ function removerAnexo() {
 function onAnexoPerguntaChange(p: FormularioPergunta, e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0] ?? null
-  if (file && file.size > TAMANHO_MAX_ANEXO) {
-    anexosPergunta[p.id] = null
-    input.value = ''
-    erros[`anexo-${p.id}`] = 'Arquivo muito grande. O tamanho máximo é 10 MB.'
-    return
+  if (file) {
+    const problema = validarArquivo(file)[0]
+    if (problema) {
+      anexosPergunta[p.id] = null
+      input.value = ''
+      erros[`anexo-${p.id}`] = problema
+      return
+    }
   }
   erros[`anexo-${p.id}`] = ''
   anexosPergunta[p.id] = file
@@ -489,6 +503,23 @@ async function enviar() {
       urgencia: ident.urgencia,
       email: ident.email.trim(),
     }
+    // Validação ANTES de ler qualquer arquivo em base64: ler 8MB para depois
+    // recusar é tempo e memória jogados fora. As perguntas de anexo são
+    // escolhida ao longo das etapas, então só aqui se sabe a lista inteira —
+    // e é aqui que a soma pode estourar o limite de quantidade do servidor.
+    const todosOsArquivos = [
+      ...(anexo.value ? [anexo.value] : []),
+      ...perguntasVisiveis.value
+        .filter((p) => p.tipo === 'ARQUIVO' && anexosPergunta[p.id])
+        .map((p) => anexosPergunta[p.id] as File),
+    ]
+    const problema = validarArquivos(todosOsArquivos)
+    if (problema) {
+      erroEnvio.value = problema
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
     if (anexo.value) {
       payload.anexoBase64 = await fileToBase64(anexo.value)
       payload.anexoNome = anexo.value.name
@@ -856,7 +887,7 @@ onMounted(() => {
               <input
                 :id="`anexo-${p.id}`"
                 type="file"
-                accept="image/*,.pdf"
+                :accept="ACCEPT_ANEXO"
                 class="input"
                 :aria-label="p.rotulo"
                 @change="onAnexoPerguntaChange(p, $event)"
@@ -1060,9 +1091,9 @@ onMounted(() => {
               <label for="anexo">
                 Anexo
                 <span v-if="exigeAnexo" class="anexo-req">(obrigatório — fotos dos locais)</span>
-                <span v-else class="opcional">(opcional — print ou foto do problema, máx. 10 MB)</span>
+                <span v-else class="opcional">(opcional — {{ LIMITE_ANEXO_TEXTO }})</span>
               </label>
-              <input id="anexo" type="file" class="input arquivo" accept="image/*,.pdf" @change="onAnexoChange" />
+              <input id="anexo" type="file" class="input arquivo" :accept="ACCEPT_ANEXO" @change="onAnexoChange" />
               <p v-if="erros.anexo" class="erro-campo">{{ erros.anexo }}</p>
               <div v-if="anexo" class="anexo-info">
                 <Paperclip :size="14" />
