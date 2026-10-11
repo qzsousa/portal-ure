@@ -212,6 +212,41 @@ export async function encaminharChamado(
   return data
 }
 
+/* ---------- Recuperação de senha ---------- */
+
+/**
+ * Chaves da categoria do formulário público que trata de recuperação de senha.
+ *
+ * A categoria é cadastro do ADMIN no formulário (não do código): o gestor que
+ * perdeu a senha abre um chamado comum escolhendo essa categoria, e é o chamado
+ * que chega em "Chamados". Vem do backend, então a lista é apenas o
+ * reconhecimento do que já existe lá — se a chave mudar lá, muda aqui.
+ */
+export const CHAVES_CATEGORIA_SENHA = ['senha', 'acesso', 'senha-acesso', 'acesso-senha', 'login']
+
+/**
+ * Diz se este chamado é o pedido de recuperação de senha do solicitante.
+ *
+ * Sem chave de categoria (chamado aberto antes do formulário dinâmico) cai para
+ * o texto do `tipo` — é menos preciso, mas melhor do que esconder a ação do
+ * ADMIN. Com chave presente, ela manda: um chamado de equipamento não vira
+ * pedido de senha só porque a descrição menciona "login".
+ */
+export function ehRecuperacaoDeSenha(c: Pick<Chamado, 'categoriaChave' | 'tipo'>): boolean {
+  const chave = (c.categoriaChave ?? '').trim().toLowerCase()
+  if (chave) return CHAVES_CATEGORIA_SENHA.includes(chave)
+  return /(senha|acesso|login)/i.test(c.tipo ?? '')
+}
+
+/**
+ * E-mail institucional informado na abertura do chamado — é por ele que o
+ * backend encontra a conta e emite o código. Vazio quando o chamado foi
+ * aberto sem e-mail: nesse caso não há contra quem gerar nada.
+ */
+export function emailDoSolicitante(c: Pick<Chamado, 'email'>): string {
+  return (c.email ?? '').trim().toLowerCase()
+}
+
 /* ---------- Apresentação ---------- */
 
 export const ROTULO_STATUS_CHAMADO: Record<StatusChamado, string> = {

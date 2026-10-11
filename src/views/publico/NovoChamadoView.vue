@@ -1006,6 +1006,13 @@ onMounted(() => {
                 :aria-invalid="!!erros.email"
               />
               <p v-if="erros.email" class="erro-campo">{{ erros.email }}</p>
+              <p class="aviso-senha">
+                Perdeu a senha? Peça a categoria de acesso/senha: o serviço
+                responde com um <strong>código de primeiro acesso</strong> e a
+                senha é criada por você, na tela de acesso.
+                <strong>Nunca escreva sua senha aqui</strong> — ela não é
+                enviada, não é anotada e não chega a ninguém.
+              </p>
             </div>
             <div class="field">
               <label for="f-escola">Escola/Unidade *</label>
@@ -1483,6 +1490,18 @@ onMounted(() => {
 .textarea {
   resize: vertical;
   min-height: 110px;
+}
+
+/* Recuperação de senha: o pedido de acesso mora no chamado, a senha nunca. */
+.aviso-senha {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm, 6px);
+  border-left: 3px solid var(--blue, #2563eb);
+  background: var(--surface-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
 }
 
 .erro-campo {

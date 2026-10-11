@@ -686,6 +686,12 @@ onMounted(async () => {
           Vale por 24 horas e só pode ser usado uma vez. Gerar um novo código
           anula o anterior.
         </p>
+        <p class="senha-temp-nota">
+          Se o pedido chegou por um chamado da unidade, você pode responder o
+          próprio chamado com este código: em <strong>Chamados</strong>, abra o
+          pedido de senha e use “Responder com código de acesso”. O solicitante
+          lê a resposta na consulta por protocolo.
+        </p>
         <button
           class="btn btn-outline"
           type="button"
