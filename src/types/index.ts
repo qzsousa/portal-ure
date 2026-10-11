@@ -50,7 +50,32 @@ export interface User {
   status?: string
   primeiroLogin?: boolean
   escopoTipos?: string[]
+  /**
+   * Rotas (telas) que este usuário pode abrir. `[]` ou ausente = SEM
+   * RESTRIÇÃO — o caso de todo mundo hoje, decidido só pelo `nivel`.
+   * Preenchido, o menu e o guard de rota escondem o que está fora da lista.
+   * Cópia manual de `ROTAS_USUARIO` do contrato do backend: o portal não
+   * importa `@shared/api`, e a chave precisa bater com a do servidor.
+   */
+  rotasPermitidas?: string[]
 }
+
+/** Domínios de rota, espelhando `ROTAS_USUARIO` do backend. */
+export const ROTAS_USUARIO = [
+  'chamados',
+  'equipamentos',
+  'dashboard',
+  'usuarios',
+  'escolas',
+  'inventario',
+  'tutoriais',
+  'encaminhamentos',
+  'notificacoes',
+  'formulario',
+  'feedback',
+] as const
+
+export type RotaUsuario = (typeof ROTAS_USUARIO)[number]
 
 export interface LoginRequest {
   email: string

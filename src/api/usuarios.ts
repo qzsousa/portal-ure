@@ -32,6 +32,12 @@ export interface NovoUsuario {
    * se vier de um Gestor.
    */
   escopoTipos?: string[]
+  /**
+   * Rotas (telas) que este usuário pode abrir. Lista vazia = sem restrição,
+   * o caso de todo mundo hoje. Só o ADMIN define; o backend recusa com 403 se
+   * vier de um Gestor.
+   */
+  rotasPermitidas?: string[]
 }
 
 export type UsuarioCriado = User & { codigoPrimeiroAcesso: string }
@@ -51,6 +57,11 @@ export interface AtualizarUsuario {
    * tudo). A distinção importa — por isso não é padrão aqui.
    */
   escopoTipos?: string[]
+  /**
+   * OMITIR o campo deixa as rotas como estão; `[]` limpa (o usuário volta a
+   * ver tudo). Mesma distinção do `escopoTipos` — por isso não é padrão aqui.
+   */
+  rotasPermitidas?: string[]
 }
 
 export async function atualizarUsuario(id: string, payload: AtualizarUsuario): Promise<User> {
