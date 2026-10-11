@@ -20,6 +20,24 @@ export interface EquipFiltros {
   unidade: string
   categoria: string
   status: string
+  /** Recortes de marca e modelo (selects em cascata da tela). */
+  marca: string
+  modelo: string
+}
+
+/** Comparação tolerante a espaço nas bordas, sem diferenciar caixa. */
+function mesmoTexto(a: string | null | undefined, b: string): boolean {
+  return (a || '').trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+/** Rótulos não vazios, sem repetição, em ordem alfabética pt-BR. */
+function unicos(valores: string[]): string[] {
+  const vistos = new Set<string>()
+  for (const v of valores) {
+    const t = (v || '').trim()
+    if (t) vistos.add(t)
+  }
+  return [...vistos].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 }
 
 function filtrarLocal(todos: Equipamento[], f: EquipFiltros): Equipamento[] {
@@ -28,8 +46,10 @@ function filtrarLocal(todos: Equipamento[], f: EquipFiltros): Equipamento[] {
     if (f.status && e.status !== f.status) return false
     if (f.unidade && e.unidade !== f.unidade) return false
     if (f.categoria && e.categoria !== f.categoria) return false
+    if (f.marca && !mesmoTexto(e.marca, f.marca)) return false
+    if (f.modelo && !mesmoTexto(e.modelo, f.modelo)) return false
     if (busca) {
-      const alvo = `${e.modelo || ''} ${e.patrimonio || ''} ${e.numeroSerie || ''} ${e.unidade || ''}`.toLowerCase()
+      const alvo = `${e.modelo || ''} ${e.marca || ''} ${e.patrimonio || ''} ${e.numeroSerie || ''} ${e.unidade || ''}`.toLowerCase()
       if (!alvo.includes(busca)) return false
     }
     return true
@@ -79,11 +99,20 @@ export function useEquipamentos(pageSize = 10) {
     porUnidade: {} as Record<string, number>,
     /** categoria/marca/modelo → quantidade (drilldown do gráfico de categorias). */
     porModelo: [] as ModeloCategoria[],
+    /** Pares marca/modelo das cargas sem recorte — alimentam os selects em cascata. */
+    catalogoModelos: [] as Array<{ marca: string; modelo: string }>,
     todosCache: [] as Equipamento[],
     cacheCarregado: false,
   })
 
-  const filtros = reactive<EquipFiltros>({ busca: '', unidade: '', categoria: '', status: '' })
+  const filtros = reactive<EquipFiltros>({
+    busca: '',
+    unidade: '',
+    categoria: '',
+    status: '',
+    marca: '',
+    modelo: '',
+  })
   /** Instante da última baixa da lista completa (ver `TTL_CACHE_MS`). */
   let cacheEm = 0
 
@@ -91,6 +120,30 @@ export function useEquipamentos(pageSize = 10) {
   const unidadesOpcoes = computed(() => Object.keys(state.porUnidade).sort())
   const categoriasOpcoes = computed(() => Object.keys(state.porCategoria).sort())
   const statsCarregadas = computed(() => Object.keys(state.porStatus).length > 0)
+
+  const marcasOpcoes = computed(() => unicos(state.catalogoModelos.map((m) => m.marca)))
+
+  /** Modelos em cascata: só os da marca escolhida, quando houver uma. */
+  const modelosOpcoes = computed(() => {
+    const fonte = filtros.marca
+      ? state.catalogoModelos.filter((m) => mesmoTexto(m.marca, filtros.marca))
+      : state.catalogoModelos
+    return unicos(fonte.map((m) => m.modelo))
+  })
+
+  /**
+   * Escolas que possuem o modelo escolhido, com a quantidade em cada uma.
+   *
+   * Sai de `state.porUnidade`, que o SCE já devolve **já restrito ao modelo**:
+   * é o mesmo agregado que popula o select de unidade, só que visto pelo outro
+   * lado. Nenhuma contagem é refeita aqui — nem sobre `state.items`, que traria
+   * só as 10 linhas da página atual.
+   */
+  const escolasDoModelo = computed(() =>
+    Object.entries(state.porUnidade)
+      .map(([nome, qtd]) => ({ nome, qtd }))
+      .sort((a, b) => b.qtd - a.qtd || a.nome.localeCompare(b.nome, 'pt-BR')),
+  )
 
   /** Lista completa do escopo do usuário, reaproveitando o cache em memória. */
   async function listaCompleta(atualizar = false): Promise<Equipamento[]> {
@@ -111,6 +164,8 @@ export function useEquipamentos(pageSize = 10) {
       status: filtros.status,
       unidade: filtros.unidade,
       categoria: filtros.categoria,
+      marca: filtros.marca,
+      modelo: filtros.modelo,
       ordem: 'modelo',
     })
     state.items = data
@@ -124,6 +179,21 @@ export function useEquipamentos(pageSize = 10) {
     /* SCE ainda sem `porModelo`: deriva da lista completa, que é o mesmo caminho
      * do modo filial. Some assim que o SCE novo estiver no ar. */
     if (!s.porModelo) await porModeloDaListaCompleta()
+    guardarCatalogo()
+  }
+
+  /**
+   * Guarda marca/modelo para os selects em cascata.
+   *
+   * Os agregados que chegam são sempre do escopo JÁ filtrado: com um modelo
+   * escolhido, `porModelo` volta só com ele, e o select passaria a oferecer
+   * uma única opção — impossível trocar de modelo. Por isso o catálogo só é
+   * substituído nas cargas sem recorte de marca/modelo; o que o usuário está
+   * vendo na tela continua vindo do agregado filtrado.
+   */
+  function guardarCatalogo() {
+    if (filtros.marca || filtros.modelo) return
+    state.catalogoModelos = state.porModelo.map((m) => ({ marca: m.marca, modelo: m.modelo }))
   }
 
   /** Compatibilidade com SCE antigo: conta os modelos sobre a lista inteira. */
@@ -137,6 +207,11 @@ export function useEquipamentos(pageSize = 10) {
 
   async function carregarLocal(atualizarCache = false) {
     const todos = await listaCompleta(atualizarCache)
+    /* O catálogo sai da lista inteira, não da filtrada: é o dicionário de opções
+     * dos selects e precisa continuar completo com um modelo escolhido. */
+    if (!filtros.marca && !filtros.modelo) {
+      state.catalogoModelos = agregar(todos).porModelo.map((m) => ({ marca: m.marca, modelo: m.modelo }))
+    }
     const filtrados = filtrarLocal(todos, filtros)
     const ag = agregar(filtrados)
     state.porStatus = ag.porStatus
@@ -189,6 +264,9 @@ export function useEquipamentos(pageSize = 10) {
     isGlobal,
     unidadesOpcoes,
     categoriasOpcoes,
+    marcasOpcoes,
+    modelosOpcoes,
+    escolasDoModelo,
     statsCarregadas,
     carregar,
     aplicarFiltros,
