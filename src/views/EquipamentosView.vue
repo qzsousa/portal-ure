@@ -46,13 +46,19 @@ const ehGestor = computed(() => auth.user?.nivel === 'GESTOR')
 
 /**
  * Trocar a marca descarta um modelo que não pertence a ela: manter os dois
- *-markados deixaria a tela vazia sem explicação (nenhum equipamento tem
+ * marcados deixaria a tela vazia sem explicação (nenhum equipamento tem
  * aquele par marca/modelo).
  */
 function aplicarMarca() {
   if (!eq.filtros.modelo) return
-  const pertence = eq.modelosOpcoes.value.some((m) => m.trim().toLowerCase() === eq.filtros.modelo.trim().toLowerCase())
-  if (!pertence) eq.filtros.modelo = ''
+  const atual = eq.filtros.modelo.trim().toLowerCase()
+  if (!eq.modelosOpcoes.value.some((m) => m.trim().toLowerCase() === atual)) eq.filtros.modelo = ''
+  eq.aplicarFiltros()
+}
+
+function limparModelo() {
+  eq.filtros.modelo = ''
+  eq.aplicarFiltros()
 }
 
 /** A lista de escolas só faz sentido com um modelo escolhido. */
@@ -194,11 +200,7 @@ useAutoRefresh(async () => {
           <Plus :size="16" />
           Adicionar equipamento
         </button>
-        <select
-          v-model="eq.filtros.marca"
-          class="select-input slim"
-          @change="aplicarMarca(); eq.aplicarFiltros()"
-        >
+        <select v-model="eq.filtros.marca" class="select-input slim" @change="aplicarMarca">
           <option value="">Marca: Todas</option>
           <option v-for="m in eq.marcasOpcoes.value" :key="m" :value="m">{{ m }}</option>
         </select>
@@ -251,11 +253,12 @@ useAutoRefresh(async () => {
     <div v-if="listaEscolasAberta" class="card escolas-card">
       <div class="escolas-head">
         <h3 class="escolas-titulo">Escolas que possuem o modelo {{ eq.filtros.modelo }}</h3>
-        <button class="btn-link" type="button" @click="eq.filtros.modelo = ''; eq.aplicarFiltros()">
+        <button class="btn-link" type="button" @click="limparModelo">
           Limpar modelo
         </button>
       </div>
-      <p v-if="!eq.state.loading && eq.escolasDoModelo.value.length === 0" class="escolas-vazio">
+      <p v-if="eq.state.loading" class="escolas-vazio">Carregando escolas...</p>
+      <p v-else-if="eq.escolasDoModelo.value.length === 0" class="escolas-vazio">
         Nenhuma escola tem equipamentos deste modelo.
       </p>
       <ul v-else class="escolas-lista">
