@@ -22,6 +22,15 @@ const erro = ref('')
 const erroEmail = ref('')
 const resultado = ref<ChamadoPublico | null>(null)
 
+/**
+ * Anexos da consulta, já com o vínculo de pergunta preservado.
+ *
+ * A resposta traz `anexos` com `perguntaId`/`pergunta` quando o arquivo veio
+ * de uma pergunta do formulário. Sem isso o anexo aparecia solto na lista, sem
+ * relação com a pergunta que o exigiu.
+ */
+const anexosDaConsulta = computed(() => resultado.value?.anexos ?? [])
+
 /** E-mail já validado desta consulta (reutilizado no polling e na avaliação). */
 const emailConsultado = ref('')
 
@@ -237,12 +246,25 @@ function formatarData(ts: string | null | undefined): string {
           <dt>Última atualização</dt>
           <dd>{{ formatarData(resultado.ultimaAtualizacao) }}</dd>
         </div>
-        <div v-if="resultado.anexoUrl" class="r-item">
-          <dt>Anexo</dt>
+        <div v-if="resultado.anexoUrl || resultado.anexos?.length" class="r-item">
+          <dt>Anexos</dt>
           <dd>
-            <a :href="resultado.anexoUrl" target="_blank" rel="noopener" class="r-link">
+            <a v-if="resultado.anexoUrl" :href="resultado.anexoUrl" target="_blank" rel="noopener" class="r-link">
               <Paperclip :size="13" /> Ver anexo
             </a>
+            <!--
+              Anexo de pergunta do formulário: o rótulo vem do servidor, e não
+              do texto salvo no banco, porque o vínculo precisa sobreviver à
+              renomeação da pergunta no formulário.
+            -->
+            <ul v-if="anexosDaConsulta.length" class="r-anexos-lista">
+              <li v-for="an in anexosDaConsulta" :key="an.url">
+                <a :href="an.url" target="_blank" rel="noopener" class="r-link">
+                  <Paperclip :size="13" /> {{ an.nome }}
+                </a>
+                <span v-if="an.pergunta" class="r-anexos-de">respondendo a “{{ an.pergunta }}”</span>
+              </li>
+            </ul>
           </dd>
         </div>
       </dl>
@@ -562,6 +584,29 @@ function formatarData(ts: string | null | undefined): string {
 
 .r-link:hover {
   text-decoration: underline;
+}
+
+.r-anexos-lista {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.r-anexos-lista li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* O rótulo da pergunta é o que explica o arquivo; sem destaque, o anexo
+   parece solto e não se sabe o que ele responde. */
+.r-anexos-de {
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .r-bloco {

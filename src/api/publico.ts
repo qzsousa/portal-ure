@@ -118,6 +118,22 @@ export interface AtividadePublica {
   anexos: AtividadeAnexo[]
 }
 
+export interface AnexoEnviado {
+  nome: string
+  tipo: string | null
+  url: string
+  path?: string
+  /** Subpasta do bucket onde o arquivo foi gravado. */
+  pasta?: string
+  /**
+   * Só existe nos anexos que vieram de uma pergunta do formulário: diz a qual
+   * pergunta o arquivo responde. Vem do servidor desde a T-010 — sem isso o
+   * anexo chegava e o formulário não sabia de onde ele era.
+   */
+  perguntaId?: string
+  pergunta?: string
+}
+
 export interface ChamadoPublico {
   protocolo: string
   unidade: string
@@ -136,6 +152,8 @@ export interface ChamadoPublico {
   mensagens?: MensagemConversa[]
   /** O que a equipe registrou no atendimento, com data e hora de cada passo. */
   atividades?: AtividadePublica[]
+  /** Anexos que subiram na abertura, com o vínculo de pergunta quando houver. */
+  anexos?: AnexoEnviado[]
 }
 
 /**
