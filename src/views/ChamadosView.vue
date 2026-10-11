@@ -15,6 +15,7 @@ import {
   FileText,
   Heart,
   History,
+  KeyRound,
   Layers,
   Loader2,
   Mail,
@@ -47,6 +48,8 @@ import {
   conferirChamado,
   concluirChamado,
   deletarChamado,
+  emailDoSolicitante,
+  ehRecuperacaoDeSenha,
   encaminharChamado,
   getChamado,
   listarChamados,
@@ -63,6 +66,7 @@ import {
   type TecnicoDestino,
 } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
+import { gerarCodigoPrimeiroAcesso } from '@/api/usuarios'
 import {
   avaliarChamadoPorProtocolo,
   getFormularioPublico,
@@ -817,6 +821,8 @@ async function abrirDetalhe(c: Chamado, opcoes: { abrirConclusao?: boolean } = {
   novoStatus.value = c.status
   descricaoResolucao.value = c.descricaoResolucao || ''
   textoResposta.value = ''
+  // Código de acesso de outro chamado não pode vazar para o que está aberto.
+  codigoSenhaModal.value = null
   perguntaEscola.value = ''
   anexosPergunta.value = []
   respostaEscola.value = ''
@@ -1387,13 +1393,75 @@ async function enviarResposta() {
   try {
     const atualizado = await responderChamado(detalhe.value.id, { texto: textoResposta.value.trim() })
     detalhe.value = atualizado
-    textoResposta.value = ''
+textoResposta.value = ''
     ui.success('Comentário registrado no histórico.')
   } catch (e) {
     ui.error(apiError(e, 'Falha ao registrar resposta.'))
   } finally {
     salvando.value = false
   }
+}
+
+/* ------- Recuperação de senha (gestor pediu → ADMIN responde com o código) ------- */
+
+/**
+ * O chamado em mãos é o pedido de senha da unidade.
+ *
+ * Só o ADMIN responde: emitir código de acesso é prerrogativa dele (o backend
+ * recusa com 403 para os demais), e o botão some para o técnico mesmo quando o
+ * pedido é desse tipo — não é papel dele fabricar acesso.
+ */
+const chamadoDeSenha = computed(() => (detalhe.value ? ehRecuperacaoDeSenha(detalhe.value) : false))
+
+/** E-mail informado na abertura do chamado — é por ele que a conta é achada. */
+const emailDaUnidade = computed(() => (detalhe.value ? emailDoSolicitante(detalhe.value) : ''))
+
+const podeResponderComCodigo = computed(
+  () =>
+    ehMatriz.value &&
+    auth.user?.nivel === 'ADMIN' &&
+    !!detalhe.value &&
+    chamadoDeSenha.value &&
+    !!emailDaUnidade.value &&
+    detalhe.value.status !== 'RESOLVIDO',
+)
+
+const emitindoCodigo = ref(false)
+/** Código recém-gerado, exibido para o ADMIN repassar. Some ao fechar. */
+const codigoSenhaModal = ref<{ email: string; codigo: string } | null>(null)
+
+/**
+ * Responde o pedido de senha com o CÓDIGO de primeiro acesso.
+ *
+ * Nenhuma senha passa por aqui: nem é pedida, nem gerada, nem lida de volta.
+ * O ADMIN emite um código de uso único, a pessoa cria a própria senha na tela
+ * de acesso e o código deixa de valer. Gerar um novo anula o anterior — por isso
+ * a ação pede confirmação quando o pedido já foi respondido antes.
+ */
+async function responderComCodigo() {
+  if (!detalhe.value || !podeResponderComCodigo.value || emitindoCodigo.value) return
+  emitindoCodigo.value = true
+  try {
+    const { codigo } = await gerarCodigoPrimeiroAcesso(emailDaUnidade.value)
+    const texto =
+      `Código de primeiro acesso: ${codigo}\n\n` +
+      'Use este código na tela de acesso do portal para criar a sua senha por lá. ' +
+      'Ele vale uma vez só e expira em 24 horas; se não usar, peça um novo.\n\n' +
+      'A Matriz não recebe, não gera e não vê a senha de ninguém.'
+    const atualizado = await responderChamado(detalhe.value.id, { texto })
+    detalhe.value = atualizado
+    codigoSenhaModal.value = { email: emailDaUnidade.value, codigo }
+    ui.success(`Código enviado ao chamado ${atualizado.protocolo}.`)
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível gerar o código de acesso.'))
+  } finally {
+    emitindoCodigo.value = false
+  }
+}
+
+/** Copia o código — o ADMIN precisa repassar a pessoa, e a resposta já está no chamado. */
+function copiarCodigoSenha() {
+  if (codigoSenhaModal.value) void navigator.clipboard.writeText(codigoSenhaModal.value.codigo)
 }
 
 /* Escola responde à pergunta da matriz — status volta para "Em atendimento" automaticamente */
@@ -2271,6 +2339,27 @@ useAutoRefresh(async () => {
             />
           </div>
 
+          <div v-if="podeResponderComCodigo" class="acao-box acao-senha">
+            <h4><KeyRound :size="15" /> Pedido de senha da unidade</h4>
+            <p class="senha-aviso">
+              A Matriz não define a senha de ninguém. O que responde este chamado é um
+              <strong>código de primeiro acesso</strong>, que a pessoa usa na tela de acesso
+              do portal para criar a senha dela.
+            </p>
+            <div class="acao-linha">
+              <span class="senha-email">{{ emailDaUnidade }}</span>
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="emitindoCodigo"
+                @click="responderComCodigo"
+              >
+                <Loader2 v-if="emitindoCodigo" :size="14" />
+                {{ emitindoCodigo ? 'Gerando...' : 'Responder com código de acesso' }}
+              </button>
+            </div>
+          </div>
+
           <div class="acao-box">
             <h4><Send :size="15" /> Adicionar comentário ao histórico</h4>
             <div class="acao-linha">
@@ -2328,6 +2417,17 @@ useAutoRefresh(async () => {
               </a>
             </div>
 
+            <button
+              v-if="podeResponderComCodigo"
+              class="btn btn-outline"
+              type="button"
+              :disabled="emitindoCodigo"
+              @click="responderComCodigo"
+            >
+              <KeyRound :size="14" />
+              {{ emitindoCodigo ? 'Gerando...' : 'Responder com codigo de primeiro acesso' }}
+            </button>
+
             <button v-if="!responderAberto" class="btn btn-primary" type="button" @click="responderAberto = true">
               Responder chamado
             </button>
@@ -2360,6 +2460,38 @@ useAutoRefresh(async () => {
 
         </template>
         </BaseAccordion>
+
+        <!-- ===== Código de primeiro acesso emitido (somente ADMIN da Matriz) =====
+             Aparece logo depois de o código ser gerado. O código é o que a
+             pessoa usa na tela de acesso para criar a própria senha — a Matriz
+             não recebe, não gera e não vê a senha de ninguém. Por isso ele
+             precisa ser exibido e copiável aqui, e some ao fechar. -->
+        <div
+          v-if="codigoSenhaModal"
+          class="acao-box ava-box"
+          role="status"
+          style="margin-top: 12px"
+        >
+          <div class="ava-topo">
+            <span class="ava-icone"><KeyRound :size="20" /></span>
+            <div>
+              <h4>Código de primeiro acesso gerado</h4>
+              <p>
+                Repasse este código a <strong>{{ codigoSenhaModal.email }}</strong>. Vale uma
+                vez e expira em 24 horas. A resposta também foi registrada no chamado.
+              </p>
+            </div>
+          </div>
+          <div class="acao-linha" style="margin-top: 10px">
+            <code class="codigo-senha">{{ codigoSenhaModal.codigo }}</code>
+            <button class="btn btn-outline" type="button" @click="copiarCodigoSenha">
+              Copiar código
+            </button>
+            <button class="btn btn-outline" type="button" @click="codigoSenhaModal = null">
+              Fechar
+            </button>
+          </div>
+        </div>
 
         <!-- ===== Avaliação do atendimento (escola, chamado concluído) ===== -->
         <template v-if="ehEscola && detalhe.status === 'RESOLVIDO'">
@@ -2486,6 +2618,30 @@ useAutoRefresh(async () => {
         </template>
       </div>
     </BaseModal>
+
+    <!-- Código emitido para o pedido de senha: o ADMIN precisa ler para repassar -->
+    <BaseModal
+      :aberto="!!codigoSenhaModal"
+      titulo="Código de primeiro acesso"
+      @fechar="codigoSenhaModal = null"
+    >
+      <div v-if="codigoSenhaModal" class="senha-box-wrap">
+        <p>
+          Já foi registrado como resposta no chamado
+          <strong>{{ detalhe?.protocolo }}</strong>. Repasse a
+          <strong>{{ codigoSenhaModal.email }}</strong> — é com ele que a pessoa
+          cria a própria senha na tela de acesso.
+        </p>
+        <div class="senha-box">{{ codigoSenhaModal.codigo }}</div>
+        <p class="senha-box-nota">
+          Vale por 24 horas e só pode ser usado uma vez. Gerar outro código anula
+          este.
+        </p>
+        <button class="btn btn-outline" type="button" @click="copiarCodigoSenha">
+          Copiar código
+        </button>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -2508,6 +2664,20 @@ useAutoRefresh(async () => {
   border-radius: var(--radius-md, 10px);
   border: 1.5px solid var(--brand-gold);
   background: linear-gradient(180deg, var(--brand-gold-soft) 0%, #fff 55%);
+}
+
+/* Código de primeiro acesso: precisa ser legível de relance e copiável com um
+   clique. É um segredo de uso único, então fica destacado em monoespaçada. */
+.codigo-senha {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1.5px dashed var(--brand-gold);
+  user-select: all;
 }
 
 .ava-topo {
@@ -3441,7 +3611,60 @@ tr.selecionado td {
     max-height: none;
   }
 
-  .anexo-remover {
+/* ---------- Recuperação de senha ---------- */
+
+.acao-senha {
+  border-color: var(--blue, #2563eb);
+}
+
+.senha-aviso {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+/* O e-mail fica à esquerda da linha e não encolhe: é ele que identifica a conta. */
+.senha-email {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.senha-box-wrap p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+/* O código tem 6 dígitos: um espaçamento largo deixaria o número solto no meio. */
+.senha-box {
+  font-family: 'Courier New', monospace;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  text-align: center;
+  padding: 16px 12px;
+  margin-bottom: 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  user-select: all;
+}
+
+.senha-box-nota {
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+}
+
+.anexo-remover {
     padding: 6px;
   }
 
