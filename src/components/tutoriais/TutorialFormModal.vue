@@ -38,8 +38,7 @@ const emit = defineEmits<{
 
 const ui = useUiStore()
 
-const LIMITE_ANEXOS = 5
-const TAMANHO_MAX_ANEXO = 5 * 1024 * 1024 // 5 MB por arquivo
+import { validarArquivo, ACCEPT_ANEXO, LIMITE_ANEXO_TEXTO, MAX_ANEXOS as LIMITE_ANEXOS } from '@/utils/anexos'
 
 const form = reactive({ titulo: '', subtitulo: '', conteudo: '', categoriaId: '' })
 const editando = computed(() => props.tutorial !== null)
@@ -62,15 +61,20 @@ async function onArquivosSelecionados(e: Event) {
   const input = e.target as HTMLInputElement
   const arquivos = Array.from(input.files || [])
   input.value = '' // permite escolher o mesmo arquivo de novo
-  for (const file of arquivos) {
-    if (totalAnexos.value >= LIMITE_ANEXOS) {
+  const novos = arquivos.filter((f) => {
+    const total = totalAnexos.value + novosAnexos.value.length
+    if (total >= LIMITE_ANEXOS) {
       ui.error(`Máximo de ${LIMITE_ANEXOS} anexos por tutorial.`)
-      break
+      return false
     }
-    if (file.size > TAMANHO_MAX_ANEXO) {
-      ui.error(`O arquivo "${file.name}" excede o limite de 5 MB.`)
-      continue
+    const problema = validarArquivo(f)[0]
+    if (problema) {
+      ui.error(problema)
+      return false
     }
+    return true
+  })
+  for (const file of novos) {
     try {
       const base64 = await arquivoParaBase64(file)
       novosAnexos.value.push({ nome: file.name, tipo: file.type || undefined, base64 })
@@ -241,9 +245,9 @@ onMounted(() => {
       <div class="field">
         <label>
           Anexos
-          <span class="opcional">(opcional — até {{ LIMITE_ANEXOS }} arquivos de 5 MB cada)</span>
+          <span class="opcional">(opcional — até {{ LIMITE_ANEXOS }} arquivos, {{ LIMITE_ANEXO_TEXTO }})</span>
         </label>
-        <input type="file" class="arquivo-input" multiple @change="onArquivosSelecionados" />
+        <input type="file" class="arquivo-input" multiple :accept="ACCEPT_ANEXO" @change="onArquivosSelecionados" />
 
         <ul v-if="anexosAtuais.length || novosAnexos.length" class="anexos-lista">
           <li

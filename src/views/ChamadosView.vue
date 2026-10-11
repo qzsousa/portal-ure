@@ -74,6 +74,7 @@ import {
 } from '@/api/publico'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { validarArquivo, MAX_ANEXOS, ACCEPT_ANEXO } from '@/utils/anexos'
 import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaEquipeReduzida, ordenarTecnicos } from '@/utils/tecnicos'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
@@ -690,8 +691,6 @@ async function confirmarEncaminhar() {
 }
 
 /* ------- Pergunta & resposta (matriz ↔ escola) ------- */
-const TAMANHO_MAX_ANEXO = 5 * 1024 * 1024 // 5 MB por arquivo (limite do backend)
-const MAX_ANEXOS = 5
 const perguntaEscola = ref('')
 const anexosPergunta = ref<AnexoMensagemPayload[]>([])
 const respostaEscola = ref('')
@@ -710,13 +709,16 @@ function fileToBase64(file: File): Promise<string> {
 async function onAnexosChange(e: Event, destino: AnexoMensagemPayload[]) {
   const input = e.target as HTMLInputElement
   const arquivos = [...(input.files || [])]
+  // `continue` e não `break` no arquivo inválido: um `.exe` no meio da lista
+  // não pode impedir que o `.jpg` escolhido logo depois suba.
   for (const arquivo of arquivos) {
     if (destino.length >= MAX_ANEXOS) {
       ui.error(`Máximo de ${MAX_ANEXOS} anexos por mensagem.`)
       break
     }
-    if (arquivo.size > TAMANHO_MAX_ANEXO) {
-      ui.error(`"${arquivo.name}" é muito grande. O tamanho máximo é 5 MB.`)
+    const problema = validarArquivo(arquivo)[0]
+    if (problema) {
+      ui.error(problema)
       continue
     }
     destino.push({ nome: arquivo.name, tipo: arquivo.type, base64: await fileToBase64(arquivo) })
@@ -2050,7 +2052,7 @@ useAutoRefresh(async () => {
                 <input
                   type="file"
                   multiple
-                  accept="image/*,.pdf"
+                  :accept="ACCEPT_ANEXO"
                   class="anexo-input"
                   @change="(e) => onAnexosChange(e, anexosAtividade)"
                 />
@@ -2098,7 +2100,7 @@ useAutoRefresh(async () => {
                 <input
                   type="file"
                   multiple
-                  accept="image/*,.pdf"
+                  :accept="ACCEPT_ANEXO"
                   class="anexo-input"
                   @change="(e) => onAnexosChange(e, anexosConclusao)"
                 />
@@ -2173,7 +2175,7 @@ useAutoRefresh(async () => {
                 <input
                   type="file"
                   multiple
-                  accept="image/*,.pdf"
+                  :accept="ACCEPT_ANEXO"
                   class="anexo-input"
                   @change="(e) => onAnexosChange(e, anexosConferencia)"
                 />
@@ -2316,7 +2318,7 @@ useAutoRefresh(async () => {
                 <input
                   type="file"
                   multiple
-                  accept="image/*,.pdf"
+                  :accept="ACCEPT_ANEXO"
                   class="anexo-input"
                   @change="(e) => onAnexosChange(e, anexosPergunta)"
                 />
@@ -2439,7 +2441,7 @@ useAutoRefresh(async () => {
               />
               <label class="anexo-label">
                 <Paperclip :size="14" /> Anexar arquivos (opcional — ficam disponíveis por 7 dias)
-                <input type="file" multiple accept="image/*,.pdf" class="anexo-input" @change="(e) => onAnexosChange(e, anexosResposta)" />
+                <input type="file" multiple :accept="ACCEPT_ANEXO" class="anexo-input" @change="(e) => onAnexosChange(e, anexosResposta)" />
               </label>
               <ul v-if="anexosResposta.length" class="anexo-lista">
                 <li v-for="(a, i) in anexosResposta" :key="i">
