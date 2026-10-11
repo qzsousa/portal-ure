@@ -68,10 +68,19 @@ export async function desativarUsuario(id: string): Promise<void> {
  * Só ADMIN (e só para quem ainda não criou senha). O código é devolvido em
  * claro porque o ADMIN precisa LER para repassar — quem define a senha é a
  * pessoa, no acesso dela.
+ *
+ * Caminho do gestor que perdeu a senha: ela abre o chamado pelo formulário
+ * público, o ADMIN gera o código aqui e responde o próprio chamado com ele
+ * (`ChamadosView` → "Responder com código de acesso"). O que circula é
+ * sempre o código, nunca uma senha.
+ *
+ * Normaliza o e-mail como o resto do fluxo (`primeiroAcesso.ts`): o gestor
+ * digita o endereço no chamado e o ADMIN o digita aqui — se divergirem em
+ * maiúsculas ou espaço, o backend não encontra a conta.
  */
 export async function gerarCodigoPrimeiroAcesso(email: string): Promise<CodigoPrimeiroAcesso> {
   const { data } = await chamadosApi.post<CodigoPrimeiroAcesso>('/auth/admin/gerar-codigo-primeiro-acesso', {
-    email,
+    email: email.trim().toLowerCase(),
   })
   return data
 }
