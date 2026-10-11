@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
 import {
   ArrowLeft,
+  AlertTriangle,
   CheckCircle2,
   Clock,
   Eye,
@@ -95,6 +96,18 @@ async function focar(refEl: { value: HTMLInputElement | null }) {
 let timerDebounce: number | undefined
 
 /**
+ * A consulta ao backend falhou e ainda não sabemos se a pessoa está em
+ * primeiro acesso.
+ *
+ * Antes isso era silêncio: a tela caía direto na etapa de senha e quem tem
+ * código ficava sem campo para digitá-lo, sem nenhuma pista do motivo. O
+ * fallback em si continua certo — travar a pessoa na tela de código quando a
+ * rede cai seria pior. O que faltava era dizer o que está acontecendo e
+ * oferecer a saída.
+ */
+const verificacaoFalhou = ref(false)
+
+/**
  * Pergunta ao backend o que fazer com este e-mail, enquanto a pessoa digita.
  *
  * Debounce de 600 ms: chamar a cada tecla gastaria o rate limit da rota sem
@@ -112,10 +125,21 @@ function agendarVerificacao() {
     verificandoEmail.value = true
     const info = await auth.verificarEmail(email)
     verificandoEmail.value = false
+    verificacaoFalhou.value = info === null
     // `null` = a consulta falhou (rede/rate limit). Não tranca ninguém: a
-    // pessoa segue para a etapa de senha e tenta o login normal.
+    // pessoa segue para a etapa de senha e tenta o login normal. Mas o aviso
+    // abaixo deixa claro que a verificação não aconteceu.
     if (info?.primeiroAcesso) entrarModoPrimeiroAcesso()
   }, 600)
+}
+
+/**
+ * Atalho para a etapa do código, para quando a verificação falhou mas a
+ * pessoa tem um código em mãos.
+ */
+function tentarCodigoDireto() {
+  verificacaoFalhou.value = false
+  entrarModoPrimeiroAcesso()
 }
 
 /** Saiu do campo: cancela a consulta pendente (já não interessa o resultado). */
@@ -132,6 +156,7 @@ function voltarParaEmail() {
   form.confirmarSenha = ''
   tokenCriacaoSenha.value = ''
   criandoSenha.value = false
+  verificacaoFalhou.value = false
   erro.value = ''
   void focar(emailInput)
 }
@@ -401,6 +426,24 @@ onBeforeUnmount(() => {
               <small class="field-hint">
                 Se for seu primeiro acesso, a Matriz precisa ter gerado um código para você.
               </small>
+            </div>
+
+            <!-- A consulta ao backend não respondeu. Sem este aviso a pessoa
+                 caía direto na tela de senha e quem tem código ficava sem
+                 campo para digitá-lo, sem explicação. O atalho abaixo
+                 resolve: o código é válido mesmo sem a verificação. -->
+            <div v-if="verificacaoFalhou" class="login-aviso-verificacao" role="status">
+              <AlertTriangle :size="16" />
+              <div>
+                <strong>Não conseguimos verificar seu acesso agora.</strong>
+                <span>
+                  Se a Matriz já passou um código para você, use-o mesmo assim —
+                  o código funciona sem esta verificação.
+                </span>
+                <button type="button" class="link-btn" @click="tentarCodigoDireto">
+                  Já tenho um código
+                </button>
+              </div>
             </div>
 
             <button class="btn btn-gold login-submit" type="submit" :disabled="!form.email.includes('@')">
@@ -978,6 +1021,36 @@ onBeforeUnmount(() => {
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--text-muted);
+}
+
+/* Falha na verificação de primeiro acesso.
+   Atenção, não erro: nada deu errado com a pessoa, a consulta é que não
+   respondeu. Por isso o tom é o mesmo do aviso de campo e não o vermelho do
+   login-error — alarmar aqui serialie para quem só está com a internet lenta. */
+.login-aviso-verificacao {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-gold) 45%, transparent);
+  background: color-mix(in srgb, var(--brand-gold-soft) 60%, transparent);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.login-aviso-verificacao strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.login-aviso-verificacao .link-btn {
+  margin-top: 6px;
+  font-size: 12.5px;
 }
 
 /* Botão do olho: a troca de ícone gira e entra em vez de piscar. */
