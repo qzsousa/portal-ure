@@ -42,6 +42,28 @@ const irmaDoGrupo = computed(() => {
 /* GESTOR só enxerga a própria unidade — filtro de unidade não se aplica. */
 const ehGestor = computed(() => auth.user?.nivel === 'GESTOR')
 
+/* ---------- Filtros de marca e modelo (cascata) ---------- */
+
+/**
+ * Trocar a marca descarta um modelo que não pertence a ela: manter os dois
+ * marcados deixaria a tela vazia sem explicação (nenhum equipamento tem
+ * aquele par marca/modelo).
+ */
+function aplicarMarca() {
+  if (!eq.filtros.modelo) return
+  const atual = eq.filtros.modelo.trim().toLowerCase()
+  if (!eq.modelosOpcoes.value.some((m) => m.trim().toLowerCase() === atual)) eq.filtros.modelo = ''
+  eq.aplicarFiltros()
+}
+
+function limparModelo() {
+  eq.filtros.modelo = ''
+  eq.aplicarFiltros()
+}
+
+/** A lista de escolas só faz sentido com um modelo escolhido. */
+const listaEscolasAberta = computed(() => eq.filtros.modelo.trim() !== '')
+
 const detalheAberto = ref(false)
 const detalheItem = ref<Equipamento | null>(null)
 const historico = ref<HistoricoItem[]>([])
@@ -178,6 +200,14 @@ useAutoRefresh(async () => {
           <Plus :size="16" />
           Adicionar equipamento
         </button>
+        <select v-model="eq.filtros.marca" class="select-input slim" @change="aplicarMarca">
+          <option value="">Marca: Todas</option>
+          <option v-for="m in eq.marcasOpcoes.value" :key="m" :value="m">{{ m }}</option>
+        </select>
+        <select v-model="eq.filtros.modelo" class="select-input slim" @change="eq.aplicarFiltros()">
+          <option value="">Modelo: Todos</option>
+          <option v-for="m in eq.modelosOpcoes.value" :key="m" :value="m">{{ m }}</option>
+        </select>
         <select v-model="eq.filtros.status" class="select-input slim" @change="eq.aplicarFiltros()">
           <option value="">Status: Todos</option>
           <option v-for="s in Object.keys(eq.state.porStatus)" :key="s" :value="s">{{ s }}</option>
@@ -217,6 +247,27 @@ useAutoRefresh(async () => {
       :detalhe="detalheModelos"
       @selecionar="alternarCategoria"
     />
+
+    <!-- Escolas que possuem o modelo escolhido: é o agregado porUnidade que o SCE
+         já devolve restrito ao modelo — nenhuma contagem refeita aqui. -->
+    <div v-if="listaEscolasAberta" class="card escolas-card">
+      <div class="escolas-head">
+        <h3 class="escolas-titulo">Escolas que possuem o modelo {{ eq.filtros.modelo }}</h3>
+        <button class="btn-link" type="button" @click="limparModelo">
+          Limpar modelo
+        </button>
+      </div>
+      <p v-if="eq.state.loading" class="escolas-vazio">Carregando escolas...</p>
+      <p v-else-if="eq.escolasDoModelo.value.length === 0" class="escolas-vazio">
+        Nenhuma escola tem equipamentos deste modelo.
+      </p>
+      <ul v-else class="escolas-lista">
+        <li v-for="e in eq.escolasDoModelo.value" :key="e.nome">
+          <span class="escola-nome">{{ e.nome }}</span>
+          <span class="escola-qtd">{{ e.qtd }}</span>
+        </li>
+      </ul>
+    </div>
 
     <!-- Tabela -->
     <div class="card table-card">
@@ -376,6 +427,81 @@ useAutoRefresh(async () => {
   padding: 14px 18px;
   color: var(--red);
   font-weight: 500;
+}
+
+/* Escolas que possuem o modelo escolhido */
+.escolas-card {
+  padding: 14px 16px;
+}
+
+.escolas-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.escolas-titulo {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--blue);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.escolas-vazio {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.escolas-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px 16px;
+}
+
+.escolas-lista li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+}
+
+.escola-nome {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.escola-qtd {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--border);
+  border-radius: 10px;
+  padding: 1px 9px;
+  font-size: 12px;
 }
 
 .aviso-leitura {

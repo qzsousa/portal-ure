@@ -507,11 +507,24 @@ Atualização: 30 s.
 
 ## `/equipamentos` — Equipamentos
 
-**Toolbar** — busca, "Adicionar equipamento" (some para FILHA), select de
-status, select de unidade (some para Gestor), botões CSV e PDF.
+**Toolbar** — busca, "Adicionar equipamento" (some para FILHA), selects de
+**marca** e **modelo** (cascata: escolher a marca restringe os modelos),
+select de status, select de unidade (some para Gestor), botões CSV e PDF.
 
 **Gráfico de categorias** com drilldown: clicar numa fatia abre a lista de
 modelos daquela categoria dentro do próprio card.
+
+**Card "Escolas que possuem o modelo {modelo}"** — aparece só com um modelo
+marcado e lista cada escola com a quantidade de equipamentos daquele modelo.
+Os números saem do **agregado `porUnidade`**, que o SCE já devolve restrito ao
+modelo: nenhuma contagem é refeita no portal, nem sobre as 10 linhas da página
+atual. O botão "Limpar modelo" volta a lista para o parque inteiro.
+
+> As opções dos dois selects vêm do agregado `porModelo` das cargas **sem**
+> recorte de marca/modelo. Os agregados que chegam são sempre do escopo já
+> filtrado — com um modelo escolhido, `porModelo` voltaria só com ele e o
+> select ficaria preso em uma única opção. Trocar a marca descarta um modelo
+> que não pertence a ela, para não sobrar um par sem nenhum equipamento.
 
 **Tabela** — `Equipamento | Patrimônio | Nº de Série | Categoria | Modelo |
 Unidade Escolar | Status | Ações`.

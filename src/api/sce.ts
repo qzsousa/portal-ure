@@ -39,6 +39,14 @@ export interface EquipamentosQuery {
   status?: string
   unidade?: string
   categoria?: string
+  /**
+   * Recortes de marca e modelo. O SCE aplica os dois **antes** de montar a
+   * página e os agregados, então `stats.porUnidade` que volta já é a lista de
+   * escolas que possuem aquele modelo — é por isso que a tela de equipamentos
+   * não precisa contar nada no cliente para montar essa lista.
+   */
+  marca?: string
+  modelo?: string
   ordem?: 'modelo' | 'patrimonio' | 'numeroSerie' | 'unidade' | 'status'
   direcao?: 'asc' | 'desc'
 }
