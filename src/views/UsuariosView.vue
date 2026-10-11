@@ -193,6 +193,38 @@ function alternarTipo(valor: string) {
     : [...escopoMarcado.value, valor]
 }
 
+/* ---------- Rotas permitidas (quem chega a qual tela) ---------- */
+
+/**
+ * Rótulos das rotas. O valor é a chave que o backend e o `meta.rota` do router
+ * usam — o backend recusa com 400 qualquer valor fora desta lista, então os
+ * dois lados precisam contar a mesma.
+ */
+const ROTAS_COM_ROTULO: { valor: string; rotulo: string }[] = [
+  { valor: 'chamados', rotulo: 'Chamados' },
+  { valor: 'dashboard', rotulo: 'Painel' },
+  { valor: 'equipamentos', rotulo: 'Equipamentos e manutenção' },
+  { valor: 'escolas', rotulo: 'Unidades escolares' },
+  { valor: 'tutoriais', rotulo: 'Tutoriais' },
+  { valor: 'feedback', rotulo: 'Elogios e avaliações' },
+  { valor: 'usuarios', rotulo: 'Usuários' },
+  { valor: 'formulario', rotulo: 'Configurações e formulário' },
+  { valor: 'inventario', rotulo: 'Inventário' },
+  { valor: 'encaminhamentos', rotulo: 'Encaminhamentos' },
+  { valor: 'notificacoes', rotulo: 'Notificações' },
+]
+
+/** Rotas marcadas no formulário (o que vai no `rotasPermitidas`). */
+const rotasMarcadas = ref<string[]>([])
+
+function alternarRota(valor: string) {
+  rotasMarcadas.value = rotasMarcadas.value.includes(valor)
+    ? rotasMarcadas.value.filter((v) => v !== valor)
+    : [...rotasMarcadas.value, valor]
+}
+
+const rotaAtiva = computed(() => rotasMarcadas.value.length > 0)
+
 const tiposPorCategoria = computed(() =>
   Object.fromEntries(gruposTipos.value.map((g) => [g.chave, g.tipos.filter((t) => escopoMarcado.value.includes(t.valor)).length])),
 )
@@ -280,6 +312,7 @@ function abrirEditar(u: User) {
   form.status = u.status === 'ATIVO' ? 'ATIVO' : 'INATIVO'
   unidades.value = u.nivel === 'TECNICO' ? separarUnidades(u.filial) : ['']
   escopoMarcado.value = [...(u.escopoTipos ?? [])]
+  rotasMarcadas.value = [...(u.rotasPermitidas ?? [])]
   modalAberto.value = true
 }
 
@@ -304,6 +337,10 @@ async function salvar() {
     // o checkbox "sem restrição" é um estado legítimo que precisa ser gravado
     // como lista vazia. No POST a lista vazia é o default de qualquer forma.
     const escopo = podeDefinirEscopo.value ? escopoMarcado.value : undefined
+    // Rotas não dependem do nível: qualquer perfil pode ser limitado a um
+    // subconjunto de telas. Lista vazia é "acesso normal" e precisa ser
+    // gravada explicitamente, senão o checkbox de "sem restrição" não limpa.
+    const rotas = isAdmin.value ? rotasMarcadas.value : undefined
     if (editando.value) {
       await atualizarUsuario(editando.value.id, {
         nome: form.nome,
@@ -311,6 +348,7 @@ async function salvar() {
         filial: filialDoFormulario(),
         status: form.status,
         ...(escopo ? { escopoTipos: escopo } : {}),
+        ...(rotas ? { rotasPermitidas: rotas } : {}),
       })
       ui.success('Usuário atualizado.')
       modalAberto.value = false
@@ -321,6 +359,7 @@ async function salvar() {
         nivel: form.nivel,
         filial: filialDoFormulario(),
         ...(escopo ? { escopoTipos: escopo } : {}),
+        ...(rotas ? { rotasPermitidas: rotas } : {}),
       })
       modalAberto.value = false
       codigoModal.value = { email: criado.email, codigo: criado.codigoPrimeiroAcesso }
@@ -651,6 +690,33 @@ onMounted(async () => {
                 @change="alternarTipo(tipo.valor)"
               />
               <span>{{ tipo.rotulo }}</span>
+            </label>
+          </div>
+        </div>
+
+        <div v-if="isAdmin" class="field field-linha escopo-box">
+          <label>Telas que este usuário pode abrir</label>
+
+          <p v-if="rotaAtiva" class="escopo-ativo">
+            <strong>Acesso restrito a {{ rotasMarcadas.length }}
+              {{ rotasMarcadas.length === 1 ? 'tela' : 'telas' }}.</strong>
+            O menu mostra só estas e, se ele digitar o endereço de outra, volta
+            para a tela inicial. O servidor também recusa: quem tentar abrir
+            por fora recebe erro de acesso negado.
+          </p>
+          <p v-else class="escopo-ativo escopo-ativo-off">
+            <strong>Sem restrição.</strong> Entra em todas as telas que o perfil
+            permite.
+          </p>
+
+          <div class="escopo-grupo">
+            <label v-for="rota in ROTAS_COM_ROTULO" :key="rota.valor" class="escopo-item">
+              <input
+                type="checkbox"
+                :checked="rotasMarcadas.includes(rota.valor)"
+                @change="alternarRota(rota.valor)"
+              />
+              <span>{{ rota.rotulo }}</span>
             </label>
           </div>
         </div>

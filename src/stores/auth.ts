@@ -62,6 +62,25 @@ export const useAuthStore = defineStore('auth', () => {
    */
   const temEscopoTipos = computed(() => (user.value?.escopoTipos?.length ?? 0) > 0)
 
+  /**
+   * Rotas que este usuário pode abrir, conforme o backend.
+   *
+   * Lista VAZIA = sem restrição (o caso de todo mundo hoje): o acesso é
+   * decidido só pelo `nivel`. Com lista preenchida, o menu esconde o que está
+   * fora dela e o guard de rota recusa a navegação direta — mas a trava de
+   * verdade é o 403 do servidor, que não depende deste código.
+   */
+  const rotasPermitidas = computed<string[]>(() => user.value?.rotasPermitidas ?? [])
+  const temRestricaoDeRota = computed(() => rotasPermitidas.value.length > 0)
+
+  function podeAcessarRota(rota: string): boolean {
+    if (!temRestricaoDeRota.value) return true
+    return rotasPermitidas.value.includes(rota)
+  }
+
+  /** Para onde manda o usuário: o painel, ou /chamados quando é restrito. */
+  const rotaInicial = computed(() => (temRestricaoDeRota.value ? 'chamados' : 'painel'))
+
   /*
    * Simulação de perfil (abas Configurações → Testes de acesso).
    *
@@ -260,6 +279,10 @@ export const useAuthStore = defineStore('auth', () => {
     mustChangePassword,
     somenteLeituraEquipamentos,
     temEscopoTipos,
+    rotasPermitidas,
+    temRestricaoDeRota,
+    podeAcessarRota,
+    rotaInicial,
     simulacaoAtivavel,
     simulando,
     nivelSimulado,

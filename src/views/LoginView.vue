@@ -24,6 +24,35 @@ const route = useRoute()
 const auth = useAuthStore()
 
 /**
+ * Para onde a pessoa vai depois de entrar.
+ *
+ * Honra o `?redirect=` que a pessoa tentou alcançar, mas só se a rota
+ * permitida permitir — senão o guard de rota devolveria para a rota inicial
+ * logo depois, com um redirecionamento que parece defeito. Usuário restrito
+ * cai em /chamados em vez do painel.
+ */
+function destinoAposLogin(store: typeof auth): string {
+  const pedido = route.query.redirect as string | undefined
+  if (pedido && store.podeAcessarRota(rotaDoCaminho(pedido))) return pedido
+  return `/${store.rotaInicial}`
+}
+
+/** Domínio de rota que um caminho do portal atende (espelha `meta.rota`). */
+function rotaDoCaminho(caminho: string): string {
+  const alvo = caminho.split('?')[0]
+  if (alvo.startsWith('/painel')) return 'dashboard'
+  if (alvo.startsWith('/equipamentos') || alvo.startsWith('/manutencao') || alvo.startsWith('/cameras-dvr'))
+    return 'equipamentos'
+  if (alvo.startsWith('/chamados') || alvo.startsWith('/relatorios')) return 'chamados'
+  if (alvo.startsWith('/tutoriais')) return 'tutoriais'
+  if (alvo.startsWith('/unidades')) return 'escolas'
+  if (alvo.startsWith('/feedback')) return 'feedback'
+  if (alvo.startsWith('/usuarios')) return 'usuarios'
+  if (alvo.startsWith('/configuracoes')) return 'formulario'
+  return ''
+}
+
+/**
  * Etapas da tela de acesso.
  *
  * `email`  → confirma o endereço e pergunta ao backend se a pessoa está em
@@ -259,8 +288,7 @@ async function submit() {
       })
       // A senha acabou de ser criada e a sessão já vem pronta: vai direto ao
       // destino que a pessoa tentava alcançar.
-      const destino = (route.query.redirect as string) || '/painel'
-      router.push(destino)
+      router.push(destinoAposLogin(auth))
       return
     }
 
@@ -276,8 +304,7 @@ async function submit() {
       router.push({ name: 'trocar-senha' })
       return
     }
-    const redirect = (route.query.redirect as string) || '/painel'
-    router.push(redirect)
+    router.push(destinoAposLogin(auth))
   } catch (e) {
     erro.value = mensagemErro(e, 'Não foi possível entrar. Tente novamente.')
     sacudirErro()

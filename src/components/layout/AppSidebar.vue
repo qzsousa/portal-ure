@@ -16,6 +16,7 @@ import {
 } from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
+import type { RotaUsuario } from '@/types'
 
 interface MenuItem {
   to: string
@@ -33,6 +34,14 @@ interface MenuItem {
    * leem o SCE).
    */
   semEscopoTipos?: boolean
+  /**
+   * Domínio de rota que esta tela atende. Vazio = a tela não é restritiva.
+   *
+   * Quando o usuário tem `rotasPermitidas` preenchida, só entra no menu o que
+   * estiver na lista. É a MESMA chave que o `meta.rota` do router e que o
+   * backend usa no 403 — os três contam a mesma lista.
+   */
+  rota?: RotaUsuario
 }
 
 const route = useRoute()
@@ -40,21 +49,25 @@ const auth = useAuthStore()
 const { menuAberto, fechar } = useSidebar()
 
 const items: MenuItem[] = [
-  { to: '/painel', label: 'Painel', icon: LayoutDashboard },
-  { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, semEscopoTipos: true },
-  { to: '/manutencao', label: 'Manutenção', icon: Wrench, semEscopoTipos: true },
-  { to: '/chamados', label: 'Chamados', icon: Headset },
-  { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen, semEscopoTipos: true },
-  { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true, semEscopoTipos: true },
-  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, matrizOnly: true, semEscopoTipos: true },
-  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, matrizOnly: true, semEscopoTipos: true },
-  { to: '/relatorios', label: 'Relatórios', icon: BarChart3, semEscopoTipos: true },
-  { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true },
-  { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true },
+  { to: '/painel', label: 'Painel', icon: LayoutDashboard, rota: 'dashboard' },
+  { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/manutencao', label: 'Manutenção', icon: Wrench, semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/chamados', label: 'Chamados', icon: Headset, rota: 'chamados' },
+  { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen, semEscopoTipos: true, rota: 'tutoriais' },
+  { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
+  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, matrizOnly: true, semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, matrizOnly: true, semEscopoTipos: true, rota: 'feedback' },
+  { to: '/relatorios', label: 'Relatórios', icon: BarChart3, semEscopoTipos: true, rota: 'chamados' },
+  { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true, rota: 'usuarios' },
+  { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true, rota: 'formulario' },
 ]
 
 const visibleItems = computed(() =>
   items.filter((i) => {
+    // Restrição de rota do usuário. Fica PRIMEIRO de propósito: é a restrição
+    // mais forte, e um item fora da lista não deve aparecer mesmo que as outras
+    // flags o deixariam passar.
+    if (i.rota && !auth.podeAcessarRota(i.rota)) return false
     if (i.semEscopoTipos && auth.temEscopoTipos) return false
     if (i.adminOnly) return auth.user?.nivel === 'ADMIN'
     if (i.gestorTambem) return ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || '')
