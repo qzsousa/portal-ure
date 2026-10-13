@@ -15,7 +15,7 @@ const mostrarNovaSenha = ref(false)
 const mostrarConfirmacao = ref(false)
 
 /**
- * São TRÊS situations diferentes nesta tela, e a pessoa não sabe dizer qual é.
+ * São TRÊS situações diferentes nesta tela, e a pessoa não sabe dizer qual é.
  *
  * A tela antiga decidia tudo por `primeiroLogin`, e quem tinha recebido senha
  * provisória da Matriz caía em "Trocar senha" com o campo "Senha atual" — que
@@ -38,36 +38,38 @@ const fluxo = computed<Fluxo>(() => {
   return 'troca'
 })
 
-interface TextoFluxo {
-  titulo: string
-  dica: string
-  rotuloAtual: string
-  dicaAtual: string
-  campoVazio: string
-}
+/**
+ * Nos dois fluxos forçados o campo "senha atual" NÃO EXISTE.
+ *
+ * A pessoa não tem senha antiga para digitar — ela tem a senha nova, que a
+ * Matriz acabou de entregar — e o servidor também não a conferiria: `/change-password`
+ * só valida `senhaAtual` quando a pessoa tem senha definitiva
+ * (`backend/src/routes/auth.ts`). Pedir o campo seria pedir algo que não tem
+ * resposta certa e que ninguém conferiria. Teria dois campos que parecem
+ * idênticos e o primeiro não decide nada.
+ */
+const mostrarCampoAtual = computed(() => fluxo.value === 'troca')
 
-const TEXTOS: Record<Fluxo, TextoFluxo> = {
+const TEXTOS: Record<Fluxo, { titulo: string; dica: string }> = {
   primeiroAcesso: {
     titulo: 'Defina sua senha',
     dica: 'Este é seu primeiro acesso. Crie uma senha definitiva para continuar.',
-    rotuloAtual: 'Senha temporária',
-    dicaAtual: 'É a senha provisória que veio junto com o seu cadastro — não escolha outra coisa.',
-    campoVazio: 'Informe a senha temporária recebida.',
   },
   provisoria: {
     titulo: 'Trocar senha provisória',
     dica: 'A Matriz acabou de gerar uma senha provisória para você. Crie agora a sua senha definitiva.',
-    rotuloAtual: 'Senha temporária',
-    dicaAtual: 'É a senha que a Matriz acabou de entregar — não é a senha antiga, que já não vale.',
-    campoVazio: 'Informe a senha provisória que a Matriz gerou.',
   },
   troca: {
     titulo: 'Trocar senha',
     dica: 'Após trocar a senha, você precisará entrar novamente.',
-    rotuloAtual: 'Senha atual',
-    dicaAtual: 'A senha definitiva que você usa hoje para entrar.',
-    campoVazio: 'Informe sua senha atual.',
   },
+}
+
+/** Só o fluxo de troca normal tem senha atual — nos forçados o campo sai. */
+const TEXTO_TROCA = {
+  rotulo: 'Senha atual',
+  dica: 'A senha definitiva que você usa hoje para entrar.',
+  vazio: 'Informe sua senha atual.',
 }
 
 const texto = computed(() => TEXTOS[fluxo.value])
@@ -94,10 +96,10 @@ const requisitosOk = computed(() => atendidos.value === REQUISITOS.length)
 
 async function submit() {
   erro.value = ''
-  // O backend exige senhaAtual preenchida mesmo nos fluxos forçados
-  // (ela só é *conferida* quando a pessoa tem senha definitiva para conferir).
-  if (!form.senhaAtual) {
-    erro.value = texto.value.campoVazio
+  // A senha atual só é exigida no fluxo de troca normal — nos forçados o campo
+  // nem existe, e o servidor também não a conferiria. Vai vazia de propósito.
+  if (mostrarCampoAtual.value && !form.senhaAtual) {
+    erro.value = TEXTO_TROCA.vazio
     return
   }
   if (!requisitosOk.value) {
@@ -111,7 +113,10 @@ async function submit() {
   }
   carregando.value = true
   try {
-    await auth.changePassword({ senhaAtual: form.senhaAtual, novaSenha: form.novaSenha })
+    await auth.changePassword({
+      senhaAtual: mostrarCampoAtual.value ? form.senhaAtual : '',
+      novaSenha: form.novaSenha,
+    })
     router.push({ name: 'login' })
   } catch (e) {
     erro.value = apiError(e, 'Não foi possível trocar a senha.')
@@ -128,8 +133,10 @@ async function submit() {
       <p class="hint">{{ texto.dica }}</p>
 
       <form class="senha-form" @submit.prevent="submit">
-        <div class="field">
-          <label for="atual">{{ texto.rotuloAtual }}</label>
+        <!-- Só no fluxo de troca normal. Nos forçados o campo sai: não há
+             senha antiga para digitar, e o servidor não a conferiria. -->
+        <div v-if="mostrarCampoAtual" class="field">
+          <label for="atual">{{ TEXTO_TROCA.rotulo }}</label>
           <input
             id="atual"
             v-model="form.senhaAtual"
@@ -138,7 +145,7 @@ async function submit() {
             autocomplete="current-password"
             required
           />
-          <small class="field-hint">{{ texto.dicaAtual }}</small>
+          <small class="field-hint">{{ TEXTO_TROCA.dica }}</small>
         </div>
 
         <div class="field">
