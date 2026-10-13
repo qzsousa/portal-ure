@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import {
   AlertTriangle,
@@ -43,6 +43,7 @@ import {
 
 const ui = useUiStore()
 const router = useRouter()
+const route = useRoute()
 
 /**
  * Busca de chamado já aberto (vai para /consulta).
@@ -158,6 +159,35 @@ function selecionarCategoria(cat: FormularioCategoria) {
   passo.value = 1
   if (cat.chave === 'equipamento') void garantirCategoriasEquipamento()
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+/**
+ * Abre o formulário já em um caminho: categoria + resposta de uma pergunta.
+ *
+ * Existe para o botão "esqueci minha senha" da tela de login, que precisa
+ * levar a pessoa direto na pergunta de senha em vez de fazê-la escolher entre
+ * quatro categorias e três sistemas. Só a categoria é obrigatória; a resposta
+ * é aplicada se a pergunta existir na categoria.
+ *
+ * Entrada: `?categoria=sistemas&respostaSeed=seed-perg-sist-1&resposta=PortalNet`
+ */
+function abrirEm(categoriaChave: string, respostaSeed: string | null, resposta: string | null) {
+  if (!formulario.value) return
+  const cat = formulario.value.find((c) => c.chave === categoriaChave)
+  if (!cat) return
+
+  selecionarCategoria(cat)
+
+  if (respostaSeed && resposta) {
+    const pergunta = cat.perguntas?.find((p) => p.id === respostaSeed)
+    // Só marca se a pergunta existe e a opção é uma das oferecidas — marcar
+    // qualquer texto faria a pergunta-filha não aparecer e o envio falhar na
+    // validação do servidor, com uma mensagem que não ajuda.
+    const opcaoValida = pergunta?.tipo === 'OPCOES' && pergunta.opcoes?.some((o) => o.rotulo === resposta)
+    if (pergunta && opcaoValida) {
+      respostas[pergunta.id] = resposta
+    }
+  }
 }
 
 function voltarHome() {
@@ -623,8 +653,23 @@ function iconeCategoria(chave: string): Component {
   return mapa[chave] ?? HelpCircle
 }
 
-onMounted(() => {
-  void carregarFormulario()
+onMounted(async () => {
+  // O caminho da query só pode ser aplicado depois do formulário carregar —
+  // `abrirEm` procura a categoria na lista, que ainda não existe no primeiro
+  // render. Sem o `await`, o deep-link do botão "esqueci minha senha" não
+  // faria nada.
+  await carregarFormulario()
+  if (!formulario.value) return
+
+  const categoriaParam = route.query.categoria
+  if (typeof categoriaParam === 'string' && categoriaParam) {
+    abrirEm(
+      categoriaParam,
+      typeof route.query.respostaSeed === 'string' ? route.query.respostaSeed : null,
+      typeof route.query.resposta === 'string' ? route.query.resposta : null,
+    )
+  }
+
   carregandoEscolas.value = true
   listarEscolasPublico()
     .then((l) => (escolas.value = l))

@@ -37,7 +37,26 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!accessToken.value)
   const isAdmin = computed(() => user.value?.nivel === 'ADMIN')
-  const mustChangePassword = computed(() => user.value?.primeiroLogin === true)
+  /**
+ * A pessoa precisa trocar a senha antes de usar o sistema.
+ *
+ * Vale para os dois casos, que são diferentes na origem e iguais na
+ * consequência:
+ *  - `primeiroLogin`: nunca definiu senha (entrou pelo código da Matriz);
+ *  - `senhaProvisoria`: tem senha, mas a Matriz acabou de gerar outra para
+ *    quem esqueceu a antiga.
+ *
+ * Antes, este sinal era só `primeiroLogin`, e por isso quem recebia senha
+ * provisória entrava direto no sistema sem trocar — a senha que a Matriz
+ * mandou por telefone continuava valendo. Os dois sinais vêm do backend desde
+ * a coluna `senhaProvisoria`.
+ */
+const mustChangePassword = computed(
+  () => user.value?.primeiroLogin === true || user.value?.senhaProvisoria === true,
+)
+
+/** A senha atual foi gerada pela Matriz (e não é a primeira vez da pessoa). */
+const senhaProvisoria = computed(() => user.value?.senhaProvisoria === true)
 
   /**
    * Escola FILHA (irmã que divide o prédio com a MÃE): o painel de equipamentos
@@ -277,6 +296,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     mustChangePassword,
+    senhaProvisoria,
     somenteLeituraEquipamentos,
     temEscopoTipos,
     rotasPermitidas,
