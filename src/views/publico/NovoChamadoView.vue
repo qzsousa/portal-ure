@@ -25,7 +25,7 @@ import {
 } from '@lucide/vue'
 import { useUiStore } from '@/stores/ui'
 import { apiError } from '@/utils/apiError'
-import { condicoesDe } from '@/utils/formulario'
+import { condicaoSatisfeita, condicoesDe } from '@/utils/formulario'
 import { validarArquivo, validarArquivos, ACCEPT_ANEXO, LIMITE_ANEXO_TEXTO } from '@/utils/anexos'
 import {
   criarChamadoPublico,
@@ -197,13 +197,17 @@ function voltarHome() {
 
 /**
  * Visibilidade condicional. A pergunta aparece quando **qualquer uma** das
- * condições é satisfeita (OU) — basta a pergunta-pai ter o rótulo esperado.
- * Sem condição, sempre visível.
+ * condições é satisfeita (OU). Sem condição, sempre visível.
+ *
+ * A regra mora em `condicaoSatisfeita` e não aqui: é a MESMA que o backend
+ * aplica ao validar a abertura. Se as duas divergem, a tela mostra a pergunta,
+ * a escola responde, e o servidor descarta a resposta por "pergunta que não
+ * apareceu" — o chamado sai sem a resposta que a escola viu ser pedida.
  */
 function perguntaVisivel(p: FormularioPergunta): boolean {
   const condicoes = condicoesDe(p)
   if (!condicoes.length) return true
-  return condicoes.some((c) => respostas[c.perguntaId] === c.opcao)
+  return condicoes.some((c) => condicaoSatisfeita(respostas, c))
 }
 
 const perguntasVisiveis = computed<FormularioPergunta[]>(() => {
