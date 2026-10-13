@@ -94,6 +94,52 @@ export async function excluirTutorial(id: string): Promise<void> {
   await chamadosApi.delete(`/tutoriais/${id}`)
 }
 
+/* ---------- Interações (curtidas e comentários) ---------- */
+
+export interface ComentarioTutorial {
+  id: string
+  autorNome: string
+  texto: string
+  parentId: string | null
+  createdAt: string
+  updatedAt: string
+  curtidasCount: number
+  curtidoPorMim: boolean
+  respostas: ComentarioTutorial[]
+}
+
+export async function curtirTutorial(id: string): Promise<{ curtido: boolean; total: number }> {
+  const { data } = await chamadosApi.post<{ curtido: boolean; total: number }>(`/tutoriais/${id}/curtir`)
+  return data
+}
+
+export async function obterCurtidasTutorial(id: string): Promise<{ curtido: boolean; total: number }> {
+  const { data } = await chamadosApi.get<{ curtido: boolean; total: number }>(`/tutoriais/${id}/curtidas`)
+  return data
+}
+
+export async function listarComentariosTutorial(id: string): Promise<ComentarioTutorial[]> {
+  const { data } = await chamadosApi.get<{ data: ComentarioTutorial[] }>(`/tutoriais/${id}/comentarios`)
+  return data.data
+}
+
+export async function criarComentarioTutorial(
+  id: string,
+  payload: { texto: string; parentId?: string | null },
+): Promise<ComentarioTutorial> {
+  const { data } = await chamadosApi.post<ComentarioTutorial>(`/tutoriais/${id}/comentarios`, payload)
+  return data
+}
+
+export async function excluirComentarioTutorial(id: string): Promise<void> {
+  await chamadosApi.delete(`/tutoriais/comentarios/${id}`)
+}
+
+export async function curtirComentarioTutorial(id: string): Promise<{ curtido: boolean; total: number }> {
+  const { data } = await chamadosApi.post<{ curtido: boolean; total: number }>(`/tutoriais/comentarios/${id}/curtir`)
+  return data
+}
+
 /* ---------- Categorias ---------- */
 
 export async function listarCategoriasTutorial(): Promise<TutorialCategoria[]> {
