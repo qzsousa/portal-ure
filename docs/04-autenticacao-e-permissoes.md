@@ -518,20 +518,31 @@ apenas `meta.roles`.
 
 ## Troca de senha
 
-**Três** funções numa tela só (`TrocarSenhaView`), com rótulos próprios. A tela
-decide pelo par `senhaProvisoria` + `mustChangePassword` da store — **não** por
-`primeiroLogin` sozinho. Era esse o defeito: quem tinha acabado de receber senha
-provisória da Matriz caía em "Trocar senha" com o campo **Senha atual**, ou
-seja, pedia exatamente a senha velha que essa pessoa não tem na mão.
+**Três** funções numa tela só (`TrocarSenhaView`). A tela decide pelo par
+`senhaProvisoria` + `mustChangePassword` da store — **não** por `primeiroLogin`
+sozinho. Era esse o defeito: quem tinha acabado de receber senha provisória da
+Matriz caía em "Trocar senha" com o campo **Senha atual**, ou seja, pedia
+exatamente a senha velha que essa pessoa não tem na mão.
 
-| Fluxo | Sinal da store | Título | Primeiro campo | Dica |
+| Fluxo | Sinal da store | Título | Campos | Dica |
 |---|---|---|---|---|
-| Primeiro acesso | `mustChangePassword` sem provisória | **Defina sua senha** | **Senha temporária** | "Este é seu primeiro acesso. Crie uma senha definitiva para continuar." |
-| Senha provisória | `senhaProvisoria` | **Trocar senha provisória** | **Senha temporária** | "A Matriz acabou de gerar uma senha provisória para você. Crie agora a sua senha definitiva." |
-| Troca voluntária | nenhum dos dois | **Trocar senha** | **Senha atual** | "Após trocar a senha, você precisará entrar novamente." |
+| Primeiro acesso | `mustChangePassword` sem provisória | **Defina sua senha** | nova + confirmar | "Este é seu primeiro acesso. Crie uma senha definitiva para continuar." |
+| Senha provisória | `senhaProvisoria` | **Trocar senha provisória** | nova + confirmar | "A Matriz acabou de gerar uma senha provisória para você. Crie agora a sua senha definitiva." |
+| Troca voluntária | nenhum dos dois | **Trocar senha** | **senha atual** + nova + confirmar | "Após trocar a senha, você precisará entrar novamente." |
 
-Nos dois fluxos forçados o primeiro campo nunca se chama "Senha atual", e cada
-um explica qual senha é a esperada no campo — inclusive que **não** é a antiga.
+**Nos dois fluxos forçados o campo "senha atual" não existe** (13/10/2026). Ele
+era redundante, e não por beleza: `POST /change-password` só confere
+`senhaAtual` quando a pessoa tem senha definitiva (`primeiroLogin` e
+`senhaProvisoria` falsos), então nos fluxos forçados a tela obrigava a digitar
+uma senha que o servidor **ignorava** — e pedia a antiga, que é o que a pessoa
+esqueceu, enquanto o que ela tem é a nova.
+
+São dois campos em vez de três porque o erro da confirmação fica sem ambiguidade:
+com três campos parecidos, se a senha estivesse certa no primeiro e a confirmação
+divergisse, não dava para saber qual dos dois era o erro.
+
+O portal envia `senhaAtual: ''` nesse fluxo — de propósito. O schema já tem
+`.default('')`, então nenhuma mudança de backend foi necessária.
 
 Política de senha, avaliada **na ordem**, primeira falha vence:
 
