@@ -518,12 +518,20 @@ apenas `meta.roles`.
 
 ## Troca de senha
 
-Duas funções numa tela só (`TrocarSenhaView`), com rótulos que se adaptam:
+**Três** funções numa tela só (`TrocarSenhaView`), com rótulos próprios. A tela
+decide pelo par `senhaProvisoria` + `mustChangePassword` da store — **não** por
+`primeiroLogin` sozinho. Era esse o defeito: quem tinha acabado de receber senha
+provisória da Matriz caía em "Trocar senha" com o campo **Senha atual**, ou
+seja, pedia exatamente a senha velha que essa pessoa não tem na mão.
 
-| Situação | Título | Dica |
-|---|---|---|
-| Primeiro acesso | **Defina sua senha** | "Este é seu primeiro acesso. Crie uma senha definitiva para continuar." |
-| Troca voluntária | **Trocar senha** | "Após trocar a senha, você precisará entrar novamente." |
+| Fluxo | Sinal da store | Título | Primeiro campo | Dica |
+|---|---|---|---|---|
+| Primeiro acesso | `mustChangePassword` sem provisória | **Defina sua senha** | **Senha temporária** | "Este é seu primeiro acesso. Crie uma senha definitiva para continuar." |
+| Senha provisória | `senhaProvisoria` | **Trocar senha provisória** | **Senha temporária** | "A Matriz acabou de gerar uma senha provisória para você. Crie agora a sua senha definitiva." |
+| Troca voluntária | nenhum dos dois | **Trocar senha** | **Senha atual** | "Após trocar a senha, você precisará entrar novamente." |
+
+Nos dois fluxos forçados o primeiro campo nunca se chama "Senha atual", e cada
+um explica qual senha é a esperada no campo — inclusive que **não** é a antiga.
 
 Política de senha, avaliada **na ordem**, primeira falha vence:
 
@@ -532,6 +540,14 @@ Política de senha, avaliada **na ordem**, primeira falha vence:
 3. Pelo menos uma letra minúscula
 4. Pelo menos um número
 5. Pelo menos um caractere especial
+
+As cinco regras aparecem **em tempo real** no campo da nova senha: barra de
+progresso com um pedaço por regra, contador "N de 5" e a lista com visto/✗. O
+botão **Salvar nova senha** só habilita quando as cinco passam. Isso é
+conveniência — quem decide continua sendo o backend.
+
+Os campos de nova senha e de confirmação têm **botão de olho**, que alterna
+entre revelar e dissimular (mesmo componente e mesmo CSS da tela de login).
 
 Ao salvar, o backend **derruba todas as sessões** do usuário e o portal limpa o
 estado em memória e volta para `/login`. É por isso que o botão diz
