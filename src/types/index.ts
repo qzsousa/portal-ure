@@ -49,6 +49,12 @@ export interface User {
   papelUnidade?: PapelUnidade | null
   status?: string
   primeiroLogin?: boolean
+  /**
+   * A senha atual foi gerada pela Matriz para quem esqueceu a senha, e precisa
+   * ser trocada no primeiro login. Vem do backend desde a coluna
+   * `senhaProvisoria`.
+   */
+  senhaProvisoria?: boolean
   escopoTipos?: string[]
   /**
    * Rotas (telas) que este usuário pode abrir. `[]` ou ausente = SEM
@@ -93,6 +99,12 @@ export interface LoginResponse {
   accessToken: string
   user: User
   primeiroLogin: boolean
+  /**
+   * A senha atual foi gerada pela Matriz e precisa ser trocada. Distinto de
+   * `primeiroLogin`: aquele é "nunca definiu senha", este é "esta senha não é
+   * definitiva". A troca é obrigatória nos dois casos.
+   */
+  senhaProvisoria?: boolean
 }
 
 export interface ChangePasswordRequest {

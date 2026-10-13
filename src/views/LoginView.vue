@@ -9,6 +9,7 @@ import {
   Clock,
   Eye,
   EyeOff,
+  HelpCircle,
   KeyRound,
   Laptop,
   Loader2,
@@ -177,8 +178,26 @@ function cancelarVerificacao() {
 }
 
 /** Volta para a etapa de e-mail. */
+/**
+ * Esqueci a senha: abre o formulário público já na pergunta de senha.
+ *
+ * O caminho (categoria `sistemas`, pergunta `seed-perg-sist-1`, resposta
+ * `PortalNet`) leva direto à pergunta "Esqueci minha senha" criada no backend.
+ * Os ids são do contrato do formulário; se a pergunta for removida ou
+ * renomeada, o deep-link abre a categoria e a pessoa escolhe — não quebra.
+ */
+function irParaSenhaEsquecida() {
+  router.push({
+    path: '/chamado/novo',
+    query: {
+      categoria: 'sistemas',
+      respostaSeed: 'seed-perg-sist-1',
+      resposta: 'PortalNet',
+    },
+  })
+}
+
 function voltarParaEmail() {
-  etapa.value = 'email'
   form.codigo = ''
   form.senha = ''
   form.novaSenha = ''
@@ -390,7 +409,9 @@ onBeforeUnmount(() => {
           <header class="login-head">
             <h1>
               <template v-if="etapa === 'codigo'">Primeiro acesso</template>
-              <template v-else-if="etapa === 'senha' && criandoSenha">Criar sua senha</template>
+              <template v-else-if="etapa === 'senha' && criandoSenha">
+                {{ auth.senhaProvisoria ? 'Trocar a senha provisória' : 'Criar sua senha' }}
+              </template>
               <template v-else>Entrar</template>
             </h1>
             <p>
@@ -398,6 +419,10 @@ onBeforeUnmount(() => {
               <template v-else-if="etapa === 'codigo'">
                 Digite o código de 6 dígitos que a <strong>Matriz</strong> entregou para
                 <strong>{{ form.email }}</strong>.
+              </template>
+              <template v-else-if="criandoSenha && auth.senhaProvisoria">
+                A senha que a <strong>Matriz</strong> entregou é provisória. Escolha uma
+                nova agora — é por isso que ela não vai mais valer depois.
               </template>
               <template v-else-if="criandoSenha">Escolha uma senha para acessar o portal.</template>
               <template v-else>Digite sua senha para continuar.</template>
@@ -661,10 +686,22 @@ onBeforeUnmount(() => {
                 <ArrowLeft :size="13" />
                 Voltar para o código
               </button>
-              <button v-else type="button" class="link-btn" @click="voltarParaEmail">
-                <ArrowLeft :size="13" />
-                Usar outro e-mail
-              </button>
+              <template v-else>
+                <button type="button" class="link-btn" @click="voltarParaEmail">
+                  <ArrowLeft :size="13" />
+                  Usar outro e-mail
+                </button>
+                <!--
+                  Esqueci a senha leva ao formulário público já na pergunta de
+                  senha, dentro de Sistemas -> PortalNet. A pessoa não digita
+                  nada aqui: quem emite a senha provisória é a Matriz, e o
+                  chamado é o registro de que ela pediu.
+                -->
+                <button type="button" class="link-btn link-esqueci" @click="irParaSenhaEsquecida">
+                  <HelpCircle :size="13" />
+                  Esqueci minha senha
+                </button>
+              </template>
             </div>
           </form>
 
