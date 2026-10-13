@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { apiError } from '@/utils/apiError'
-import { KeyRound, Pencil, Plus, Search, UserPlus, UserX, X } from '@lucide/vue'
+import { KeyRound, Lock, Pencil, Plus, Search, UserPlus, UserX, X } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import RowActions from '@/components/ui/RowActions.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
@@ -11,6 +11,7 @@ import {
   criarUsuario,
   desativarUsuario,
   gerarCodigoPrimeiroAcesso,
+  gerarSenhaProvisoria,
   listarEscolas,
   listarUsuarios,
 } from '@/api/usuarios'
@@ -291,6 +292,9 @@ const unidadePreenchida = computed(() => {
  */
 const codigoModal = ref<{ email: string; codigo: string } | null>(null)
 
+/** Senha provisória gerada para quem já tem senha. Mesmo modal, outro conteúdo. */
+const senhaModal = ref<{ email: string; senha: string } | null>(null)
+
 function abrirCriar() {
   editando.value = null
   form.nome = ''
@@ -387,6 +391,35 @@ async function novoCodigoPrimeiroAcesso(u: User) {
   } catch (e) {
     ui.error(apiError(e, 'Não foi possível gerar o código de acesso.'))
   }
+}
+
+/**
+ * Gera a senha provisória de quem já tem senha e esqueceu.
+ *
+ * Diferente do código de primeiro acesso, aqui a senha **é** exibida: a pessoa
+ * entra com ela e é obrigada a trocar. O backend derruba as sessões antigas e
+ * marca `senhaProvisoria`, que o portal lê para forçar a troca na entrada.
+ */
+async function novaSenhaProvisoria(u: User) {
+  try {
+    const resultado = await gerarSenhaProvisoria(u.email)
+    senhaModal.value = { email: u.email, senha: resultado.senha }
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível gerar a senha provisória.'))
+  }
+}
+
+/** Fecha os dois modais de credencial com a mesma ação. */
+function fecharCredencial() {
+  codigoModal.value = null
+  senhaModal.value = null
+}
+
+/** Copia a senha provisória para a Matriz repassar. */
+function copiarSenhaProvisoria() {
+  if (!senhaModal.value) return
+  void navigator.clipboard.writeText(senhaModal.value.senha)
+  ui.success('Senha copiada.')
 }
 
 async function desativar(u: User) {
@@ -552,8 +585,19 @@ onMounted(async () => {
                   v-if="podeEditarAlvo(u)"
                   :itens="[
                     { rotulo: 'Editar', icone: Pencil, acao: () => abrirEditar(u) },
+                    // Duas opções, uma por público. `primeiroLogin` é false
+                    // justamente quando a pessoa JÁ tem senha — e é esse caso
+                    // que o código de primeiro acesso recusa. Mostrar as duas
+                    // para todo mundo deixaria a Matriz escolher a opção errada:
+                    // gerar senha provisória para quem nunca entrou põe a
+                    // pessoa num fluxo que não é o dela.
                     ...(isAdmin
-                      ? [{ rotulo: 'Novo código de acesso', icone: KeyRound, acao: () => novoCodigoPrimeiroAcesso(u) }]
+                      ? [
+                          ...(u.primeiroLogin === false
+                            ? [{ rotulo: 'Gerar senha provisória', icone: Lock, acao: () => novaSenhaProvisoria(u) }]
+                            : []),
+                          { rotulo: 'Novo código de acesso', icone: KeyRound, acao: () => novoCodigoPrimeiroAcesso(u) },
+                        ]
                       : []),
                     { rotulo: 'Desativar', icone: UserX, perigo: true, acao: () => desativar(u) },
                   ]"
@@ -735,13 +779,39 @@ onMounted(async () => {
       </template>
     </BaseModal>
 
-    <!-- Modal do código de primeiro acesso -->
+    <!-- Modal do código de primeiro acesso OU da senha provisória.
+         Um modal só, dois conteúdos: os dois servem ao mesmo momento (a Matriz
+         atendendo um pedido de senha) e a diferença real é o que está na tela —
+         um código que a pessoa troca por senha própria, ou uma senha que ela
+         entra e é obrigada a trocar. -->
     <BaseModal
-      :aberto="!!codigoModal"
-      titulo="Código de primeiro acesso"
-      @fechar="codigoModal = null"
+      :aberto="!!codigoModal || !!senhaModal"
+      :titulo="senhaModal ? 'Senha provisória' : 'Código de primeiro acesso'"
+      @fechar="fecharCredencial"
     >
-      <div v-if="codigoModal" class="senha-temp">
+      <div v-if="senhaModal" class="senha-temp">
+        <p>
+          Entregue esta senha a <strong>{{ senhaModal.email }}</strong> e peça
+          que entre com ela. A pessoa vai cair direto na troca e escolher a
+          senha definitiva — essa aqui deixa de valer assim que ela trocar.
+        </p>
+        <div class="senha-box">{{ senhaModal.senha }}</div>
+        <p class="senha-temp-nota">
+          <strong>Esta senha foi gerada agora.</strong> Se o pedido chegou por um
+          chamado da unidade, você pode responder o próprio chamado com ela: em
+          <strong>Chamados</strong>, abra o pedido de senha. O solicitante lê a
+          resposta na consulta por protocolo.
+        </p>
+        <p class="senha-temp-nota">
+          A senha antiga deixa de funcionar assim que esta é gerada, e as sessões
+          abertas da pessoa são encerradas.
+        </p>
+        <button class="btn btn-outline" type="button" @click="copiarSenhaProvisoria">
+          Copiar senha
+        </button>
+      </div>
+
+      <div v-else-if="codigoModal" class="senha-temp">
         <p>
           Entregue este código a <strong>{{ codigoModal.email }}</strong>.
           Com ele, a pessoa cria a própria senha na tela de acesso — você

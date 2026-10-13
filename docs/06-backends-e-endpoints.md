@@ -138,7 +138,7 @@ Duas consequências que afetam o tratamento de erro:
 | GET | `/auth/me` | `initialize()` ao recarregar a página |
 | POST | `/auth/change-password` | `TrocarSenhaView` |
 | POST | `/auth/admin/gerar-codigo-primeiro-acesso` | `UsuariosView` (só ADMIN) |
-| POST | `/auth/admin/gerar-senha-provisoria` | tela de senha do ADMIN (só ADMIN) |
+| POST | `/auth/admin/gerar-senha-provisoria` | `UsuariosView` › menu de ações › "Gerar senha provisória" (só ADMIN) |
 
 > **Duas rotas, dois públicos.** A nota seguinte descreve o que existia até
 > 11/10/2026 e continua válida para *quem nunca definiu senha*.

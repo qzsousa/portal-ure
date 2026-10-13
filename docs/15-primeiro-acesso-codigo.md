@@ -148,6 +148,20 @@ provisória para quem já tem senha. Foi o que fez o botão da Matriz recusar co
 A senha provisória volta no corpo da resposta, porque a Matriz precisa repassar
 à pessoa. Por isso a rota é ADMIN-only e nunca entra em log.
 
+### Onde fica o botão (passo 5)
+
+**`Usuários` → menu de ações da linha do usuário → "Gerar senha provisória".**
+O mesmo menu onde fica "Novo código de acesso"; o modal é o mesmo, com outro
+título e outro texto.
+
+O item **só aparece para quem já tem senha** (`primeiroLogin = false`), porque
+é esse o público da senha provisória. Quem nunca definiu senha continua vendo
+apenas "Novo código de acesso" — que é o caminho certo para ela. Mostrar as duas
+opções para todo mundo deixaria a Matriz escolher a errada.
+
+Quando a senha é gerada, a antiga deixa de funcionar e as sessões abertas da
+pessoa são encerradas.
+
 **Nenhum campo do pedido de senha pede a senha antiga** — quem esqueceu não a
 tem. O formulário é o registro de que ela pediu; a emissão continua sendo da
 Matriz.

@@ -96,6 +96,30 @@ export async function gerarCodigoPrimeiroAcesso(email: string): Promise<CodigoPr
   return data
 }
 
+/**
+ * Senha provisória para quem JÁ tem senha e esqueceu.
+ *
+ * Rota separada do código de primeiro acesso porque os dois públicos são
+ * diferentes: `gerar-codigo-primeiro-acesso` recusa quem já tem senha (e está
+ * certo — emitir código de primeiro acesso para ela seria um oráculo de "esta
+ * conta já tem senha definitiva"). Esta existe para o outro caso.
+ *
+ * Diferente do código, aqui a senha volta no corpo da resposta: a Matriz
+ * precisa repassar à pessoa, e é a pessoa que troca no primeiro login.
+ */
+export interface SenhaProvisoriaGerada {
+  senha: string
+  nome: string
+  trocaObrigatoria: boolean
+}
+
+export async function gerarSenhaProvisoria(email: string): Promise<SenhaProvisoriaGerada> {
+  const { data } = await chamadosApi.post<SenhaProvisoriaGerada>('/auth/admin/gerar-senha-provisoria', {
+    email: email.trim().toLowerCase(),
+  })
+  return data
+}
+
 /** Aceita tanto `["E.E. X"]` quanto `[{ nome: "E.E. X" }]`. */
 function extrairNomes(data: unknown): string[] {
   if (!Array.isArray(data)) return []
