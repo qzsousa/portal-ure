@@ -98,11 +98,98 @@ valida o código ao confirmar, não na etapa 1.
 
 Ver [a correção em `09-tratamento-de-erros.md`](./09-tratamento-de-erros.md).
 
-## Limite conhecido
+## Limite conhecido — e a senha provisória (atualizado em 12/10/2026)
 
-Este fluxo cobre **primeiro acesso**. Para quem **já tem senha e a esqueceu**,
-o caminho é o de sempre (pedir redefinição) e **não foi construído aqui**. Se
-esse for o seu caso, é outra task.
+A versão anterior deste capítulo dizia, neste mesmo ponto:
+
+> Este fluxo cobre **primeiro acesso**. Para quem **já tem senha e a esqueceu**,
+> o caminho é o de sempre (pedir redefinição) e **não foi construído aqui**. Se
+> esse for o seu caso, é outra task.
+
+Essa task foi feita. Quem já tem senha e esqueceu agora tem caminho próprio, e
+**não passa pelo código de 6 dígitos** — ele é exclusive de quem nunca definiu
+senha.
+
+## Os dois caminhos, lado a lado
+
+| | Primeiro acesso | Senha provisória |
+|---|---|---|
+| Quem é a pessoa | nunca definiu senha | já usa o sistema e esqueceu |
+| O que a Matriz gera | código de 6 dígitos | senha provisória |
+| Como entra | digita o código | digita a senha provisória |
+| Vira senha definitiva | sim | sim, na troca |
+| Rótulo na tela | "Primeiro acesso" | "Trocar a senha provisória" |
+
+O sinal que o portal usa é o mesmo nos dois casos — `mustChangePassword` — mas
+vem de **duas colunas diferentes**, porque são duas perguntas diferentes:
+
+```
+primeiroLogin     "esta pessoa NUNCA definiu senha?"
+senhaProvisoria   "a senha ATUAL foi gerada pela Matriz?"
+```
+
+Mientras coubessem na mesma coluna, não haveria como representar senha
+provisória para quem já tem senha. Foi o que fez o botão da Matriz recusar com
+"este usuário já definiu a senha".
+
+## O caminho de quem já tem senha
+
+```
+1. /login  →  e-mail  →  etapa de senha
+2. "Esqueci minha senha"
+3. /chamado/novo já em Sistemas → PortalNet → "Esqueci minha senha"
+4. A escola escreve o que aconteceu e abre o chamado
+5. A Matriz gera a senha provisória
+   POST /api/auth/admin/gerar-senha-provisoria   (ADMIN)
+6. A pessoa entra com a senha provisória
+7. O portal manda direto para /trocar-senha
+```
+
+A senha provisória volta no corpo da resposta, porque a Matriz precisa repassar
+à pessoa. Por isso a rota é ADMIN-only e nunca entra em log.
+
+**Nenhum campo do pedido de senha pede a senha antiga** — quem esqueceu não a
+tem. O formulário é o registro de que ela pediu; a emissão continua sendo da
+Matriz.
+
+## O link do passo 3 é um deep-link
+
+O botão do login leva para `/chamado/novo` com query:
+
+```
+?categoria=sistemas&respostaSeed=seed-perg-sist-1&resposta=PortalNet
+```
+
+Isso abre a categoria, marca PortalNet na 1ª pergunta e revela a pergunta de
+senha — a pessoa não escolhe entre quatro categorias e três sistemas.
+
+A pergunta é a `seed-perg-sist-senha`, criada por migration
+(`20261012100000_add_pergunta_esqueci_senha`). Ela **só existe no banco por
+migration**: o `SEED_FORMULARIO` só roda quando a tabela de categorias está
+vazia, e produção já tinha 11 perguntas em Sistemas.
+
+Se a pergunta for removida ou renomeada, o deep-link ainda abre a categoria e a
+pessoa escolhe — não quebra.
+
+## Duas regras que impedem a pessoa de ficar presa
+
+**Trocar a senha limpa a marca.** `definirSenhaPrimeiroAcesso` e o
+`PATCH /change-password` zeram `senhaProvisoria`. Sem isso a pessoa trocava a
+senha e caía de volta na troca, em laço.
+
+**A senha atual só é conferida quando existe.** O handler só compara a senha
+antiga quando `primeiroLogin` **e** `senhaProvisoria` são falsos. Nos dois casos
+em que a pessoa não tem senha antiga, a checagem é pulada:
+
+```
+primeiroLogin=true  ou senhaProvisoria=true  → não confere a senha atual
+os dois false                                  → confere, 401 se errada
+```
+
+E o contrato precisa permitir `senhaAtual` vazio para isso funcionar — com
+`min(1)` o corpo era recusado antes do handler e a pessoa ficava trancada
+respondendo 400 numa tela que a mandava trocar a senha. Ver
+[`04-autenticacao-e-permissoes.md`](./04-autenticacao-e-permissoes.md).
 
 ## Como testar de novo
 

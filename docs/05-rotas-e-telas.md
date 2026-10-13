@@ -313,6 +313,40 @@ entrar"** (para quem já tem senha definitiva e foi parar aqui por engano).
 O campo do código é numérico: digitar letra, espaço ou traço não cola
 (`somenteDigitos`), e o `maxlength="6"` trava o tamanho.
 
+### "Esqueci minha senha" (12/10/2026)
+
+Na etapa ③ (login normal), ao lado de **"Usar outro e-mail"**, há o link
+**"Esqueci minha senha"**. Ele não abre formulário de solicitação: leva direto
+ao formulário público, já dentro do problema certo.
+
+```
+/login → e-mail → etapa de senha → "Esqueci minha senha"
+  ↓
+/chamado/novo?categoria=sistemas&respostaSeed=seed-perg-sist-1&resposta=PortalNet
+  ↓
+Sistemas → PortalNet → "Esqueci minha senha"
+```
+
+A pessoa não escolhe categoria nem sistema: a query pré-seleciona os dois, e a
+pergunta de senha aparece porque depende da resposta `PortalNet`.
+
+O caminho é aplicado **depois** do formulário carregar — `abrirEm` procura a
+categoria na lista, que ainda não existe no primeiro render. Se a pergunta for
+removida ou renomeada, a tela abre a categoria e a pessoa escolhe: não quebra.
+
+Nenhum campo do pedido pede a senha antiga — quem esqueceu não a tem. A
+emissão da senha provisória é da Matriz; o chamado é o registro do pedido.
+Ver [Primeiro acesso](./15-primeiro-acesso-codigo.md).
+
+### Senha provisória na entrada
+
+Quem entra com senha provisória cai direto em `/trocar-senha`, e a tela diz
+**"Trocar a senha provisória"** — não "Primeiro acesso", que descreveria mal
+quem usa o sistema há anos.
+
+O texto explica que a senha da Matriz é provisória e não vai mais valer depois
+da troca.
+
 O raciocínio de segurança e as três defesas estão em
 [Autenticação e permissões](./04-autenticacao-e-permissoes.md).
 

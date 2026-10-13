@@ -394,8 +394,13 @@ Requisição ao SCE
 | | |
 |---|---|
 | **Sintoma** | Validação no navegador, arquivo nem é enviado |
-| **Causa** | Arquivo acima de 10 MB (formulário público) ou 5 MB (conversa de chamado) |
+| **Causa** | Arquivo acima de **5 MB** (em qualquer tela) |
 | **Solução** | Comprimir ou enviar mais de um arquivo menor. |
+
+> **Corrigido em 12/10/2026.** Era "acima de **10 MB** (formulário público) ou
+> 5 MB (conversa de chamado)". O formulário público aceitava 10 MB e o servidor
+> recusava acima de 5 — a pessoa escolhia um `.jpg` de 8 MB e recebia um 400 sem
+> explicação. Os dois lados passam a ler a mesma constante.
 
 ### D7. "O anexo é muito grande para ser enviado."
 
@@ -404,7 +409,22 @@ Requisição ao SCE
 | **Sintoma** | Toast após o envio |
 | **Causa** | Resposta HTTP **413** — o corpo passou do limite do servidor |
 | **Diagnóstico** | Inspecionar a requisição no Network: `Payload Too Large`. |
-| **Solução** | Reduzir o arquivo. Nota: o limite do frontend (10 MB) é **maior** que o do servidor (25 MB de body, mas a requisição base64 cresce ~33% — 10 MB de arquivo vira ~13 MB de JSON, e com outros campos se aproxima do limite). |
+| **Solução** | Reduzir o arquivo. |
+
+> **O 413 só ficou real em 12/10/2026.** O `errorHandler` só tratava ZodError,
+> P2002 e P2025; o body-parser lançava `entity.too.large` com status 413, mas o
+> erro caía no catch-all — resposta **500** e disparo de `notificarAdmins`. Uma
+> escola mandando arquivo grande acordava a administração com "erro interno do
+> sistema", e o ramo de 413 que o portal já tinha era código morto.
+>
+> Agora o `errorHandler` reconhece o `413` e **não** notifica os admins: corpo
+> grande é erro do cliente, não incidente.
+>
+> Sobre o tamanho: o base64 cresce ~33% (5 MB ≈ 6,7 MB de JSON) e o limite do
+> corpo é `25mb` (`LIMITE_CORPO_JSON`). Um arquivo de 24 MB vira ~32 MB e é
+> barrado pelo body-parser **antes** da validação por arquivo — por isso existem
+> dois caminhos: `400` para arquivo grande que cabe no corpo, `413` para o corpo
+> estourado.
 
 ### D8. "Chamado não encontrado. Confira o número do protocolo e o e-mail usados na abertura."
 

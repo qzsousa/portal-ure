@@ -314,6 +314,110 @@ e a **MÃE** do mesmo grupo em
 
 ---
 
+## Rotas permitidas (eixo independente do nível e do escopo)
+
+Há **três** restrições, e elas não se confundem. Duas já existiam; a terceira foi
+acrescentada em 12/10/2026.
+
+| Eixo | Pergunta que responde | Onde vive |
+|---|---|---|
+| `nivel` | o que a pessoa **é** | `Usuario.nivel` |
+| `escopoTipos` | quais **chamados** ela atende | `Usuario.escopoTipos[]` |
+| `rotasPermitidas` | a que **telas** ela chega | `Usuario.rotasPermitidas[]` |
+
+Um técnico da área de sistemas pode ter os três ao mesmo tempo: `nivel=TECNICO`,
+`escopoTipos` com SEI e PortalNet, e `rotasPermitidas` só com `chamados`.
+
+### A diferença entre escopo e rota
+
+`escopoTipos` filtra **linhas de uma tabela** (chamados). `rotasPermitidas` impede
+de **abrir uma tela**. São coisas diferentes: um técnico com escopo pode ver
+chamados de rede e, ao mesmo tempo, não ter acesso ao inventário.
+
+### Como é gravado
+
+```
+rotasPermitidas = ["chamados"]
+```
+
+**Lista vazia = sem restrição**, pelo mesmo motivo do `escopoTipos`: nenhuma
+conta já cadastrada muda de comportamento. Por isso a migration usa
+`DEFAULT '{}'` em vez de coluna nullable.
+
+### A trava é do servidor
+
+O item de menu escondido no portal é **conveniência**, não segurança: esconder
+o link não impede chamar a API. A restrição real é um **403** na parede de auth.
+
+```
+GET /api/equipamentos  →  403 FORBIDDEN   (usuário restrito a /chamados)
+GET /api/chamados      →  200
+```
+
+Rotas fora do catálogo de domínios **fecham por padrão**. Isso é deliberado: um
+endpoint novo não vaza para o usuário restrito só porque alguém esqueceu de
+mapear no catálogo.
+
+### `/api/auth` nunca é bloqueada
+
+Travar a rota de sessão prenderia o técnico sem conseguir trocar a senha nem
+sair — e trocar a senha é justamente o primeiro acesso dele.
+
+### O que o portal faz com isso
+
+- **Menu**: esconde os itens fora da lista (o filtro roda antes das outras flags,
+  porque é a restrição mais forte);
+- **Guard de rota**: navegação direta por URL é recusada e vai para a tela
+  inicial do usuário;
+- **Login**: quem é restrito cai em `/chamados` em vez de `/painel`, e o
+  `?redirect=` só é honrado se a rota permitir.
+
+No *Cadastro de usuários* é um bloco de checkboxes "Telas que este usuário pode
+abrir", só para Administrador.
+
+## Senha provisória (coluna própria, desde 12/10/2026)
+
+`Usuario.senhaProvisoria: Boolean @default(false)`.
+
+Existe para responder a uma pergunta que `primeiroLogin` **não** respondia:
+
+```
+primeiroLogin     "esta pessoa NUNCA definiu senha?"
+senhaProvisoria   "a senha ATUAL foi gerada pela Matriz?"
+```
+
+Com as duas na mesma coluna, não havia como representar senha temporária para
+quem já usa o sistema — que é exatamente quem esqueceu a senha.
+
+`false` (default) = senha definitiva, o caso de sempre.
+
+### Onde ela é ligada e desligada
+
+| Momento | Efeito |
+|---|---|
+| Matriz gera senha provisória | `true`, e derruba as sessões antigas |
+| Pessoa troca a senha | `false` |
+
+Todo caminho que grava senha nova limpa a marca — senão a pessoa troca e cai de
+volta na troca, em laço.
+
+### Na tela de troca de senha
+
+A senha atual só é conferida quando a pessoa **tem** senha definitiva para
+conferir:
+
+```
+primeiroLogin=true  ou senhaProvisoria=true  →  não confere a senha atual
+os dois false                                  →  confere, 401 se errada
+```
+
+Por isso `senhaAtual` **aceita vazio** no contrato. Com `min(1)` o corpo era
+recusado antes do handler e as duas pessoas acima ficavam trancadas numa tela
+que as mandava trocar a senha. A folga não vira brecha: quem tem senha
+definitiva e manda vazio ou errado recebe 401.
+
+Ver [o fluxo completo em `15-primeiro-acesso-codigo.md`](./15-primeiro-acesso-codigo.md).
+
 ## Guarda de rota
 
 `router/index.ts` roda um `beforeEach` global com quatro regras, nesta ordem:

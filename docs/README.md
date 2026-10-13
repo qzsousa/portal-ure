@@ -32,6 +32,8 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | **Entender o aceite e a conclusão pelo técnico** (carimbos de horário) | **[14 · Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md)** |
 | **Ver o fluxo do chamado inteiro** (da abertura até a conferência da escola) | **[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)** |
 | **Por que a senha não se digita no lugar do código** (primeiro acesso) | **[15 · Primeiro acesso: código no lugar da senha](./15-primeiro-acesso-codigo.md)** |
+| **O que fazer quando alguém esqueceu a senha** (senha provisória) | **[15 · Primeiro acesso: código no lugar da senha](./15-primeiro-acesso-codigo.md)** |
+| **Por que um técnico não entra em Inventário** (rota permitida, 403) | [04 · Autenticação e permissões](./04-autenticacao-e-permissoes.md) |
 
 ---
 

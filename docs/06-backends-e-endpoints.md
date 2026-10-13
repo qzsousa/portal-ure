@@ -138,10 +138,30 @@ Duas consequências que afetam o tratamento de erro:
 | GET | `/auth/me` | `initialize()` ao recarregar a página |
 | POST | `/auth/change-password` | `TrocarSenhaView` |
 | POST | `/auth/admin/gerar-codigo-primeiro-acesso` | `UsuariosView` (só ADMIN) |
+| POST | `/auth/admin/gerar-senha-provisoria` | tela de senha do ADMIN (só ADMIN) |
+
+> **Duas rotas, dois públicos.** A nota seguinte descreve o que existia até
+> 11/10/2026 e continua válida para *quem nunca definiu senha*.
 
 > Era `/auth/admin/gerar-senha-temporaria` e foi **substituído**: o ADMIN
 > passou a gerar um **código de 6 dígitos**, não uma senha. A pessoa cria a
 > própria senha no primeiro acesso.
+
+> **Voltou em 12/10/2026, separada.** O código acima continua recusando quem já
+> tem senha (`JA_TEM_SENHA`), e está certo: emitir código de primeiro acesso para
+> alguém seria um oráculo de "esta conta já tem senha definitiva". Para quem
+> **esqueceu a senha**, existe agora `/auth/admin/gerar-senha-provisoria`, que
+> aceita exatamente esse caso e devolve a senha no corpo da resposta — a Matriz
+> precisa repassar a pessoa. Por isso é ADMIN-only e nunca entra em log.
+>
+> ```
+> primeiro acesso   (nunca definiu senha)  →  gerar-codigo-primeiro-acesso
+> esqueci a senha   (já tenho senha)       →  gerar-senha-provisoria
+> ```
+>
+> A resposta traz `senha`, `nome` e `trocaObrigatoria`. A coluna
+> `senhaProvisoria` fica ligada e o portal manda trocar a senha na entrada.
+> Detalhes em [Primeiro acesso](./15-primeiro-acesso-codigo.md).
 
 #### Primeiro acesso (código gerado pela Matriz)
 
@@ -386,9 +406,56 @@ próprias — inclusive no caso do anexo ser obrigatório:
 
 | Onde | Limite | Mensagem |
 |---|---|---|
-| `NovoChamadoView` | 10 MB | `Arquivo muito grande. O tamanho máximo é 10 MB.` |
-| `ChamadosView` | 5 MB / arquivo | `"<nome>" é muito grande. O tamanho máximo é 5 MB.` |
-| `ChamadosView` | 5 arquivos | `Máximo de 5 anexos por mensagem.` |
+| `NovoChamadoView` | 5 MB | `"<nome>" maior que 5MB` |
+| `ChamadosView` | 5 MB / arquivo | `"<nome>" maior que 5MB` |
+| `ChamadosView` | 5 arquivos | `Máximo de 5 anexos por envio.` |
+
+> **Corrigido em 12/10/2026.** A tabela acima dizia **10 MB** para o
+> `NovoChamadoView`, contra os 5 MB que o servidor sempre aceitou: a escola
+> escolhia um `.jpg` de 8 MB, o navegador aceitava, e a resposta era um 400
+> `VALIDATION_ERROR` que não dizia qual era o problema.
+>
+> A validação agora vive em `src/utils/anexos.ts`, que espelha o contrato do
+> servidor, e vale para todas as telas. O portal **não** importa `@shared/api`
+> (não tem a dependência no `package.json`), então a lista é uma cópia manual —
+> conferida item a item contra o backend: mesmas 25 extensões, mesma ordem, mesmo
+> MIME por extensão. Há um verificador em `orq/tools/conferir-contrato-anexo.mjs`
+> que detecta a divergência quando alguém mexer num dos lados.
+
+### Extensão é validada no servidor (desde 12/10/2026)
+
+Antes **não existia** validação de extensão no backend, e o bucket `anexos` é
+público com o `contentType` declarado pelo cliente: um `.html` ou `.svg` era
+aceito e servível como `text/html` no próprio domínio. Agora:
+
+| Situação | Resposta |
+|---|---|
+| Extensão fora da allowlist | `400` nomeando o arquivo e a extensão |
+| `.png` declarado como `text/html` | `400` |
+| Arquivo sem extensão | `400` |
+| Acima de 5 MB | `400` nomeando o arquivo |
+| Corpo acima do limite do body-parser | **`413`** (era `500`) |
+
+O `413` importa por si: antes, uma escola mandando arquivo grande **acordava a
+administração com alerta de erro interno do sistema**. O `errorHandler` passou a
+tratar `entity.too.large` e a não notificar nesse caso.
+
+Os limites são sobrescrevíveis por env: `ANEXO_MAX_BYTES`,
+`ANEXO_MAX_POR_PEDIDO`, `ANEXO_EXTENSOES`, `LIMITE_CORPO_JSON`.
+
+### Anexo de pergunta do formulário
+
+`POST /chamados` aceita `anexos`, `anexosPergunta` e o `anexoBase64` legado, e
+**os três passam pela mesma validação**. Antes:
+
+- `anexosPergunta` era **descartado em silêncio** — o portal enviava e o backend
+  lia só `anexos`;
+- `anexoBase64` era costurado **depois** de toda a validação, então passava
+  24 MB inteiros.
+
+A resposta 201 devolve por anexo `nome`, `tipo`, `url`, `path`, `pasta` e — só
+nos que vieram de pergunta — `perguntaId` e `pergunta`. Sem isso o portal recebia
+o arquivo e não sabia a qual pergunta ele pertencia.
 
 ---
 
