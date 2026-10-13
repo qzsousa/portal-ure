@@ -34,6 +34,7 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | **Por que a senha não se digita no lugar do código** (primeiro acesso) | **[15 · Primeiro acesso: código no lugar da senha](./15-primeiro-acesso-codigo.md)** |
 | **O que fazer quando alguém esqueceu a senha** (senha provisória) | **[15 · Primeiro acesso: código no lugar da senha](./15-primeiro-acesso-codigo.md)** |
 | **Por que um técnico não entra em Inventário** (rota permitida, 403) | [04 · Autenticação e permissões](./04-autenticacao-e-permissoes.md) |
+| **Esquema de comentários e curtidas nos tutoriais** | [16 · Tutoriais — comentários e curtidas](./16-tutoriais-comentarios-e-curtidas.md) |
 
 ---
 
