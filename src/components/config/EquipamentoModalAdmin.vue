@@ -7,13 +7,14 @@
  * As mudanças são aplicadas no próprio modal (EquipamentoFormModal.vue).
  */
 import { ref } from 'vue'
-import { ArrowDown, ArrowUp, Eye, RotateCcw, Save } from '@lucide/vue'
+import { ArrowDown, ArrowUp, Eye, Plus, RotateCcw, Save, Trash2 } from '@lucide/vue'
 import EquipamentoFormModal from '@/components/equipamentos/EquipamentoFormModal.vue'
 import { PERFIS_USUARIO, useEquipamentoModalConfig } from '@/composables/useEquipamentoModalConfig'
 import { useUiStore } from '@/stores/ui'
 
 const ui = useUiStore()
-const { ordenados, salvar, restaurar } = useEquipamentoModalConfig()
+const { ordenados, salvar, restaurar, novaPergunta, removerPergunta, chaveEhFixo } =
+  useEquipamentoModalConfig()
 
 const previewAberto = ref(false)
 
@@ -60,6 +61,19 @@ function alternarPerfil(campo: any, perfil: string) {
 function abrirPreview() {
   previewAberto.value = true
 }
+
+/** Nova pergunta livre: entra em edição já selecionada no fim da lista. */
+function adicionarPergunta() {
+  novaPergunta()
+  ui.info('Pergunta adicionada. Edite o rótulo e clique em Salvar.')
+}
+
+function excluirPergunta(chave: string, rotulo: string) {
+  if (chaveEhFixo(chave)) return
+  if (!window.confirm(`Excluir a pergunta "${rotulo}"?`)) return
+  removerPergunta(chave)
+  ui.success('Pergunta excluída da configuração.')
+}
 </script>
 
 <template>
@@ -80,6 +94,10 @@ function abrirPreview() {
         <button class="btn btn-outline" type="button" @click="abrirPreview">
           <Eye :size="15" />
           Pré-visualizar
+        </button>
+        <button class="btn btn-outline" type="button" @click="adicionarPergunta">
+          <Plus :size="15" />
+          Nova pergunta
         </button>
         <button class="btn btn-primary" type="button" @click="salvarConfig">
           <Save :size="15" />
@@ -108,8 +126,19 @@ function abrirPreview() {
 
         <div class="ema-corpo">
           <div class="ema-linha1">
-            <code class="ema-chave">{{ c.chave }}</code>
-            <input v-model="c.rotulo" class="input ema-rotulo" placeholder="Rótulo exibido no modal" />
+            <code class="ema-chave">{{ c.personalizada ? 'extra' : c.chave }}</code>
+            <input
+              v-model="c.rotulo"
+              class="input ema-rotulo"
+              placeholder="Rótulo exibido no modal"
+            />
+            <div v-if="c.personalizada" class="ema-switches">
+              <select v-model="c.tipo" class="select-input slim ema-tipo">
+                <option value="texto">Texto</option>
+                <option value="textarea">Texto longo</option>
+                <option value="opcoes">Opções</option>
+              </select>
+            </div>
             <div class="ema-switches">
               <label class="switch" :class="{ on: c.ativo }">
                 <input type="checkbox" v-model="c.ativo" />
@@ -122,6 +151,12 @@ function abrirPreview() {
             </div>
           </div>
           <input v-model="c.ajuda" class="input ema-ajuda" placeholder="Texto de ajuda (opcional)" />
+          <input
+            v-if="c.personalizada && c.tipo === 'opcoes'"
+            v-model="c.opcoes"
+            class="input ema-ajuda"
+            placeholder="Opções separadas por vírgula (ex.: Sim, Não, Trocar)"
+          />
           <div class="ema-perfis">
             <span class="ema-perfis-rotulo">Quem preenche:</span>
             <div class="ema-chips">
@@ -138,6 +173,15 @@ function abrirPreview() {
             </div>
           </div>
         </div>
+        <button
+          v-if="c.personalizada"
+          class="ico-btn perigo ema-excluir"
+          type="button"
+          title="Excluir pergunta"
+          @click="excluirPergunta(c.chave, c.rotulo)"
+        >
+          <Trash2 :size="14" />
+        </button>
       </div>
     </div>
 
@@ -384,6 +428,19 @@ function abrirPreview() {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+.ema-tipo {
+  min-width: 130px;
+}
+.ema-excluir {
+  align-self: center;
+  flex-shrink: 0;
+}
+.ico-btn.perigo {
+  color: var(--red);
+}
+.ico-btn.perigo:hover:not(:disabled) {
+  background: var(--red-soft);
 }
 @media (max-width: 640px) {
   .ema-campos {

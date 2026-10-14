@@ -26,7 +26,10 @@ import {
 } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { useEquipamentoModalConfig } from '@/composables/useEquipamentoModalConfig'
+import {
+  useEquipamentoModalConfig,
+  type EquipamentoCampoConfig,
+} from '@/composables/useEquipamentoModalConfig'
 import type { Equipamento } from '@/types'
 
 /** Escola FILHA: só visualiza o parque compartilhado com a Mãe. */
@@ -118,6 +121,59 @@ let tokenSpecs = 0
 
 const editando = computed(() => props.item !== null)
 const extraviado = computed(() => form.status === 'Extraviado')
+
+/**
+ * Perguntas livres criadas pelo ADMIN.
+ *
+ * O SCE não tem coluna para elas: a resposta viaja no `observacoes` do
+ * equipamento, entre marcadores, para o valor sobreviver ao cadastro e poder
+ * ser lido de volta na edição.
+ */
+const MARCADOR_EXTRA = /^\[extra:([^\]]+)\]\s?(.*)$/
+
+/** Respostas das perguntas extras: `chave` -> texto. */
+const extras = reactive<Record<string, string>>({})
+
+/** Perguntas extras ativas e liberadas para o perfil logado. */
+const perguntasExtras = computed(() =>
+  cfgEquip
+    .perguntasExtras.value.filter((c) => c.ativo && cfgEquip.permitidoPara(c.chave, auth.user?.nivel)),
+)
+
+/** Separa o `observacoes` gravado em observações livres + respostas extras. */
+function separarExtras(texto: string): { base: string; valores: Record<string, string> } {
+  const base: string[] = []
+  const valores: Record<string, string> = {}
+  for (const linha of String(texto ?? '').split('\n')) {
+    const m = linha.match(MARCADOR_EXTRA)
+    if (m) {
+      valores[m[1]] = m[2] ?? ''
+    } else {
+      base.push(linha)
+    }
+  }
+  return { base: base.join('\n').trim(), valores }
+}
+
+/**
+ * Junta observações livres + respostas extras no texto que vai ao SCE.
+ *
+ * Percorre TODAS as extras configuradas, e não só as visíveis para o perfil:
+ * quem não enxerga uma pergunta não pode apagar a resposta de outro.
+ */
+function juntarExtras(base: string): string {
+  const linhas = [String(base ?? '').trim()].filter(Boolean)
+  for (const p of cfgEquip.perguntasExtras.value) {
+    const valor = (extras[p.chave] ?? '').trim()
+    if (valor) linhas.push(`[${p.chave}] ${valor}`)
+  }
+  return linhas.join('\n')
+}
+
+/** Perguntas extras obrigatórias que ficaram sem resposta. */
+function faltaExtrasObrigatorias(): EquipamentoCampoConfig | null {
+  return perguntasExtras.value.find((p) => p.obrigatorio && !(extras[p.chave] ?? '').trim()) ?? null
+}
 
 /** Rótulo configurável do campo (fallback para o padrão do modal). */
 function campoRotulo(chave: string, padrao: string): string {
@@ -359,6 +415,7 @@ function preencher(item: Equipamento | null) {
   custom.categoria = ''
   custom.marca = ''
   custom.modelo = ''
+  for (const chave of Object.keys(extras)) delete extras[chave]
   if (item) {
     form.unidade = item.unidade
     form.categoria = item.categoria
@@ -381,7 +438,10 @@ function preencher(item: Equipamento | null) {
     form.armazenamento = item.armazenamento || ''
     form.tamanhoTela = item.tamanhoTela || ''
     form.responsavelAtual = item.responsavelAtual || ''
-    form.observacoes = item.observacoes || ''
+    // As respostas das perguntas extras moram no `observacoes`, com marcador.
+    const separacao = separarExtras(item.observacoes || '')
+    form.observacoes = separacao.base
+    Object.assign(extras, separacao.valores)
     anexoJaSalvo.value = item.boletimOcorrenciaAnexoUrl || ''
   } else {
     form.unidade = auth.user?.nivel === 'ADMIN' ? '' : auth.user?.filial || ''
@@ -448,6 +508,8 @@ function validar(): string | null {
     if (!form.boletimOcorrencia.trim())
       return 'Informe o número do Boletim de Ocorrência.'
   }
+  const faltando = faltaExtrasObrigatorias()
+  if (faltando) return `Responda "${faltando.rotulo}" antes de salvar.`
   return null
 }
 
@@ -486,7 +548,7 @@ async function salvar() {
       armazenamento: form.armazenamento.trim(),
       tamanhoTela: form.tamanhoTela.trim(),
       responsavelAtual: form.responsavelAtual.trim(),
-      observacoes: form.observacoes.trim(),
+      observacoes: juntarExtras(form.observacoes),
     }
 
     // O anexo entra como base64 no corpo do POST (o SCE valida pelos magic
@@ -816,6 +878,43 @@ onMounted(async () => {
         <label>{{ campoRotulo('observacoes', 'Observações') }}</label>
         <textarea v-model="form.observacoes" class="input textarea" placeholder="Opcional" />
       </div>
+
+      <!-- Perguntas livres criadas no ADMIN (gravadas no campo observacoes). -->
+      <template v-if="perguntasExtras.length">
+        <div class="field full">
+          <div class="secao-titulo">
+            <span>Preguntas adicionais</span>
+          </div>
+        </div>
+        <div
+          v-for="p in perguntasExtras"
+          :key="p.chave"
+          class="field"
+          :class="{ full: p.tipo === 'textarea' }"
+        >
+          <label>
+            {{ p.rotulo }}{{ p.obrigatorio ? ' *' : '' }}
+            <span v-if="!p.obrigatorio" class="opcional">(opcional)</span>
+          </label>
+          <textarea
+            v-if="p.tipo === 'textarea'"
+            v-model="extras[p.chave]"
+            class="input textarea"
+            :placeholder="p.ajuda || 'Responda...'"
+          />
+          <select v-else-if="p.tipo === 'opcoes'" v-model="extras[p.chave]" class="select-input">
+            <option value="" disabled>Selecione...</option>
+            <option v-for="o in cfgEquip.opcoesDe(p)" :key="o" :value="o">{{ o }}</option>
+          </select>
+          <input
+            v-else
+            v-model="extras[p.chave]"
+            class="input"
+            :placeholder="p.ajuda || 'Responda...'"
+          />
+          <p v-if="p.ajuda && p.tipo !== 'textarea'" class="dica">{{ p.ajuda }}</p>
+        </div>
+      </template>
     </div>
 
     <p v-if="erroLocal" class="erro-form">{{ erroLocal }}</p>

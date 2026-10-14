@@ -17,6 +17,10 @@ export interface EquipamentoCampoConfig {
   ordem: number
   /** Perfis (nível do usuário) que veem/preenchem esta pergunta. Vazio = todos. */
   perfis: string[]
+  /** Perguntas criadas pelo ADMIN: texto livre em vez de campo fixo do SCE. */
+  personalizada?: boolean
+  /** Lista de opções (separadas por vírgula) quando `tipo` = 'opcoes'. */
+  opcoes?: string
 }
 
 export const PERFIS_USUARIO = ['ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'] as const
@@ -42,23 +46,36 @@ export const CAMPOS_EQUIPAMENTO_DEFAULT: EquipamentoCampoConfig[] = [
   { chave: 'observacoes', rotulo: 'Observações', ajuda: '(opcional)', tipo: 'textarea', obrigatorio: false, ativo: true, ordem: 16, perfis: [...PERFIS_USUARIO] },
 ]
 
+function perfisNormalizados(valor: unknown): string[] {
+  if (!Array.isArray(valor) || !valor.length) return [...PERFIS_USUARIO]
+  return valor.filter((p): p is string => PERFIS_USUARIO.includes(p as never))
+}
+
+/** Campos fixos do SCE não podem virar pergunta livre (o servidor não tem coluna). */
+function chaveEhFixo(chave: string): boolean {
+  return CAMPOS_EQUIPAMENTO_DEFAULT.some((c) => c.chave === chave)
+}
+
 function normalizar(lista: EquipamentoCampoConfig[]): EquipamentoCampoConfig[] {
   const base = new Map(CAMPOS_EQUIPAMENTO_DEFAULT.map((c) => [c.chave, c]))
   const result: EquipamentoCampoConfig[] = []
   for (const item of lista || []) {
-    if (!item || typeof item.chave !== 'string' || !base.has(item.chave)) continue
-    const padrao = base.get(item.chave)!
+    if (!item || typeof item.chave !== 'string' || !item.chave.trim()) continue
+    const padrao = base.get(item.chave)
+    // Chave fora do catálogo e sem o prefixo de pergunta extra: config inválida.
+    if (!padrao && !item.chave.startsWith('extra:')) continue
+    const tipo = item.tipo && ['texto', 'opcoes', 'textarea', 'select'].includes(item.tipo) ? item.tipo : (padrao?.tipo ?? 'texto')
     result.push({
       chave: item.chave,
-      rotulo: String(item.rotulo ?? padrao.rotulo),
-      ajuda: String(item.ajuda ?? padrao.ajuda ?? ''),
-      tipo: item.tipo ?? padrao.tipo,
-      obrigatorio: Boolean(item.obrigatorio ?? padrao.obrigatorio),
+      rotulo: String(item.rotulo ?? padrao?.rotulo ?? '').trim() || 'Pergunta',
+      ajuda: String(item.ajuda ?? padrao?.ajuda ?? ''),
+      tipo,
+      obrigatorio: Boolean(item.obrigatorio ?? padrao?.obrigatorio),
       ativo: item.ativo !== false,
-      ordem: Number.isFinite(item.ordem) ? (item.ordem as number) : padrao.ordem,
-      perfis: Array.isArray(item.perfis) && item.perfis.length
-        ? item.perfis.filter((p) => PERFIS_USUARIO.includes(p as typeof PERFIS_USUARIO[number]))
-        : [...PERFIS_USUARIO],
+      ordem: Number.isFinite(item.ordem) ? (item.ordem as number) : (padrao?.ordem ?? result.length + 1),
+      perfis: perfisNormalizados(item.perfis),
+      personalizada: !padrao ? true : Boolean(item.personalizada),
+      opcoes: String(item.opcoes ?? ''),
     })
   }
   // Adiciona campos novos do default que ainda não existem na config.
@@ -111,6 +128,33 @@ export function useEquipamentoModalConfig() {
     campos.value = restaurarConfigEquipamento()
   }
 
+  /**
+   * Cria uma pergunta livre. A resposta não tem coluna no SCE: o modal grava
+   * no `observacoes` do equipamento, o que preserva a resposta no banco.
+   */
+  function novaPergunta(): EquipamentoCampoConfig {
+    const maior = campos.value.reduce((max, c) => Math.max(max, c.ordem), 0)
+    const pergunta: EquipamentoCampoConfig = {
+      chave: `extra:${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      rotulo: 'Nova pergunta',
+      ajuda: '',
+      tipo: 'texto',
+      obrigatorio: false,
+      ativo: true,
+      ordem: maior + 1,
+      perfis: [...PERFIS_USUARIO],
+      personalizada: true,
+      opcoes: '',
+    }
+    campos.value = [...campos.value, pergunta]
+    return pergunta
+  }
+
+  function removerPergunta(chave: string): void {
+    if (chaveEhFixo(chave)) return
+    campos.value = campos.value.filter((c) => c.chave !== chave)
+  }
+
   function obter(chave: string): EquipamentoCampoConfig | undefined {
     return campos.value.find((c) => c.chave === chave)
   }
@@ -139,5 +183,32 @@ export function useEquipamentoModalConfig() {
     return perfis.includes(nivel)
   }
 
-  return { campos, ordenados, salvar, restaurar, obter, visivel, rotulo, ajuda, obrigatorio, permitidoPara }
+  /** Perguntas livres configuradas pelo ADMIN (não são campos fixos do SCE). */
+  const perguntasExtras = computed(() => ordenados.value.filter((c) => c.personalizada))
+
+  /** Lista de opções já limpa (sem vazios). */
+  function opcoesDe(c: EquipamentoCampoConfig): string[] {
+    return String(c.opcoes ?? '')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean)
+  }
+
+  return {
+    campos,
+    ordenados,
+    perguntasExtras,
+    salvar,
+    restaurar,
+    novaPergunta,
+    removerPergunta,
+    obter,
+    visivel,
+    rotulo,
+    ajuda,
+    obrigatorio,
+    permitidoPara,
+    opcoesDe,
+    chaveEhFixo,
+  }
 }
