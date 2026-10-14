@@ -210,6 +210,84 @@ h4 {
   background: var(--surface-muted);
 }
 
+/* ============ Cor de fundo da linha por status ============
+   Mantido do SCE de propósito: quem inventaria equipamento há anos lê a tabela
+   pela cor da linha, não pelo badge. O hover continua por cima para não
+   apagar a codificação ao passar o mouse. */
+.linha-status-disponivel { background: var(--linha-disponivel); }
+.linha-status-emprestado { background: var(--linha-emprestado); }
+.linha-status-manutencao { background: var(--linha-manutencao); }
+.linha-status-em-verificacao { background: var(--linha-em-verificacao); }
+.linha-status-quebrado { background: var(--linha-quebrado); }
+.linha-status-extraviado { background: var(--linha-extraviado); }
+.linha-status-inservivel { background: var(--linha-inservivel); }
+.linha-status-removido { background: var(--linha-removido); opacity: 0.7; }
+
+/* Andamento do serviço, na tela de Manutenção (mesmos tons dos KPIs). */
+.linha-man-pendente { background: var(--red-soft); }
+.linha-man-andamento { background: var(--blue-soft); }
+.linha-man-concluido { background: var(--green-soft); }
+
+/* ============ Impressão ============
+   A repartição ainda imprime a lista de equipamentos. O padrão é o do SCE:
+   some com a navegação e os controles, mantém a tabela e carimba a data. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .sidebar,
+  .topbar {
+    display: none !important;
+  }
+
+  /* Sem a sidebar o flex não precisa mais segurar duas colunas. */
+  .shell {
+    display: block !important;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .card {
+    box-shadow: none;
+    border: 1px solid #c9c9c9;
+    break-inside: avoid;
+  }
+
+  .table thead th {
+    background: #f1f1f1 !important;
+    color: #000 !important;
+  }
+
+  .table tbody tr {
+    break-inside: avoid;
+  }
+
+  .print-cabecalho {
+    display: block !important;
+  }
+}
+
+.print-cabecalho {
+  display: none;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--sidebar-bg);
+}
+
+.print-cabecalho h2 {
+  font-size: 15px;
+  color: #000;
+}
+
+.print-cabecalho p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #444;
+}
+
 /* Scrollbar discreta */
 ::-webkit-scrollbar {
   width: 10px;

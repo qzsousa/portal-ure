@@ -10,7 +10,7 @@
  *   recusa o cadastro sem o anexo
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { FileUp, Loader2, Paperclip, X } from '@lucide/vue'
+import { Dices, FileUp, Loader2, Paperclip, X } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { apiError } from '@/utils/apiError'
 import { getEspecificacoesPorModelo } from '@/utils/catalogoModelos'
@@ -28,7 +28,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import type { Equipamento } from '@/types'
 
-/** Escola FILHA: só visualiza o parque compartilhado com a MÃE. */
+/** Escola FILHA: só visualiza o parque compartilhado com a Mãe. */
 const somenteLeitura = computed(() => auth.somenteLeituraEquipamentos)
 
 const MODO_LEITURA_MSG =
@@ -59,12 +59,16 @@ const form = reactive({
   marca: '',
   modelo: '',
   patrimonio: '',
+  justificativaPatrimonio: '',
+  numeroEtiqueta: '',
   numeroSerie: '',
   justificativaNumeroSerie: '',
   status: 'Disponível',
+  vinculadoBlueMonitor: 'Não',
   numeroChamadoManutencao: '',
   descricaoQuebrado: '',
   boletimOcorrencia: '',
+  justificativaVerificacao: '',
   sistemaOperacional: '',
   processador: '',
   memoriaRAM: '',
@@ -112,6 +116,29 @@ let tokenSpecs = 0
 
 const editando = computed(() => props.item !== null)
 const extraviado = computed(() => form.status === 'Extraviado')
+
+/**
+ * Status herdado que não está na lista de opções (ex.: "Em verificação",
+ * gravado no SCE antigo). Aparece no select para o usuário enxergar e trocar —
+ * sem isso a edição transformaria o status em "Disponível" sem avisar.
+ */
+const statusHerdado = computed(() => {
+  const atual = props.item?.status
+  return atual && !STATUS_OPCOES.includes(atual) ? atual : ''
+})
+const statusOpcoes = computed(() =>
+  statusHerdado.value ? [...STATUS_OPCOES, statusHerdado.value] : STATUS_OPCOES,
+)
+
+/**
+ * Status a abrir no formulário: o do próprio equipamento, seja ele da lista
+ * ou não (`statusOpcoes` reinsere os desconhecidos no select). Sem
+ * equipamento, "Disponível".
+ */
+function statusInicial(item: Equipamento | null): string {
+  return item?.status || 'Disponível'
+}
+
 /** Já existe B.O. no banco (ou upload novo): o SCE só exige UM dos dois. */
 const temBoletim = computed(() => Boolean(anexoArquivo.value) || Boolean(anexoJaSalvo.value))
 
@@ -204,6 +231,26 @@ function onModelo() {
   if (!hidratando) autoPreencherSpecs()
 }
 
+/* ---------- Número de série sem etiqueta física ---------- */
+
+/**
+ * Gera um número de série provisório para quem não tem a etiqueta do fabricante.
+ * Mesmo formato do SCE: prefixo + data + 4 aleatórios — só precisa ser único
+ * dentro do parque, e a checagem de duplicado é do servidor.
+ */
+function gerarNumeroSerie() {
+  const prefixo = 'SCE'
+  const d = new Date()
+  const data = [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('')
+  const aleatorio = Array.from({ length: 4 }, () => Math.floor(Math.random() * 10)).join('')
+  form.numeroSerie = `${prefixo}-${data}-${aleatorio}`
+  form.justificativaNumeroSerie = ''
+}
+
 /* ---------- Boletim de Ocorrência: escolha/limpeza do anexo ---------- */
 
 function limparAnexo() {
@@ -278,6 +325,12 @@ function arquivoParaBase64(file: File): Promise<string> {
   })
 }
 
+/**
+ * Hidrata o formulário. No modo editar as justificativas já gravadas são
+ * carregadas: o SCE só as exige na criação, mas em editá-las o campo vinha
+ * vazio e o comparador de mudanças gravava `''` por cima — apagando a
+ * justificativa original a cada edição do equipamento.
+ */
 function preencher(item: Equipamento | null) {
   // Enquanto hidrata, o watcher de `form.modelo` não pode sobrescrever os
   // detalhes técnicos que já vêm gravados no equipamento.
@@ -299,12 +352,16 @@ function preencher(item: Equipamento | null) {
     form.marca = item.marca
     form.modelo = item.modelo
     form.patrimonio = item.patrimonio || ''
+    form.justificativaPatrimonio = item.justificativaPatrimonio || ''
+    form.numeroEtiqueta = item.numeroEtiqueta || ''
     form.numeroSerie = item.numeroSerie || ''
-    form.justificativaNumeroSerie = ''
-    form.status = STATUS_OPCOES.includes(item.status) ? item.status : 'Disponível'
+    form.justificativaNumeroSerie = item.justificativaNumeroSerie || ''
+    form.status = statusInicial(item)
+    form.vinculadoBlueMonitor = (item.vinculadoBlueMonitor || '').toLowerCase() === 'sim' ? 'Sim' : 'Não'
     form.numeroChamadoManutencao = item.numeroChamadoManutencao || ''
     form.descricaoQuebrado = item.descricaoQuebrado || ''
     form.boletimOcorrencia = item.boletimOcorrencia || ''
+    form.justificativaVerificacao = item.justificativaVerificacao || ''
     form.sistemaOperacional = item.sistemaOperacional || ''
     form.processador = item.processador || ''
     form.memoriaRAM = item.memoriaRAM || ''
@@ -319,12 +376,16 @@ function preencher(item: Equipamento | null) {
     form.marca = ''
     form.modelo = ''
     form.patrimonio = ''
+    form.justificativaPatrimonio = ''
+    form.numeroEtiqueta = ''
     form.numeroSerie = ''
     form.justificativaNumeroSerie = ''
     form.status = 'Disponível'
+    form.vinculadoBlueMonitor = 'Não'
     form.numeroChamadoManutencao = ''
     form.descricaoQuebrado = ''
     form.boletimOcorrencia = ''
+    form.justificativaVerificacao = ''
     form.sistemaOperacional = ''
     form.processador = ''
     form.memoriaRAM = ''
@@ -396,12 +457,16 @@ async function salvar() {
       marca: valorMarca.value,
       modelo: valorModelo.value,
       patrimonio: form.patrimonio.trim(),
+      justificativaPatrimonio: form.justificativaPatrimonio.trim(),
+      numeroEtiqueta: form.numeroEtiqueta.trim(),
       numeroSerie: form.numeroSerie.trim(),
       justificativaNumeroSerie: form.justificativaNumeroSerie.trim(),
       status: form.status,
+      vinculadoBlueMonitor: form.vinculadoBlueMonitor,
       numeroChamadoManutencao: form.numeroChamadoManutencao.trim(),
       descricaoQuebrado: form.descricaoQuebrado.trim(),
       boletimOcorrencia: extraviado.value ? form.boletimOcorrencia.trim() : '',
+      justificativaVerificacao: form.justificativaVerificacao.trim(),
       sistemaOperacional: form.sistemaOperacional.trim(),
       processador: form.processador.trim(),
       memoriaRAM: form.memoriaRAM.trim(),
@@ -429,12 +494,16 @@ async function salvar() {
         ['marca', it.marca],
         ['modelo', it.modelo],
         ['patrimonio', it.patrimonio],
+        ['justificativaPatrimonio', it.justificativaPatrimonio],
+        ['numeroEtiqueta', it.numeroEtiqueta],
         ['numeroSerie', it.numeroSerie],
         ['justificativaNumeroSerie', it.justificativaNumeroSerie],
         ['status', it.status],
+        ['vinculadoBlueMonitor', it.vinculadoBlueMonitor],
         ['numeroChamadoManutencao', it.numeroChamadoManutencao],
         ['descricaoQuebrado', it.descricaoQuebrado],
         ['boletimOcorrencia', it.boletimOcorrencia],
+        ['justificativaVerificacao', it.justificativaVerificacao],
         ['sistemaOperacional', it.sistemaOperacional],
         ['processador', it.processador],
         ['memoriaRAM', it.memoriaRAM],
@@ -446,7 +515,13 @@ async function salvar() {
       ]
       for (const [campo, original] of chComp) {
         const novo = payload[campo] as string | undefined
-        if (String(novo || '') !== String(original || '')) campos[campo] = novo || ''
+        /* O SCE grava o BlueMonitor como "Sim"/"Não"; comparar sem normalizar
+         * marcaria alteração a cada edição de equipamento não vinculado. */
+        const mesmo =
+          campo === 'vinculadoBlueMonitor'
+            ? String(novo || 'Não').toLowerCase() === String(original || 'Não').toLowerCase()
+            : String(novo || '') === String(original || '')
+        if (!mesmo) campos[campo] = novo || ''
       }
       // Anexo novo é uma mudança por si só (o SCE troca o arquivo no storage).
       if (payload._anexoBoletim) campos._anexoBoletim = payload._anexoBoletim
@@ -517,7 +592,7 @@ onMounted(async () => {
       <div class="field">
         <label>Status *</label>
         <select v-model="form.status" class="select-input">
-          <option v-for="s in STATUS_OPCOES" :key="s" :value="s">{{ s }}</option>
+          <option v-for="s in statusOpcoes" :key="s" :value="s">{{ s }}</option>
         </select>
       </div>
 
@@ -572,13 +647,36 @@ onMounted(async () => {
       </div>
 
       <div class="field">
-        <label>Patrimônio</label>
+        <label>Patrimônio <span class="opcional">(opcional)</span></label>
         <input v-model="form.patrimonio" class="input" placeholder="Opcional" />
+        <input
+          v-if="!form.patrimonio.trim()"
+          v-model="form.justificativaPatrimonio"
+          class="input mt6"
+          placeholder="Justificativa da ausência do patrimônio *"
+        />
+      </div>
+
+      <div class="field">
+        <label>Nº da etiqueta <span class="opcional">(opcional)</span></label>
+        <input v-model="form.numeroEtiqueta" class="input" placeholder="Etiqueta colocada pela escola" />
+        <p class="dica">Controle interno da escola — não substitui o patrimônio nem o nº de série.</p>
       </div>
 
       <div class="field">
         <label>Nº de série</label>
-        <input v-model="form.numeroSerie" class="input" placeholder="Se não houver, justifique abaixo" />
+        <div class="serie-linha">
+          <input v-model="form.numeroSerie" class="input" placeholder="Se não houver, justifique abaixo" />
+          <button
+            class="btn-gerar"
+            type="button"
+            title="Gerar um número de série provisório"
+            @click="gerarNumeroSerie"
+          >
+            <Dices :size="14" />
+            Gerar
+          </button>
+        </div>
         <input
           v-if="!form.numeroSerie.trim()"
           v-model="form.justificativaNumeroSerie"
@@ -587,9 +685,26 @@ onMounted(async () => {
         />
       </div>
 
+      <div class="field">
+        <label>Vinculado no BlueMonitor? <span class="opcional">(opcional)</span></label>
+        <select v-model="form.vinculadoBlueMonitor" class="select-input">
+          <option value="Não">Não</option>
+          <option value="Sim">Sim</option>
+        </select>
+      </div>
+
       <div v-if="form.status === 'Manutenção'" class="field">
         <label>Nº do chamado de manutenção</label>
         <input v-model="form.numeroChamadoManutencao" class="input" placeholder="Ex.: CH-20260916-0004" />
+      </div>
+
+      <div v-if="form.status === 'Em verificação'" class="field full">
+        <label>Justificativa da verificação *</label>
+        <textarea
+          v-model="form.justificativaVerificacao"
+          class="input textarea"
+          placeholder="Por que o equipamento está em verificação"
+        />
       </div>
 
       <div v-if="form.status === 'Quebrado'" class="field full">
@@ -735,6 +850,39 @@ onMounted(async () => {
 
 .mt6 {
   margin-top: 6px;
+}
+
+/* ---------- Nº de série gerado ---------- */
+
+.serie-linha {
+  display: flex;
+  gap: 8px;
+}
+
+.serie-linha .input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-gerar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+}
+
+.btn-gerar:hover {
+  border-style: solid;
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blue-soft);
 }
 
 /* ---------- Detalhes técnicos ---------- */

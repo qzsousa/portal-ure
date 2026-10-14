@@ -30,7 +30,7 @@ export function montarEscopo(categoriaChave: string, rotulo?: string | null): st
 /**
  * Escopo de TIPOS de chamado que este usuário atende.
  *
- * `[]` (ou ausente) = SEM RESTRIÇÃO: o usuário respeita só a unidade, como
+ * `[]` (ou ausente) = SEM RESTRIÇão: o usuário respeita só a unidade, como
  * sempre. Preenchido, a unidade deixa de valer para CHAMADOS e o que limita é
  * o tipo — a pessoa atende todas as escolas, mas só destes chamados.
  *
@@ -58,7 +58,7 @@ export interface User {
   escopoTipos?: string[]
   /**
    * Rotas (telas) que este usuário pode abrir. `[]` ou ausente = SEM
-   * RESTRIÇÃO — o caso de todo mundo hoje, decidido só pelo `nivel`.
+   * RESTRIÇão — o caso de todo mundo hoje, decidido só pelo `nivel`.
    * Preenchido, o menu e o guard de rota escondem o que está fora da lista.
    * Cópia manual de `ROTAS_USUARIO` do contrato do backend: o portal não
    * importa `@shared/api`, e a chave precisa bater com a do servidor.
@@ -336,8 +336,40 @@ export interface Equipamento {
   observacoes?: string | null
   justificativaPatrimonio?: string | null
   justificativaNumeroSerie?: string | null
+  /** Etiqueta interna controlada pela escola (não confundir com o patrimônio). */
+  numeroEtiqueta?: string | null
+  /**
+   * Empréstimo em aberto, anexado pela tela a partir de `/emprestimos-ativos`.
+   * Ausente quando o equipamento não está emprestado.
+   */
+  emprestimo?: EmprestimoAtivo | null
   dataCadastro?: string
   dataUltimaAtualizacao?: string
+}
+
+/** Status possíveis de um registro de manutenção. */
+export type StatusManutencao = 'Pendente' | 'Em andamento' | 'Concluído'
+
+/**
+ * Empréstimo em aberto de um equipamento.
+ *
+ * `emAtraso` e `diasAtraso` são calculados pelo SCE (rota `/emprestimos-ativos`)
+ * para que todas as telas usem o mesmo corte de dia.
+ */
+export interface EmprestimoAtivo {
+  id: string
+  equipamentoId: string
+  patrimonio: string
+  unidade: string
+  responsavel: string
+  cpf: string
+  emailResponsavel: string
+  dataEmprestimo: string | null
+  dataPrevistaDevolucao: string | null
+  tipoEmprestimo: string | null
+  escolaDestino: string
+  emAtraso: boolean
+  diasAtraso: number
 }
 
 /** Resposta padrão da API do SCE: { success, data, error } */

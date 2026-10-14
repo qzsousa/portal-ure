@@ -60,6 +60,18 @@
   --ch-concluido: var(--green);
   --ch-concluido-bg: var(--green-soft);
 
+  /* Fundo da LINHA por status de equipamento.
+     O SCE pintava a linha inteira e quem usa o inventário há anos varre a
+     tabela por cor — o StatusPill sozinho mudaria esse hábito de leitura. */
+  --linha-disponivel: #e8f5e9;
+  --linha-emprestado: #e3f2fd;
+  --linha-manutencao: #fff3e0;
+  --linha-em-verificacao: #f3e5f5;
+  --linha-quebrado: #fde8ea;
+  --linha-extraviado: #ffebee;
+  --linha-inservivel: #efebe9;
+  --linha-removido: #eceff1;
+
   /* Forma */
   --radius-sm: 8px;
   --radius-md: 12px;

@@ -1,5 +1,6 @@
-import { computed, reactive } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import {
+  listarEmprestimosAtivos,
   listarEquipamentosDaFilial,
   listarEquipamentosGlobal,
   resumirStatus,
@@ -7,7 +8,7 @@ import {
   type ModeloCategoria,
 } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
-import type { Equipamento } from '@/types'
+import type { EmprestimoAtivo, Equipamento } from '@/types'
 
 /**
  * Validade da lista completa em cache. Só é usada no caminho de compatibilidade
@@ -28,6 +29,42 @@ export interface EquipFiltros {
 /** Comparação tolerante a espaço nas bordas, sem diferenciar caixa. */
 function mesmoTexto(a: string | null | undefined, b: string): boolean {
   return (a || '').trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+/**
+ * Colunas ordenáveis da tela.
+ *
+ * Mesmo conjunto que o SCE aceita em `/equipamentos-global?ordem=` — o
+ * servidor cai em `data_cadastro` para qualquer outra chave, então ordenar por
+ * Categoria ordenaria a Matriz por data e a filial por categoria.
+ */
+export type OrdemEquipamento = 'modelo' | 'patrimonio' | 'numeroSerie' | 'unidade' | 'status'
+
+/** Campo do equipamento correspondente a cada coluna ordenável. */
+const CAMPO_POR_ORDEM: Record<OrdemEquipamento, keyof Equipamento> = {
+  modelo: 'modelo',
+  patrimonio: 'patrimonio',
+  numeroSerie: 'numeroSerie',
+  unidade: 'unidade',
+  status: 'status',
+}
+
+/**
+ * Ordena a página no cliente (caminho dos perfis sem paginação no servidor).
+ * Ausência de valor vai para o fim em qualquer direção — "—" embaixo de quem
+ * tem dado é mais útil do que no meio da lista.
+ */
+function ordenarLocal(items: Equipamento[], ordem: OrdemEquipamento, direcao: 'asc' | 'desc'): Equipamento[] {
+  const sinal = direcao === 'asc' ? 1 : -1
+  const campo = CAMPO_POR_ORDEM[ordem]
+  return [...items].sort((a, b) => {
+    const va = (a[campo] as string | null | undefined) || ''
+    const vb = (b[campo] as string | null | undefined) || ''
+    if (!va && vb) return 1
+    if (va && !vb) return -1
+    const cmp = va.localeCompare(vb, 'pt-BR', { numeric: true, sensitivity: 'base' })
+    return cmp === 0 ? sinal : cmp * sinal
+  })
 }
 
 /** Rótulos não vazios, sem repetição, em ordem alfabética pt-BR. */
@@ -84,9 +121,15 @@ function agregar(items: Equipamento[]) {
  * - Perfil ADMIN (Matriz no SCE): usa /equipamentos-global (paginação e agregações do servidor)
  * - Demais perfis: baixa o escopo da filial e filtra/pagina localmente
  */
-export function useEquipamentos(pageSize = 10) {
+export function useEquipamentos(pageSizeInicial = 10) {
   const auth = useAuthStore()
   const isGlobal = computed(() => auth.user?.nivel === 'ADMIN')
+
+  /** Itens por página —seletor da barra de ferramentas, igual ao do SCE. */
+  const pageSize = ref(pageSizeInicial)
+  /** Coluna e sentido da ordenação; o clique no cabeçalho alterna o sentido. */
+  const ordem = ref<OrdemEquipamento>('modelo')
+  const direcao = ref<'asc' | 'desc'>('asc')
 
   const state = reactive({
     loading: true,
@@ -101,6 +144,11 @@ export function useEquipamentos(pageSize = 10) {
     porModelo: [] as ModeloCategoria[],
     /** Pares marca/modelo das cargas sem recorte — alimentam os selects em cascata. */
     catalogoModelos: [] as Array<{ marca: string; modelo: string }>,
+    /**
+     * Empréstimos em aberto por `equipamentoId`. Indexados à parte para não
+     * percorrer a lista toda a cada linha da tabela.
+     */
+    emprestimosPorEquipamento: {} as Record<string, EmprestimoAtivo>,
     todosCache: [] as Equipamento[],
     cacheCarregado: false,
   })
@@ -156,17 +204,49 @@ export function useEquipamentos(pageSize = 10) {
     return state.todosCache
   }
 
+  /**
+   * Carrega os empréstimos em aberto e indexa por equipamento.
+   *
+   * Falha aqui não pode derrubar a tela: o equipamento continua aparecendo,
+   * só sem a informação de prazo/responsável. Silencioso justamente por isso —
+   * a rota é um complemento, não a fonte da lista.
+   */
+  async function carregarEmprestimos() {
+    try {
+      const ativos = await listarEmprestimosAtivos()
+      const indice: Record<string, EmprestimoAtivo> = {}
+      for (const e of ativos) indice[e.equipamentoId] = e
+      state.emprestimosPorEquipamento = indice
+    } catch {
+      /* mantém o índice anterior */
+    }
+  }
+
+  /**
+   * Anexa o empréstimo correspondente a cada item.
+   *
+   * Roda depois das duas requisições terminarem: o índice e a lista chegam em
+   * paralelo, e anexar dentro de cada uma delas deixaria a última a responder
+   * sobrescrever o campo da anterior.
+   */
+  function anexarEmprestimos(itens: Equipamento[]) {
+    const indice = state.emprestimosPorEquipamento
+    for (const item of itens) item.emprestimo = indice[item.id] || null
+    return itens
+  }
+
   async function carregarServidor() {
     const { data, total, stats: s } = await listarEquipamentosGlobal({
-      limite: pageSize,
-      offset: (state.page - 1) * pageSize,
+      limite: pageSize.value,
+      offset: (state.page - 1) * pageSize.value,
       busca: filtros.busca,
       status: filtros.status,
       unidade: filtros.unidade,
       categoria: filtros.categoria,
       marca: filtros.marca,
       modelo: filtros.modelo,
-      ordem: 'modelo',
+      ordem: ordem.value,
+      direcao: direcao.value,
     })
     state.items = data
     state.total = total
@@ -219,8 +299,12 @@ export function useEquipamentos(pageSize = 10) {
     state.porUnidade = ag.porUnidade
     state.porModelo = ag.porModelo
     state.total = filtrados.length
-    const ini = (state.page - 1) * pageSize
-    state.items = filtrados.slice(ini, ini + pageSize)
+    /* Ordena ANTES de fatiar: aplicá-lo na página isolada faria a página 2
+     * trazer os menores valores em vez do continuamento da ordem — a lista
+     * pareceria embaralhada ao passar de uma página para a outra. */
+    const ordenados = ordenarLocal(filtrados, ordem.value, direcao.value)
+    const ini = (state.page - 1) * pageSize.value
+    state.items = ordenados.slice(ini, ini + pageSize.value)
   }
 
   /**
@@ -235,8 +319,12 @@ export function useEquipamentos(pageSize = 10) {
       state.erro = ''
     }
     try {
-      if (isGlobal.value) await carregarServidor()
-      else await carregarLocal(silencioso)
+      /* Os dois pedidos saem juntos: a lista não espera o pragmático falhar,
+       * nem o contrário. `carregarEmprestimos` engole o próprio erro. */
+      await Promise.all([isGlobal.value ? carregarServidor() : carregarLocal(silencioso), carregarEmprestimos()])
+      /* Agora que o índice de empréstimos está pronto, ele é aplicado à página
+       * que a outra requisição acabou de montar. */
+      state.items = anexarEmprestimos(state.items)
     } catch (e) {
       if (silencioso) return
       state.erro = e instanceof Error ? e.message : 'Falha ao carregar equipamentos.'
@@ -257,11 +345,33 @@ export function useEquipamentos(pageSize = 10) {
     void carregar()
   }
 
+  /** Trocar a quantidade por página volta para a primeira — senão a tela em branco. */
+  function definirPageSize(n: number) {
+    pageSize.value = n
+    state.page = 1
+    void carregar()
+  }
+
+  /** Clique no cabeçalho: mesma coluna inverte o sentido, outra coluna assume ascendente. */
+  function alternarOrdem(coluna: OrdemEquipamento) {
+    if (ordem.value === coluna) {
+      direcao.value = direcao.value === 'asc' ? 'desc' : 'asc'
+    } else {
+      ordem.value = coluna
+      direcao.value = 'asc'
+    }
+    state.page = 1
+    void carregar()
+  }
+
   return {
     state,
     filtros,
     stats,
     isGlobal,
+    pageSize,
+    ordem,
+    direcao,
     unidadesOpcoes,
     categoriasOpcoes,
     marcasOpcoes,
@@ -271,5 +381,7 @@ export function useEquipamentos(pageSize = 10) {
     carregar,
     aplicarFiltros,
     irParaPagina,
+    definirPageSize,
+    alternarOrdem,
   }
 }

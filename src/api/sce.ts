@@ -1,6 +1,6 @@
 import { sceApi } from './http'
 import type { AxiosResponse } from 'axios'
-import type { Equipamento, SceResponse } from '@/types'
+import type { Equipamento, EmprestimoAtivo, SceResponse, StatusManutencao } from '@/types'
 
 /**
  * Cliente da API do SCE (equipamentos). Usa o JWT do portal (emitido pelo
@@ -186,6 +186,7 @@ export interface EquipamentoPayload {
   modelo: string
   patrimonio?: string
   justificativaPatrimonio?: string
+  numeroEtiqueta?: string
   numeroSerie?: string
   justificativaNumeroSerie?: string
   status?: string
@@ -236,9 +237,85 @@ export async function removerEquipamento(id: string): Promise<void> {
   await unwrap(sceApi.post<SceResponse<unknown>>('/remover-equipamento', { id }))
 }
 
-/** Filiais/unidades ativas cadastradas (para selects de unidade). */
+/** Filiais/unidades ativas cadastradas (para selects de unidade e de empréstimo). */
 export async function listarFiliais(): Promise<string[]> {
   return unwrap(sceApi.get<SceResponse<string[]>>('/filiais-para-emprestimo'))
+}
+
+/* ---------- Empréstimo e devolução ---------- */
+
+/**
+ * Empréstimo interno (responsável da própria unidade) ou inter-escolar.
+ *
+ * `interno` grava o equipamento como Emprestado na própria unidade;
+ * `interestadual` exige `escolaDestino` e o SCE recusa o registro sem ela.
+ */
+export type TipoEmprestimo = 'interno' | 'interestadual'
+
+export interface EmprestimoPayload {
+  /** Sem padrão: o chamador decide quantos equipamentos vale a pena no pedido. */
+  ids: string[]
+  responsavel: string
+  cpf?: string
+  emailResponsavel?: string
+  /** Data prevista de devolução (`YYYY-MM-DD`) ou string vazia. */
+  dataPrevistaDevolucao?: string
+  observacoes?: string
+  tipoEmprestimo: TipoEmprestimo
+  escolaDestino?: string
+}
+
+/** Troca o status de todos os `ids` para Emprestado e abre um empréstimo para cada. */
+export async function registrarEmprestimo(payload: EmprestimoPayload): Promise<void> {
+  await unwrap(sceApi.post<SceResponse<null>>('/registrar-emprestimo', payload))
+}
+
+/** Encerra o empréstimo ativo de cada `id` e devolve o equipamento para Disponível. */
+export async function registrarDevolucao(ids: string[], observacao?: string): Promise<void> {
+  await unwrap(sceApi.post<SceResponse<null>>('/registrar-devolucao', { ids, observacao }))
+}
+
+/**
+ * Empréstimos em aberto do escopo do usuário.
+ *
+ * Sai numa rota à parte porque quem levou o equipamento e a data prevista de
+ * devolução vivem na tabela `emprestimos` do SCE — o `/equipamentos-*` não
+ * traz nenhum dos dois. `emAtraso`/`diasAtraso` já vêm calculados pelo servidor.
+ */
+export async function listarEmprestimosAtivos(): Promise<EmprestimoAtivo[]> {
+  return unwrap(sceApi.get<SceResponse<EmprestimoAtivo[]>>('/emprestimos-ativos'))
+}
+
+/* ---------- Manutenção ---------- */
+
+export interface RegistroManutencao {
+  id: string
+  equipamento_id: string
+  autor: string
+  data: string
+  descricao: string
+  status: string
+}
+
+/** Histórico de manutenções do equipamento, mais recente primeiro. */
+export async function listarRegistrosManutencao(equipamentoId: string): Promise<RegistroManutencao[]> {
+  return unwrap(
+    sceApi.get<SceResponse<RegistroManutencao[]>>('/registros-manutencao', { params: { equipamentoId } }),
+  )
+}
+
+/** Cria um registro de manutenção e espelha o status no equipamento. */
+export async function registrarManutencao(
+  equipamentoId: string,
+  descricao: string,
+  status: StatusManutencao,
+): Promise<void> {
+  await unwrap(sceApi.post<SceResponse<null>>('/registrar-manutencao', { equipamentoId, descricao, status }))
+}
+
+/** Muda só o `statusManutencao`, sem criar registro (usado nas ações em lote). */
+export async function atualizarStatusManutencao(equipamentoId: string, novoStatus: StatusManutencao): Promise<void> {
+  await unwrap(sceApi.post<SceResponse<null>>('/atualizar-status-manutencao', { equipamentoId, novoStatus }))
 }
 
 /* ---------- Configurações (somente Matriz) ---------- */

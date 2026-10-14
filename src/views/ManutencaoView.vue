@@ -7,6 +7,7 @@ import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { listarEquipamentosDaFilial, historicoEquipamento, type HistoricoItem } from '@/api/sce'
+import { classeLinhaManutencao } from '@/utils/linhaStatus'
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDateTime } from '@/utils/format'
 import type { Equipamento } from '@/types'
@@ -103,7 +104,7 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
     </div>
 
     <!-- Filtro -->
-    <div class="filtro-bar card">
+    <div class="filtro-bar card no-print">
       <label>Status:</label>
       <select :value="filtroStatus" class="select-input slim" @change="mudarStatusFiltro(($event.target as HTMLSelectElement).value)">
         <option value="">Todos</option>
@@ -123,7 +124,7 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
               <th>Unidade Escolar</th>
               <th>Descrição</th>
               <th>Status</th>
-              <th class="th-acoes">Ações</th>
+              <th class="th-acoes no-print">Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -133,7 +134,11 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
             <tr v-else-if="pagina.length === 0">
               <td colspan="7" class="td-center">Nenhum equipamento em manutenção.</td>
             </tr>
-            <tr v-for="item in pagina" :key="item.id">
+            <tr
+              v-for="item in pagina"
+              :key="item.id"
+              :class="classeLinhaManutencao(item.statusManutencao)"
+            >
               <td class="nowrap">{{ formatDateTime(item.dataUltimaAtualizacao) }}</td>
               <td>
                 <strong class="eq-modelo">{{ item.modelo }}</strong>
@@ -143,7 +148,7 @@ useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
               <td>{{ item.unidade }}</td>
               <td class="desc-cell">{{ item.descricaoQuebrado || '—' }}</td>
               <td><StatusPill :status="item.statusManutencao || 'Manutenção'" /></td>
-              <td class="td-acoes">
+              <td class="td-acoes no-print">
                 <RowActions
                   :itens="[{ rotulo: 'Ver detalhes e histórico', acao: () => abrirDetalhe(item) }]"
                 />
