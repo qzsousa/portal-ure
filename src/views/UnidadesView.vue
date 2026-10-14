@@ -122,6 +122,17 @@ const totalNaoAtribuido = computed(() =>
 
 const busca = ref('')
 const filtroEquip = ref<'' | 'com' | 'sem'>('')
+const sortCol = ref<'total' | 'disponiveis' | 'manutencao' | 'quebrados' | 'extraviados' | null>(null)
+const sortDir = ref<'asc' | 'desc'>('desc')
+
+function toggleSort(col: 'total' | 'disponiveis' | 'manutencao' | 'quebrados' | 'extraviados') {
+  if (sortCol.value === col) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  else {
+    sortCol.value = col
+    sortDir.value = 'desc'
+  }
+  estado.page = 1
+}
 const filtroTecnico = ref('')
 const filtroInventario = ref('')
 
@@ -205,7 +216,7 @@ const tecnicosOpcoes = computed(() =>
 
 const filtradas = computed(() => {
   const b = norm(busca.value.trim())
-  return estado.items.filter((u) => {
+  const base = estado.items.filter((u) => {
     if (b && !norm(`${u.nome} ${u.grupo} ${u.irma || ''}`).includes(b)) return false
     if (filtroEquip.value === 'com' && u.equip.total === 0) return false
     if (filtroEquip.value === 'sem' && u.equip.total > 0) return false
@@ -213,6 +224,10 @@ const filtradas = computed(() => {
     if (filtroInventario.value && u.inventarioStatus !== filtroInventario.value) return false
     return true
   })
+  if (!sortCol.value) return base
+  const col = sortCol.value
+  const dir = sortDir.value === 'asc' ? 1 : -1
+  return [...base].sort((a, b) => (a.equip[col] - b.equip[col]) * dir)
 })
 
 const paginaAtual = computed(() => {
@@ -375,11 +390,21 @@ onMounted(() => {
               <th>Técnico</th>
               <th>Inventário</th>
               <th>Cadastrou equip.?</th>
-              <th class="th-num">Total Equip.</th>
-              <th class="th-num">Disponíveis</th>
-              <th class="th-num">Manutenção</th>
-              <th class="th-num">Quebrados</th>
-              <th class="th-num">Extraviados</th>
+              <th class="th-num sortable" @click="toggleSort('total')">
+                Total Equip. {{ sortCol === 'total' ? (sortDir === 'asc' ? '↑' : '↓') : '' }}
+              </th>
+              <th class="th-num sortable" @click="toggleSort('disponiveis')">
+                Disponíveis {{ sortCol === 'disponiveis' ? (sortDir === 'asc' ? '↑' : '↓') : '' }}
+              </th>
+              <th class="th-num sortable" @click="toggleSort('manutencao')">
+                Manutenção {{ sortCol === 'manutencao' ? (sortDir === 'asc' ? '↑' : '↓') : '' }}
+              </th>
+              <th class="th-num sortable" @click="toggleSort('quebrados')">
+                Quebrados {{ sortCol === 'quebrados' ? (sortDir === 'asc' ? '↑' : '↓') : '' }}
+              </th>
+              <th class="th-num sortable" @click="toggleSort('extraviados')">
+                Extraviados {{ sortCol === 'extraviados' ? (sortDir === 'asc' ? '↑' : '↓') : '' }}
+              </th>
               <th class="th-num">Chamados</th>
             </tr>
           </thead>
@@ -491,6 +516,15 @@ onMounted(() => {
 .td-num {
   text-align: right;
   white-space: nowrap;
+}
+
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+th.sortable:hover {
+  color: var(--blue);
 }
 
 .num {

@@ -274,7 +274,8 @@ onMounted(() => {
         <!-- Perguntas da categoria -->
         <div v-if="expandidas.has(c.id)" class="perguntas">
           <ul v-if="perguntasDe(c).length" class="perg-lista">
-            <li v-for="(p, i) in perguntasDe(c)" :key="p.id" class="perg-item">
+            <li v-for="(p, i) in perguntasDe(c)" :key="p.id" class="perg-item" :class="{ 'perg-condicional': condicoesDe(p).length > 0 }">
+              <span v-if="condicoesDe(p).length > 0" class="perg-seta" aria-hidden="true">↳</span>
               <span class="perg-ordem">{{ i + 1 }}</span>
               <div class="perg-info">
                 <div class="perg-titulo-linha">
@@ -609,6 +610,20 @@ onMounted(() => {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
+}
+
+.perg-seta {
+  color: var(--blue);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.perg-item.perg-condicional {
+  margin-left: 26px;
+  border-left: 3px solid var(--blue);
+  background: var(--blue-soft);
 }
 
 .perg-vazia {

@@ -216,6 +216,7 @@ useAutoRefresh(async () => {
           <option value="">Unidade: Todas</option>
           <option v-for="u in eq.unidadesOpcoes.value" :key="u" :value="u">{{ u }}</option>
         </select>
+        <span class="total-evidente">Total: {{ eq.state.total.toLocaleString('pt-BR') }}</span>
         <button class="btn btn-outline" type="button" :disabled="exportando" @click="baixarCsv">
           <Download :size="16" />
           CSV
@@ -416,6 +417,17 @@ useAutoRefresh(async () => {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.total-evidente {
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--sidebar-bg);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .select-input.slim {
