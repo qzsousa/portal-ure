@@ -26,6 +26,7 @@ import {
 } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
+import { useEquipamentoModalConfig } from '@/composables/useEquipamentoModalConfig'
 import type { Equipamento } from '@/types'
 
 /** Escola FILHA: só visualiza o parque compartilhado com a Mãe. */
@@ -43,6 +44,7 @@ const emit = defineEmits<{ (e: 'fechar'): void; (e: 'salvo'): void }>()
 
 const auth = useAuthStore()
 const ui = useUiStore()
+const cfgEquip = useEquipamentoModalConfig()
 
 const STATUS_OPCOES = ['Disponível', 'Manutenção', 'Quebrado', 'Emprestado', 'Extraviado']
 
@@ -116,6 +118,17 @@ let tokenSpecs = 0
 
 const editando = computed(() => props.item !== null)
 const extraviado = computed(() => form.status === 'Extraviado')
+
+/** Rótulo configurável do campo (fallback para o padrão do modal). */
+function campoRotulo(chave: string, padrao: string): string {
+  return cfgEquip.rotulo(chave) || padrao
+}
+function campoVisivel(chave: string): boolean {
+  return cfgEquip.visivel(chave) && cfgEquip.permitidoPara(chave, auth.user?.nivel ?? null)
+}
+function campoObrigatorio(chave: string): boolean {
+  return cfgEquip.obrigatorio(chave)
+}
 
 /**
  * Status herdado que não está na lista de opções (ex.: "Em verificação",
@@ -575,8 +588,8 @@ onMounted(async () => {
     @fechar="emit('fechar')"
   >
     <div class="form-grid">
-      <div class="field">
-        <label>Unidade escolar *</label>
+      <div v-if="campoVisivel('unidade')" class="field">
+        <label>{{ campoRotulo('unidade', 'Unidade escolar') }}{{ campoObrigatorio('unidade') ? ' *' : '' }}</label>
         <select
           v-if="auth.user?.nivel === 'ADMIN'"
           v-model="form.unidade"
@@ -589,15 +602,14 @@ onMounted(async () => {
         <input v-else class="input" :value="form.unidade" disabled />
       </div>
 
-      <div class="field">
-        <label>Status *</label>
+      <div v-if="campoVisivel('status')" class="field">
+        <label>{{ campoRotulo('status', 'Status') }}{{ campoObrigatorio('status') ? ' *' : '' }}</label>
         <select v-model="form.status" class="select-input">
           <option v-for="s in statusOpcoes" :key="s" :value="s">{{ s }}</option>
         </select>
       </div>
-
-      <div class="field">
-        <label>Categoria *</label>
+      <div v-if="campoVisivel('categoria')" class="field">
+        <label>{{ campoRotulo('categoria', 'Categoria') }}{{ campoObrigatorio('categoria') ? ' *' : '' }}</label>
         <select v-model="form.categoria" class="select-input" :disabled="carregandoBase" @change="onCategoria">
           <option value="" disabled>Selecione...</option>
           <option v-for="c in categorias" :key="c" :value="c">{{ c }}</option>
@@ -611,8 +623,8 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="field">
-        <label>Marca <span class="opcional">(opcional)</span></label>
+      <div v-if="campoVisivel('marca')" class="field">
+        <label>{{ campoRotulo('marca', 'Marca') }}</label>
         <select v-model="form.marca" class="select-input" :disabled="!form.categoria" @change="onMarca">
           <option value="">{{ form.categoria ? '— Sem marca —' : 'Escolha a categoria primeiro' }}</option>
           <option v-for="m in marcasFiltradas" :key="m" :value="m">{{ m }}</option>
@@ -626,8 +638,8 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="field">
-        <label>Modelo <span class="opcional">(opcional)</span></label>
+      <div v-if="campoVisivel('modelo')" class="field">
+        <label>{{ campoRotulo('modelo', 'Modelo') }}</label>
         <select
           v-model="form.modelo"
           class="select-input"
@@ -646,8 +658,8 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="field">
-        <label>Patrimônio <span class="opcional">(opcional)</span></label>
+      <div v-if="campoVisivel('patrimonio')" class="field">
+        <label>{{ campoRotulo('patrimonio', 'Patrimônio') }}</label>
         <input v-model="form.patrimonio" class="input" placeholder="Opcional" />
         <input
           v-if="!form.patrimonio.trim()"
@@ -657,14 +669,14 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="field">
-        <label>Nº da etiqueta <span class="opcional">(opcional)</span></label>
+      <div v-if="campoVisivel('numeroEtiqueta')" class="field">
+        <label>{{ campoRotulo('numeroEtiqueta', 'Nº da etiqueta') }}</label>
         <input v-model="form.numeroEtiqueta" class="input" placeholder="Etiqueta colocada pela escola" />
         <p class="dica">Controle interno da escola — não substitui o patrimônio nem o nº de série.</p>
       </div>
 
-      <div class="field">
-        <label>Nº de série</label>
+      <div v-if="campoVisivel('numeroSerie')" class="field">
+        <label>{{ campoRotulo('numeroSerie', 'Nº de série') }}{{ campoObrigatorio('numeroSerie') ? ' *' : '' }}</label>
         <div class="serie-linha">
           <input v-model="form.numeroSerie" class="input" placeholder="Se não houver, justifique abaixo" />
           <button
@@ -685,21 +697,21 @@ onMounted(async () => {
         />
       </div>
 
-      <div class="field">
-        <label>Vinculado no BlueMonitor? <span class="opcional">(opcional)</span></label>
+      <div v-if="campoVisivel('vinculadoBlueMonitor')" class="field">
+        <label>{{ campoRotulo('vinculadoBlueMonitor', 'Vinculado no BlueMonitor?') }}</label>
         <select v-model="form.vinculadoBlueMonitor" class="select-input">
           <option value="Não">Não</option>
           <option value="Sim">Sim</option>
         </select>
       </div>
 
-      <div v-if="form.status === 'Manutenção'" class="field">
-        <label>Nº do chamado de manutenção</label>
+      <div v-if="campoVisivel('numeroChamadoManutencao') && form.status === 'Manutenção'" class="field">
+        <label>{{ campoRotulo('numeroChamadoManutencao', 'Nº do chamado de manutenção') }}</label>
         <input v-model="form.numeroChamadoManutencao" class="input" placeholder="Ex.: CH-20260916-0004" />
       </div>
 
-      <div v-if="form.status === 'Em verificação'" class="field full">
-        <label>Justificativa da verificação *</label>
+      <div v-if="campoVisivel('justificativaVerificacao') && form.status === 'Em verificação'" class="field full">
+        <label>{{ campoRotulo('justificativaVerificacao', 'Justificativa da verificação') }}{{ campoObrigatorio('justificativaVerificacao') ? ' *' : '' }}</label>
         <textarea
           v-model="form.justificativaVerificacao"
           class="input textarea"
@@ -707,13 +719,13 @@ onMounted(async () => {
         />
       </div>
 
-      <div v-if="form.status === 'Quebrado'" class="field full">
-        <label>Descrição do problema *</label>
+      <div v-if="campoVisivel('descricaoQuebrado') && form.status === 'Quebrado'" class="field full">
+        <label>{{ campoRotulo('descricaoQuebrado', 'Descrição do problema') }}{{ campoObrigatorio('descricaoQuebrado') ? ' *' : '' }}</label>
         <textarea v-model="form.descricaoQuebrado" class="input textarea" placeholder="O que aconteceu com o equipamento?" />
       </div>
 
-      <div v-if="extraviado" class="field full">
-        <label>Boletim de Ocorrência *</label>
+      <div v-if="campoVisivel('boletimOcorrencia') && extraviado" class="field full">
+        <label>{{ campoRotulo('boletimOcorrencia', 'Boletim de Ocorrência') }}{{ campoObrigatorio('boletimOcorrencia') ? ' *' : '' }}</label>
         <input
           v-model="form.boletimOcorrencia"
           class="input"
@@ -756,7 +768,7 @@ onMounted(async () => {
       </div>
 
       <!-- Detalhes técnicos: autopreenchidos pelo modelo, editáveis. -->
-      <template v-if="valorModelo">
+      <template v-if="valorModelo && campoVisivel('detalhesTecnicos')">
         <div class="field full">
           <div class="secao-titulo">
             <span>Detalhes do equipamento</span>
@@ -794,14 +806,14 @@ onMounted(async () => {
           <input v-model="form.tamanhoTela" class="input" placeholder="Ex.: 14&quot;" />
         </div>
 
-        <div class="field">
-          <label>Responsável atual <span class="opcional">(opcional)</span></label>
+        <div v-if="campoVisivel('responsavelAtual')" class="field">
+          <label>{{ campoRotulo('responsavelAtual', 'Responsável atual') }}</label>
           <input v-model="form.responsavelAtual" class="input" placeholder="Quem está usando o equipamento" />
         </div>
       </template>
 
-      <div class="field full">
-        <label>Observações</label>
+      <div v-if="campoVisivel('observacoes')" class="field full">
+        <label>{{ campoRotulo('observacoes', 'Observações') }}</label>
         <textarea v-model="form.observacoes" class="input textarea" placeholder="Opcional" />
       </div>
     </div>

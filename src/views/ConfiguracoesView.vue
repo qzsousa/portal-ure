@@ -9,6 +9,7 @@ import { useRouter } from 'vue-router'
 import { CheckCircle2, Eye, Loader2, Plus, ShieldCheck, Trash2, Users, Wrench, XCircle, Zap } from '@lucide/vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import FormularioAdmin from '@/components/config/FormularioAdmin.vue'
+import EquipamentoModalAdmin from '@/components/config/EquipamentoModalAdmin.vue'
 import {
   alternarRegraEncaminhamento,
   aplicarEncaminhamentoPendente,
@@ -39,7 +40,7 @@ import { useUiStore } from '@/stores/ui'
 import { useErrorLogStore } from '@/stores/errorLog'
 import type { Nivel } from '@/types'
 
-type Aba = 'catalogo' | 'status' | 'formulario' | 'encaminhamento' | 'logs' | 'integracoes' | 'acesso'
+type Aba = 'catalogo' | 'status' | 'formulario' | 'equipamentoModal' | 'encaminhamento' | 'logs' | 'integracoes' | 'acesso'
 
 const ui = useUiStore()
 const auth = useAuthStore()
@@ -50,6 +51,7 @@ const ABAS_BASE: Array<{ id: Aba; rotulo: string }> = [
   { id: 'catalogo', rotulo: 'Catálogo de equipamentos' },
   { id: 'status', rotulo: 'Status do parque' },
   { id: 'formulario', rotulo: 'Formulário de chamados' },
+  { id: 'equipamentoModal', rotulo: 'Modal de equipamentos' },
   { id: 'encaminhamento', rotulo: 'Encaminhamento' },
   { id: 'logs', rotulo: 'Logs do sistema' },
   { id: 'integracoes', rotulo: 'Integrações' },
@@ -523,6 +525,11 @@ onMounted(() => {
         <!-- ============ FORMULÁRIO DE CHAMADOS ============ -->
         <section v-else-if="aba === 'formulario'" class="card conf-card">
           <FormularioAdmin />
+        </section>
+
+        <!-- ============ MODAL DE EQUIPAMENTOS ============ -->
+        <section v-else-if="aba === 'equipamentoModal'" class="card conf-card">
+          <EquipamentoModalAdmin />
         </section>
 
         <!-- ============ ENCAMINHAMENTO AUTOMÁTICO ============ -->
