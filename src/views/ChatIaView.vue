@@ -149,7 +149,6 @@ import { useContextoIA } from '@/composables/useContextoIA'
 
 interface Msg { role: 'user' | 'assistant' | 'tool'; content: string }
 
-const apiKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined
 const auth = useAuthStore()
 const { resumo, carregando: carregandoDados, status, carregar, recarregar: recarregarBase } = useContextoIA()
 const nomeUsuario = (auth.user?.nome || 'Usuario').split(' ')[0]
@@ -429,7 +428,10 @@ async function enviar() {
   if (enviando.value) return
   if (!entrada.value.trim()) return
   const geminiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
-  if (!apiKey && !geminiKey) {
+  const groqKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined
+  const nvidiaKey = import.meta.env.VITE_NVIDIA_API_KEY as string | undefined
+  const nvidiaModel = (import.meta.env.VITE_NVIDIA_MODEL as string | undefined) || 'z-ai/glm-5.3-flash'
+  if (!geminiKey && !groqKey && !nvidiaKey) {
     status.value = 'Nenhuma API de IA configurada.'
     return
   }
@@ -484,8 +486,7 @@ async function enviar() {
     throw new Error('Gemini loop excedido')
   }
 
-  async function tentarGroq(): Promise<string> {
-    if (!apiKey) throw new Error('sem groq')
+  async function tentarOpenAI(nome: string, base: string, modelo: string, key: string): Promise<string> {
     const msgs: any[] = [
       { role: 'system', content: 'Voce e um assistente do Portal URE Leste 3. Responda em portugues, de forma concisa e objetiva. Use as tools para TODO detalhe que nao esteja no resumo - elas consultam a base inteira dos dois backends. Para contar tipos/categorias/status use resumo_chamados e resumo_equipamentos; para ver registros use listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool correspondente. Resumo:\n' + resumo.value },
       ...mensagens.value.slice(-6).map((m) => ({ role: m.role, content: m.content })),
@@ -493,10 +494,10 @@ async function enviar() {
     for (let step = 0; step < 4; step++) {
       let res: any = null
       for (let tent = 0; tent < 3; tent++) {
-        res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        res = await fetch(`${base}/chat/completions`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'openai/gpt-oss-20b', messages: msgs, tools, tool_choice: 'auto', temperature: 0.2 }),
+          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: modelo, messages: msgs, tools, tool_choice: 'auto', temperature: 0.2, max_tokens: 4000 }),
         })
         if (res.ok) break
         if (res.status === 429 && tent < 2) { await new Promise((r) => setTimeout(r, 8000)); continue }
@@ -504,7 +505,7 @@ async function enviar() {
       }
       const choice = (await res.json())?.choices?.[0]
       const message = choice?.message
-      if (!message) throw new Error('Groq sem resposta')
+      if (!message) throw new Error(`${nome} sem resposta`)
       if (choice.finish_reason === 'tool_calls' && message.tool_calls?.length) {
         msgs.push(message)
         for (const tc of message.tool_calls) {
@@ -515,22 +516,28 @@ async function enviar() {
         }
         continue
       }
-      return message.content || message.reasoning || 'Sem resposta.'
+      return message.content || message.reasoning_content || message.reasoning || 'Sem resposta.'
     }
-    throw new Error('Groq loop excedido')
+    throw new Error(`${nome} loop excedido`)
   }
 
   let resposta = 'Sem resposta.'
   let erroFinal = ''
-  try {
-    resposta = await tentarGemini()
-  } catch (e: any) {
+  const provedores: Array<() => Promise<string>> = []
+  if (nvidiaKey) provedores.push(() => tentarOpenAI('NVIDIA', 'https://integrate.api.nvidia.com/v1', nvidiaModel, nvidiaKey))
+  if (geminiKey) provedores.push(() => tentarGemini())
+  if (groqKey) provedores.push(() => tentarOpenAI('Groq', 'https://api.groq.com/openai/v1', 'openai/gpt-oss-20b', groqKey))
+
+  for (const tentar of provedores) {
     try {
-      resposta = await tentarGroq()
-    } catch (e2: any) {
-      erroFinal = String(e2?.message || e2)
+      resposta = await tentar()
+      erroFinal = ''
+      break
+    } catch (e: any) {
+      erroFinal = String(e?.message || e)
     }
   }
+  if (!provedores.length) erroFinal = 'sem provedor configurado'
 
   if (erroFinal) {
     const msg = erroFinal
