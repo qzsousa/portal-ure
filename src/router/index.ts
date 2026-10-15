@@ -63,6 +63,12 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', redirect: { name: 'painel' } },
       {
+        path: 'chat',
+        name: 'chat',
+        component: () => import('@/views/ChatIaView.vue'),
+        meta: { title: 'Chat IA', breadcrumb: 'Chat IA', roles: ['ADMIN'] as Nivel[], rota: 'dashboard' },
+      },
+      {
         path: 'painel',
         name: 'painel',
         component: () => import('@/views/PainelView.vue'),

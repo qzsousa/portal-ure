@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BarChart3,
+  Bot,
   BookOpen,
   Camera,
   Headset,
@@ -50,6 +51,7 @@ const { menuAberto, fechar } = useSidebar()
 
 const items: MenuItem[] = [
   { to: '/painel', label: 'Painel', icon: LayoutDashboard, rota: 'dashboard' },
+  { to: '/chat', label: 'Chat IA', icon: Bot, adminOnly: true, rota: 'dashboard' },
   { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, semEscopoTipos: true, rota: 'equipamentos' },
   { to: '/manutencao', label: 'Manutenção', icon: Wrench, semEscopoTipos: true, rota: 'equipamentos' },
   { to: '/chamados', label: 'Chamados', icon: Headset, rota: 'chamados' },
