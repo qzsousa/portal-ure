@@ -497,7 +497,7 @@ async function enviar() {
         res = await fetch(`${base}/chat/completions`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: modelo, messages: msgs, tools, tool_choice: 'auto', temperature: 0.2, max_tokens: 4000 }),
+          body: JSON.stringify({ model: modelo, messages: msgs, tools, tool_choice: 'auto', temperature: 0.2, max_tokens: 4000, chat_template_kwargs: { thinking: false } }),
         })
         if (res.ok) break
         if (res.status === 429 && tent < 2) { await new Promise((r) => setTimeout(r, 8000)); continue }
@@ -516,7 +516,12 @@ async function enviar() {
         }
         continue
       }
-      return message.content || message.reasoning_content || message.reasoning || 'Sem resposta.'
+      // `reasoning_content` e `reasoning` sao o rascunho interno do modelo. Nunca
+      // vao para a tela: vazam o system prompt e leem como lixo. Content vazio
+      // aqui significa resposta truncada, entao o erro cai no proximo provedor.
+      const conteudo = message.content || ''
+      if (!conteudo.trim()) throw new Error(`${nome} devolveu resposta vazia`)
+      return conteudo
     }
     throw new Error(`${nome} loop excedido`)
   }
@@ -741,6 +746,7 @@ carregar()
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   position: relative;
   isolation: isolate;
   background:
