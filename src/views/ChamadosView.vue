@@ -1621,7 +1621,12 @@ useAutoRefresh(async () => {
              todo o histórico anterior a ele ter virado dinâmico. -->
         <option :value="CATEGORIA_SEM_CHAVE">Fora das categorias</option>
       </select>
-      <select v-model="filtros.responsavel" class="select-input slim" @change="aplicarFiltros">
+      <select
+        v-model="filtros.responsavel"
+        class="select-input slim"
+        title="Mostra os chamados das escolas atendidas pelo técnico"
+        @change="aplicarFiltros"
+      >
         <option value="">Técnico: Todos</option>
         <option v-for="t in tecnicosFiltro" :key="t" :value="t">{{ t }}</option>
       </select>

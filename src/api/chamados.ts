@@ -23,7 +23,10 @@ export interface FiltrosChamado {
   categoriaChave?: string
   status?: StatusChamado | ''
   urgencia?: string
-  /** Nome do técnico responsável — o backend casa por nome, não por id. */
+  /**
+   * Nome do técnico ATENDENTE, como no cadastro. O backend devolve os chamados
+   * das escolas dele (`Usuario.filial`), não os que ele é responsável.
+   */
   responsavel?: string
   page?: number
   limit?: number
