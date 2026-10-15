@@ -142,6 +142,7 @@ import {
   Trash2,
 } from '@lucide/vue'
 import { listarChamados } from '@/api/chamados'
+import { chamadosApi } from '@/api/http'
 import { listarUsuarios } from '@/api/usuarios'
 import { listarEquipamentosGlobal } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
@@ -427,123 +428,66 @@ async function executarTool(nome: string, args: any) {
 async function enviar() {
   if (enviando.value) return
   if (!entrada.value.trim()) return
-  const geminiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
-  const groqKey = import.meta.env.VITE_GROQ_API_KEY as string | undefined
-  const nvidiaKey = import.meta.env.VITE_NVIDIA_API_KEY as string | undefined
-  const nvidiaModel = (import.meta.env.VITE_NVIDIA_MODEL as string | undefined) || 'z-ai/glm-5.3-flash'
-  if (!geminiKey && !groqKey && !nvidiaKey) {
-    status.value = 'Nenhuma API de IA configurada.'
-    return
-  }
-  if (!resumo.value) await carregar()
+const msgs: any[] = [
+    {
+      role: 'system',
+      content:
+        'Voce e um assistente do Portal URE Leste 3. Responda em portugues, de forma concisa e objetiva. ' +
+        'Use as tools para TODO detalhe que nao esteja no resumo - elas consultam a base inteira dos dois backends. ' +
+        'Para contar tipos/categorias/status use resumo_chamados e resumo_equipamentos; para ver registros use ' +
+        'listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool ' +
+        'correspondente. Resumo:\n' + resumo.value,
+    },
+    ...mensagens.value.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+  ]
 
-  const texto = entrada.value.trim()
-  entrada.value = ''
-  mensagens.value.push({ role: 'user', content: texto })
-  rolarParaBaixo()
-  enviando.value = true
+  // A chamada sai para o backend, nunca para o provedor: e o que tira a chave
+  // do bundle e destrava a NVIDIA, que nao libera CORS para o navegador. O
+  // backend devolve no mesmo formato da OpenAI, entao o loop de tools abaixo e
+  // identico ao de antes - so muda o destino da requisição.
+  async function perguntarAoBackend(): Promise<string> {
+const { data: res } = await chamadosApi.post<any>('/ia/chat', {
+      messages: msgs,
+      tools,
+      tool_choice: 'auto',
+      temperature: 0.2,
+      max_tokens: 4000,
+    })
 
-  const systemText = 'Voce e um assistente do Portal URE Leste 3. Responda em portugues, de forma concisa e objetiva. Use as tools para TODO detalhe que nao esteja no resumo - elas consultam a base inteira dos dois backends (chamados e equipamentos). Para saber qual tecnico atende uma escola use a lista de tecnicos cadastrados; para contar tipos/categorias/status use resumo_chamados e resumo_equipamentos; para ver registros use listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool correspondente. Resumo:\n' + resumo.value
+    const choice = res?.choices?.[0]
+    const message = choice?.message
+    if (!message) throw new Error('Resposta sem message')
 
-  async function tentarGemini(): Promise<string> {
-    if (!geminiKey) throw new Error('sem gemini')
-    const geminiTools = [{ functionDeclarations: tools.map((t: any) => t.function) }]
-    let contents: any[] = [{ role: 'user', parts: [{ text: texto }] }]
-    for (let step = 0; step < 5; step++) {
-      let res: any = null
-      for (let tent = 0; tent < 3; tent++) {
-        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemText }] },
-            contents,
-            tools: geminiTools,
-            generationConfig: { temperature: 0.2 },
-          }),
-        })
-        if (res.ok) break
-        if (res.status === 429 && tent < 2) { await new Promise((r) => setTimeout(r, 8000)); continue }
-        const t = await res.text(); throw new Error(`${res.status} ${t}`)
-      }
-      const data = await res.json()
-      const parts = data?.candidates?.[0]?.content?.parts || []
-      const calls = parts.filter((p: any) => p.functionCall)
-      if (calls.length) {
-        contents.push({ role: 'model', parts })
-        const respParts: any[] = []
-        for (const c of calls) {
-          const r = await executarTool(c.functionCall.name, c.functionCall.args || {})
-          respParts.push({ functionResponse: { name: c.functionCall.name, response: r } })
+    if (choice.finish_reason === 'tool_calls' && message.tool_calls?.length) {
+      msgs.push(message)
+      for (const tc of message.tool_calls) {
+        let args: any = {}
+        try {
+          args = JSON.parse(tc.function.arguments || '{}')
+        } catch {
+          args = {}
         }
-        contents.push({ role: 'user', parts: respParts })
-        continue
+        const result = await executarTool(tc.function.name, args)
+        msgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
       }
-      const txt = parts.map((p: any) => p.text || '').join('\n').trim()
-      if (txt) return txt
-      throw new Error('Gemini sem resposta')
+      return perguntarAoBackend()
     }
-    throw new Error('Gemini loop excedido')
-  }
 
-  async function tentarOpenAI(nome: string, base: string, modelo: string, key: string): Promise<string> {
-    const msgs: any[] = [
-      { role: 'system', content: 'Voce e um assistente do Portal URE Leste 3. Responda em portugues, de forma concisa e objetiva. Use as tools para TODO detalhe que nao esteja no resumo - elas consultam a base inteira dos dois backends. Para contar tipos/categorias/status use resumo_chamados e resumo_equipamentos; para ver registros use listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool correspondente. Resumo:\n' + resumo.value },
-      ...mensagens.value.slice(-6).map((m) => ({ role: m.role, content: m.content })),
-    ]
-    for (let step = 0; step < 4; step++) {
-      let res: any = null
-      for (let tent = 0; tent < 3; tent++) {
-        res = await fetch(`${base}/chat/completions`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: modelo, messages: msgs, tools, tool_choice: 'auto', temperature: 0.2, max_tokens: 4000, chat_template_kwargs: { thinking: false } }),
-        })
-        if (res.ok) break
-        if (res.status === 429 && tent < 2) { await new Promise((r) => setTimeout(r, 8000)); continue }
-        const t = await res.text(); throw new Error(`${res.status} ${t}`)
-      }
-      const choice = (await res.json())?.choices?.[0]
-      const message = choice?.message
-      if (!message) throw new Error(`${nome} sem resposta`)
-      if (choice.finish_reason === 'tool_calls' && message.tool_calls?.length) {
-        msgs.push(message)
-        for (const tc of message.tool_calls) {
-          let args: any = {}
-          try { args = JSON.parse(tc.function.arguments || '{}') } catch { args = {} }
-          const result = await executarTool(tc.function.name, args)
-          msgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
-        }
-        continue
-      }
-      // `reasoning_content` e `reasoning` sao o rascunho interno do modelo. Nunca
-      // vao para a tela: vazam o system prompt e leem como lixo. Content vazio
-      // aqui significa resposta truncada, entao o erro cai no proximo provedor.
-      const conteudo = message.content || ''
-      if (!conteudo.trim()) throw new Error(`${nome} devolveu resposta vazia`)
-      return conteudo
-    }
-    throw new Error(`${nome} loop excedido`)
+    // `reasoning_content` e `reasoning` sao o rascunho interno do modelo. Nunca
+    // vao para a tela: vazam o system prompt e leem como lixo.
+    const conteudo = message.content || ''
+    if (!conteudo.trim()) throw new Error('Resposta vazia')
+    return conteudo
   }
 
   let resposta = 'Sem resposta.'
   let erroFinal = ''
-  const provedores: Array<() => Promise<string>> = []
-  if (nvidiaKey) provedores.push(() => tentarOpenAI('NVIDIA', 'https://integrate.api.nvidia.com/v1', nvidiaModel, nvidiaKey))
-  if (geminiKey) provedores.push(() => tentarGemini())
-  if (groqKey) provedores.push(() => tentarOpenAI('Groq', 'https://api.groq.com/openai/v1', 'openai/gpt-oss-20b', groqKey))
-
-  for (const tentar of provedores) {
-    try {
-      resposta = await tentar()
-      erroFinal = ''
-      break
-    } catch (e: any) {
-      erroFinal = String(e?.message || e)
-    }
+  try {
+    resposta = await perguntarAoBackend()
+  } catch (e: any) {
+    erroFinal = String(e?.message || e)
+    console.error('[CafeIA] falhou', e)
   }
-  if (!provedores.length) erroFinal = 'sem provedor configurado'
-
   if (erroFinal) {
     const msg = erroFinal
     let texto = 'Nï¿½o foi possï¿½vel obter resposta. Tente novamente.'
@@ -1072,6 +1016,7 @@ carregar()
   .rail-body { display: none; }
   }
 </style>
+
 
 
 
