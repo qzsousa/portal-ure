@@ -239,6 +239,32 @@ O campo **Unidade** continua obrigatório no cadastro — o SCE e o inventário
 dependem dele. O texto do bloco de escopo avisa que, com escopo marcado, a
 unidade deixa de valer **para chamados**.
 
+### A ressalva: Sistemas e E-mail exigem liberação
+
+Para o resto, "lista vazia = sem restrição" é exatamente isso. **Sistemas e
+E-mail são a exceção**: são as categorias de fila curta e trabalho
+especializado, e nelas a lista vazia significa **"não atende"**.
+
+Sem essa ressalva, qualquer técnico que atendesse a escola recebia chamado de
+sistema junto com o de rede. A escala da equipe (`src/utils/tecnicos.ts`) tentava
+impedir isso, mas vivia só na tela: o encaminhamento — automático ou manual —
+não olhava o perfil, e era por lá que o chamado entrava.
+
+O que a regra faz, e onde:
+
+| Onde | Efeito |
+|---|---|
+| Fila do "Técnico da unidade" (`modo: UNIDADE`, regra automática) | Quem não tem a categoria marcada fica de fora, mesmo atendendo a escola |
+| Técnico fixo da regra (`modo: TECNICO`) | Encaminhamento recusado com 422 |
+| Salvar a regra em Configurações | Recusado com 400, com a mensagem dizendo para liberar a categoria |
+| Select de destino do modal de detalhes | `GET /chamados/encaminhar/tecnicos?categoriaChave=sistemas` já devolve só os liberados |
+
+> ⚠️ **Ao ativar a regra:** as contas que já atendiam Sistemas/E-mail e estão
+> com `escopoTipos` vazio param de receber esses chamados até o ADMIN marcar a
+> categoria no *Cadastro de usuários*. A fila não avisa e não há aviso na tela:
+> o chamado simplesmente segue sem responsável. Marque a categoria em quem
+> attendia antes.
+
 ### Como o tipo é comparado
 
 O backend monta o `tipo` do chamado como `"<Categoria> - <1ª resposta>"`, então
@@ -474,11 +500,20 @@ Três decisões importantes:
 | `/chamados` | Chamados | — | todos os autenticados |
 | `/tutoriais` | Tutoriais | — | todos os autenticados |
 | `/tutoriais/:id` | Detalhe do tutorial | — | leitura: todos · escrita: ADMIN |
-| `/feedback` | Elogios e avaliações | — | **ADMIN, TECNICO** |
+| `/feedback` | Elogios e avaliações | — | **ADMIN** |
 | `/unidades` | Unidades escolares | — | **ADMIN, TECNICO** |
+| `/cameras-dvr` | Câmeras DVR | — | **ADMIN** |
 | `/relatorios` | Relatórios | — | todos os autenticados |
 | `/usuarios` | Usuários | — | **ADMIN, GESTOR** |
 | `/configuracoes` | Configurações | — | **ADMIN** |
+
+> **Sobre `/feedback` e `/cameras-dvr`.** As duas telas saíram do Técnico: ele
+> atende chamado e vai à escola, não responde a caixa de elogios nem
+> acompanha o monitoramento das câmeras. O bloqueio é duplo e nos dois lados —
+> o `meta.roles` do router esconde o item do menu e recusa a URL, e o
+> servidor barra a API (`requireRole('ADMIN')` em `/api/feedback` e
+> `NIVEIS_PERMITIDOS=ADMIN` no monitor). Se só o portal mudasse, a tela
+> sumiria do menu mas a rota da API continuaria respondendo.
 
 > **Sobre `/relatorios`:** a rota não tem `meta.roles`, então aparece no menu
 > para todo mundo. Mas dois dos seis relatórios exigem ADMIN no backend. Para
@@ -503,7 +538,7 @@ Três decisões importantes:
 `AppSidebar.vue` filtra os itens no `computed visibleItems`:
 
 ```ts
-adminOnly:    só nivel === 'ADMIN'              → Configurações
+adminOnly:    só nivel === 'ADMIN'              → Configurações, Câmeras DVR, Elogios e Avaliações
 gestorTambem: ['ADMIN','GESTOR']                → Usuários
 matrizOnly:   ['ADMIN','TECNICO']               → Unidades Escolares
 (sem flag):   todos os autenticados             → o resto

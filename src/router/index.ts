@@ -111,7 +111,10 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Elogios e avaliações',
           breadcrumb: 'Elogios e avaliações',
-          roles: ['ADMIN', 'TECNICO'] as Nivel[],
+          // Só o ADMIN responde a caixa. O Técnico atende chamado e vai à
+          // escola — o backend exige o mesmo nível, então liberar aqui sem
+          // liberar lá só daria tela que abre e volta 403.
+          roles: ['ADMIN'] as Nivel[],
           rota: 'feedback',
         },
       },
@@ -125,7 +128,8 @@ const routes: RouteRecordRaw[] = [
         path: 'cameras-dvr',
         name: 'cameras-dvr',
         component: () => import('@/views/MonitorDvrsView.vue'),
-        meta: { title: 'Câmeras DVR', breadcrumb: 'Câmeras DVR', roles: ['ADMIN', 'TECNICO'] as Nivel[], rota: 'equipamentos' },
+        // O monitor confere o nível sozinho (`NIVEIS_PERMITIDOS` no monitor).
+        meta: { title: 'Câmeras DVR', breadcrumb: 'Câmeras DVR', roles: ['ADMIN'] as Nivel[], rota: 'equipamentos' },
       },
       {
         path: 'relatorios',

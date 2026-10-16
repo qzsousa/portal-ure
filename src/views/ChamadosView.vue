@@ -75,7 +75,7 @@ import {
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { validarArquivo, MAX_ANEXOS, ACCEPT_ANEXO } from '@/utils/anexos'
-import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaEquipeReduzida, ordenarTecnicos } from '@/utils/tecnicos'
+import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaComLiberacao, ordenarTecnicos } from '@/utils/tecnicos'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import {
@@ -580,6 +580,12 @@ const novoStatus = ref<StatusChamado>('ANDAMENTO')
 const descricaoResolucao = ref('')
 const textoResposta = ref('')
 
+/** Categoria do chamado, com fallback no texto de tipo dos chamados antigos. */
+const chaveCategoria = computed(() => chaveDaCategoria(detalhe.value))
+
+/** Chamado de Sistemas/E-mail — a lista de destino é a de quem liberou a categoria. */
+const categoriaLiberada = computed(() => ehCategoriaComLiberacao(chaveCategoria.value))
+
 /* ------- Encaminhar para técnico (matriz) ------- */
 const encaminharAberto = ref(false)
 const encaminhando = ref(false)
@@ -596,8 +602,9 @@ const gruposTecnicos = computed(() => {
   const rotulo = (t: TecnicoDestino) =>
     t.abertos === undefined ? t.nome : `${t.nome} · ${t.abertos} aberto${t.abertos === 1 ? '' : 's'}`
 
-  // Só a equipe de atendimento aparece no select, na ordem da escala — em
-  // Sistemas/E-mail, apenas as cinco pessoas que atendem esse tipo de chamado.
+  // A escala ordena o select. Quem PODE receber veio filtrado do backend: nas
+  // categorias com liberação (Sistemas/E-mail), só quem tem a categoria marcada
+  // no perfil chega até aqui.
   const ordenados = ordenarTecnicos(tecnicos.value, { categoriaChave: chaveCategoria.value })
 
   const daUnidade = ordenados.filter((t) => atende.has(t.id))
@@ -608,19 +615,16 @@ const gruposTecnicos = computed(() => {
     grupos.push({ nome: GRUPO_UNIDADE, opcoes: daUnidade.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
   }
   if (outros.length) {
-    grupos.push({ nome: 'Outros técnicos', opcoes: outros.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
+    grupos.push({
+      nome: categoriaLiberada.value ? 'Liberados para este assunto' : 'Outros técnicos',
+      opcoes: outros.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })),
+    })
   }
   return grupos
 })
 
 /** true quando quem atende a unidade entrou no select (não entrou em Sistemas/E-mail). */
 const unidadeNaLista = computed(() => gruposTecnicos.value[0]?.nome === GRUPO_UNIDADE)
-
-/** Categoria do chamado, com fallback no texto de tipo dos chamados antigos. */
-const chaveCategoria = computed(() => chaveDaCategoria(detalhe.value))
-
-/** Chamado de Sistemas/E-mail — a lista de destino é a equipe restrita. */
-const equipeReduzida = computed(() => ehCategoriaEquipeReduzida(chaveCategoria.value))
 
 /** Rótulo da opção "Técnico da unidade" (o sucessor é a sugestão do backend). */
 const rotuloTecnicoDaUnidade = computed(() => {
@@ -650,9 +654,11 @@ async function abrirEncaminhar(c: Chamado) {
   try {
     // As sugestões da unidade vêm primeiro: o select já abre com
     // "Técnico da unidade" escolhido, que é o comportamento padrão.
+    // A chave da categoria vai junto porque em Sistemas/E-mail é ela que
+    // decide a lista: só entra quem tem a categoria liberada no perfil.
     const [daUnidade, todos] = await Promise.all([
       listarTecnicosDaUnidade(c.id).catch(() => []),
-      listarTecnicos().catch(() => []),
+      listarTecnicos(chaveCategoria.value).catch(() => []),
     ])
     tecnicosDaUnidade.value = daUnidade
     tecnicos.value = todos
@@ -2282,12 +2288,18 @@ useAutoRefresh(async () => {
                 placeholder="Observação (opcional) — fica registrada no histórico"
               />
               <p v-if="carregandoTecnicos" class="acao-dica">Carregando técnicos...</p>
+              <p v-else-if="categoriaLiberada && !tecnicosDaUnidade.length" class="acao-dica enc-aviso">
+                Nenhum técnico está liberado para este assunto no perfil. Em
+                <strong>Configurações → Encaminhamento</strong> ou em
+                <strong>Usuários → Escopo de tipos</strong> você marca quem atende
+                esta categoria.
+              </p>
               <p v-else-if="!tecnicosDaUnidade.length" class="acao-dica enc-aviso">
                 Nenhum técnico ativo atendendo {{ detalhe.unidade }} está cadastrado — escolha um técnico na lista.
               </p>
-              <p v-else-if="!unidadeNaLista && equipeReduzida" class="acao-dica enc-aviso">
-                Este chamado não é atendido pelo técnico de {{ detalhe.unidade }}: o responsável
-                sai de <strong>JESSICA, MATHEUS, PABLO, FERNANDA e FABIO</strong>.
+              <p v-else-if="!unidadeNaLista && categoriaLiberada" class="acao-dica enc-aviso">
+                Este chamado não é atendido pelo técnico de {{ detalhe.unidade }}: em
+                Sistemas e E-mail só entra quem tem a categoria liberada no perfil.
               </p>
               <p v-else-if="detalhe.responsavel" class="acao-dica enc-aviso">
                 Ao encaminhar, <strong>{{ detalhe.responsavel }}</strong> deixa de ser o responsável.

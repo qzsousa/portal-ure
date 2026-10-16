@@ -192,7 +192,7 @@ O `POST /usuarios` (criação de usuário) também devolve
 | POST | `/chamados/:id/resposta` | "Responder chamado" (escola) |
 | PATCH | `/chamados/batch` | "Aplicar em lote" (matriz) |
 | DELETE | `/chamados/:id` | "Excluir" (só ADMIN no backend) |
-| GET | `/chamados/encaminhar/tecnicos` | select de destino |
+| GET | `/chamados/encaminhar/tecnicos?categoriaChave=` | select de destino |
 | GET | `/chamados/encaminhar/tecnicos/:id` | opções que atendem a unidade |
 | GET | `/chamados/filtros/tecnicos` | select "Técnico" do filtro |
 | POST | `/chamados/:id/encaminhar` | "Encaminhar para técnico" |
@@ -255,6 +255,14 @@ categorias" fecha exatamente o total, sem chamado aparecer nos dois filtros.
 > "Jessica" e "jessica" no histórico), mas **não** por acento: o filtro casa por
 > `contains`, que não ignora acento, então agrupar "Joao" com "JOÃO" geraria uma
 > opção que não acha chamado nenhum.
+
+> **`?categoriaChave=` em `/encaminhar/tecnicos`.** O parâmetro é opcional e só
+> muda a lista nas categorias **com liberação** (Sistemas e E-mail): lá o backend
+> devolve apenas quem tem a categoria marcada no perfil, porque o `POST
+> /chamados/:id/encaminhar` recusa quem não tem. Nas outras categorias o
+> parâmetro é ignorado e a lista vem inteira — que é o que a tela de Regras de
+> Encaminhamento usa para escolher o técnico fixo de qualquer categoria. A tela
+> de chamado sempre manda a chave.
 
 > No `ChamadosView`, marcar o chip "PortalNet" **desmarca** o select de
 > categoria, e vice-versa. Ambos filtrariam por categoria ao mesmo tempo e a
@@ -322,9 +330,12 @@ direto.
 
 | Método | Rota | Quem chama |
 |---|---|---|
-| GET | `/feedback` | `FeedbackView` (ADMIN/TÉCNICO) |
+| GET | `/feedback` | `FeedbackView` (ADMIN) |
 | GET | `/feedback/stats` | `FeedbackView` + card do `PainelView` |
 | GET | `/feedback/avaliacoes` | `FeedbackView` — notas **com comentário** |
+
+> As três são `requireRole('ADMIN')`. O Técnico saiu junto com a tela; a escola
+> (GESTOR/VISUALIZADOR) nunca entrou.
 
 ---
 
