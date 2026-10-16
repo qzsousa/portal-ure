@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import {
   BarChart3,
   Bot,
+  Globe,
   BookOpen,
   Camera,
   Headset,
@@ -61,6 +62,7 @@ const items: MenuItem[] = [
   { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, adminOnly: true, semEscopoTipos: true, rota: 'feedback' },
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3, semEscopoTipos: true, rota: 'chamados' },
   { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true, rota: 'usuarios' },
+  { to: '/links-internet', label: 'Links de Internet', icon: Globe, adminOnly: true },
   { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true, rota: 'formulario' },
 ]
 

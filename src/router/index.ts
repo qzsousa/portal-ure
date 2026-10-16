@@ -149,6 +149,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'links-internet',
+        name: 'links-internet',
+        component: () => import('@/views/LinksInternetView.vue'),
+        meta: {
+          title: 'Links de Internet',
+          breadcrumb: 'Links de Internet',
+          roles: ['ADMIN'] as Nivel[],
+        },
+      },
+      {
         path: 'configuracoes',
         name: 'configuracoes',
         component: () => import('@/views/ConfiguracoesView.vue'),
