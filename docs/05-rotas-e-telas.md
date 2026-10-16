@@ -717,7 +717,7 @@ Com a cota cheia, o aviso vira vermelho e o botão *Novo usuário* some a ação
 
 ---
 
-## `/feedback` — Elogios e avaliações *(matriz: ADMIN/TÉCNICO)*
+## `/feedback` — Elogios e avaliações *(ADMIN)*
 
 Somente leitura, em três blocos:
 
@@ -733,10 +733,11 @@ Atualização: 60 s (os três blocos).
 
 ![Tela de elogios e avaliações](screenshots/28-feedback.png)
 
-> Item do menu **Elogios e Avaliações**, visível só para a matriz. O backend
-> exige `ADMIN` ou `TECNICO` nas três rotas (`GET /feedback`,
-> `GET /feedback/stats`, `GET /feedback/avaliacoes`); a escola não vê nem os
-> números nem a caixa de retorno.
+> Item do menu **Elogios e Avaliações**, visível só para o ADMIN. O backend
+> exige `ADMIN` nas três rotas (`GET /feedback`, `GET /feedback/stats`,
+> `GET /feedback/avaliacoes`); técnico e escola não veem nem os números nem a
+> caixa de retorno. O Técnico saiu daqui junto com a tela — ele atende chamado
+> e vai à escola, não responde a caixa de elogios.
 >
 > O comentário da avaliação era gravado desde o começo mas **ninguém da matriz
 > conseguia ler** — só quem abriu o chamado, em `/consulta`. A rota
@@ -806,26 +807,32 @@ Retorna quantos foram encaminhados e quantos ficaram sem técnico.
 
 #### A escala de atendimento
 
-Quem pode ficar com um chamado não vem solto do cadastro de usuários: é a
-escala fixa de `src/utils/tecnicos.ts`, e a **ordem da lista é a ordem do
-select**.
+A escala de `src/utils/tecnicos.ts` define a **ordem** do select de
+responsável — e, nas categorias comuns, também **quem entra**.
 
-| Categoria do chamado | Equipe (nesta ordem) |
-|---|---|
-| Todas, exceto Sistemas/E-mail | PABLO, FERNANDA, MATHEUS, JESSICA, FABIO, JOAO, GUILHERME, JOSEMIR, VALDEIR, CHARLES, CAROL, HEBERT |
-| **Sistemas** e **E-mail** | JESSICA, MATHEUS, PABLO, FERNANDA, FABIO |
+| Categoria do chamado | Quem pode receber | Ordem |
+|---|---|---|
+| Todas, exceto Sistemas/E-mail | os técnicos ativos que estão na escala | PABLO, FERNANDA, MATHEUS, JESSICA, FABIO, JOAO, GUILHERME, JOSEMIR, VALDEIR, CHARLES, CAROL, HEBERT |
+| **Sistemas** e **E-mail** | quem tem a categoria marcada em *Escopo de tipos* (perfil) | JESSICA, MATHEUS, PABLO, FERNANDA, FABIO |
+
+Nas categorias comuns, quem está fora da escala não entra no select — é o que
+esconde a conta de teste e o homônimo ("Pablo" ao lado de "Pablo -
+Estagiário"). Em Sistemas/E-mail a lista **é o perfil**, não a escala: a rota
+`GET /chamados/encaminhar/tecnicos?categoriaChave=<chave>` já devolve só os
+liberados, e a escala só os coloca na frente. Ver "A ressalva: Sistemas e
+E-mail exigem liberação" em
+[04 · Autenticação e permissões](./04-autenticacao-e-permissoes.md).
 
 No modal do chamado, quem atende a unidade vem sempre em primeiro (optgroup
-"Atende esta unidade"); nas categorias restritas, o técnico da unidade só
-aparece se estiver entre os cinco — caso contrário some da lista e a tela avisa
-que ele não atende aquele tipo de chamado.
+"Atende esta unidade"). Se ele não puder receber aquele chamado, some da lista
+e a tela avisa o motivo.
 
 O casamento entre o nome cadastrado no backend e o nome da escala é pelo
 **primeiro nome**, sem acento e sem diferenciar maiúsculas/minúsculas
 ("Carolina Prado" entra como CAROL, "Heberto" como HEBERT). Técnico ativo fora
 da escala não some do select: nas categorias comuns ele vai para o fim da
-lista; em Sistemas/E-mail sai da lista, a não ser o técnico que já estava
-salvo na regra.
+lista; em Sistemas/E-mail, quem o backend mandou vai para o fim também, e o
+técnico já salvo na regra nunca some em nenhuma das duas.
 
 ### 5 · Logs do sistema
 

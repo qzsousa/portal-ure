@@ -17,6 +17,7 @@ import {
 } from '@/api/usuarios'
 import { getFormularioPublico, type FormularioCategoria } from '@/api/publico'
 import { montarEscopo, rotuloPerfil, type Nivel, type User } from '@/types'
+import { ehCategoriaComLiberacao } from '@/utils/tecnicos'
 import { useUiStore } from '@/stores/ui'
 import { useAuthStore } from '@/stores/auth'
 
@@ -187,6 +188,16 @@ const podeDefinirEscopo = computed(
 )
 
 const escopoAtivo = computed(() => escopoMarcado.value.length > 0)
+
+/**
+ * Categorias do formulário que NÃO aceitam "sem restrição" (Sistemas e E-mail):
+ * nelas, deixar tudo desmarcado é "não atende", e não "atende tudo". Sem este
+ * aviso o ADMIN lê "Sem restrição" e acha que a pessoa continua recebendo
+ * chamado de sistema — que é exatamente como o problema nasceu.
+ */
+const gruposComLiberacao = computed(() =>
+  gruposTipos.value.filter((g) => ehCategoriaComLiberacao(g.chave)).map((g) => g.nome),
+)
 
 function alternarTipo(valor: string) {
   escopoMarcado.value = escopoMarcado.value.includes(valor)
@@ -709,10 +720,20 @@ onMounted(async () => {
             Vai ver e receber chamado destes tipos em <strong>todas as escolas</strong> —
             a unidade escolhida acima deixa de valer para chamados. Os demais tipos
             ficam ocultos e ele não entra na fila de encaminhamento deles.
+            <template v-if="gruposComLiberacao.length">
+              Marcar
+              <strong>{{ gruposComLiberacao.join(' e ') }}</strong>
+              é também o que libera esta pessoa para <strong>receber</strong> esses
+              chamados.
+            </template>
           </p>
           <p v-else class="escopo-ativo escopo-ativo-off">
             <strong>Sem restrição.</strong> Vai ver chamado de qualquer tipo, das escolas
             do campo Unidade.
+            <template v-if="gruposComLiberacao.length">
+              <strong>{{ gruposComLiberacao.join(' e ') }}</strong> é a exceção: não
+              recebe chamado dessas categorias sem marcar a caixa acima.
+            </template>
           </p>
 
           <div v-if="!gruposTipos.length" class="perfil-hint perfil-hint-erro">
