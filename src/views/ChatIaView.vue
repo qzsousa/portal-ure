@@ -59,6 +59,37 @@
           <h1>Caf&eacute;IA</h1>
           <p>Assistente de chamados e equipamentos</p>
         </div>
+        <div class="stage-actions">
+          <span class="model-atual" title="Modelo em uso">{{ modeloIa }}</span>
+          <button class="model-btn" @click="toggleModelos" :disabled="carregandoModelos">
+            <Cpu :size="15" /> Modelos NIM
+          </button>
+        </div>
+        <Transition name="fade-slide">
+          <div v-if="painelModelos" class="model-panel">
+            <header>
+              <strong>Modelos disponíveis (NIM)</strong>
+              <button @click="painelModelos = false">&times;</button>
+            </header>
+            <input
+              v-model="buscaModelo"
+              class="model-search"
+              placeholder="Filtrar modelo..."
+              spellcheck="false"
+            />
+            <div class="model-list">
+              <button
+                v-for="m in modelosFiltrados"
+                :key="m"
+                class="model-item"
+                :class="{ active: m === modeloIa }"
+                @click="escolherModelo(m)"
+              >{{ m }}</button>
+              <p v-if="carregandoModelos">Carregando...</p>
+              <p v-else-if="!modelosFiltrados.length">Nenhum modelo encontrado.</p>
+            </div>
+          </div>
+        </Transition>
 
       </header>
 
@@ -128,9 +159,10 @@
   </div>
 </template>
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import {
   CheckCircle2,
+  Cpu,
   Loader2,
   MessageSquare,
   PanelLeftClose,
@@ -452,6 +484,7 @@ const { data: res } = await chamadosApi.post<any>('/ia/chat', {
       tool_choice: 'auto',
       temperature: 0.2,
       max_tokens: 4000,
+      modelo: modeloIa.value,
     })
 
     const choice = res?.choices?.[0]
@@ -507,7 +540,49 @@ function recarregar() {
   recarregarBase()
 }
 
+const modeloIa = ref('z-ai/glm-5.3-flash')
+const modelosNvidia = ref<string[]>([])
+const carregandoModelos = ref(false)
+const painelModelos = ref(false)
+const buscaModelo = ref('')
+
+const modelosFiltrados = computed(() => {
+  const alvo = buscaModelo.value.trim().toLowerCase()
+  if (!alvo) return modelosNvidia.value
+  return modelosNvidia.value.filter((m) => m.toLowerCase().includes(alvo))
+})
+
+async function carregarModelosNvidia() {
+  carregandoModelos.value = true
+  try {
+    const { data } = await chamadosApi.get('/ia/modelos')
+    modelosNvidia.value = Array.isArray(data?.modelos) ? data.modelos : []
+    if (modelosNvidia.value.length && !modelosNvidia.value.includes(modeloIa.value)) {
+      modeloIa.value = modelosNvidia.value.includes('z-ai/glm-5.3-flash')
+        ? 'z-ai/glm-5.3-flash'
+        : modelosNvidia.value[0]
+    }
+  } catch {
+    // mantém valor padrão
+  } finally {
+    carregandoModelos.value = false
+  }
+}
+
+function toggleModelos() {
+  painelModelos.value = !painelModelos.value
+  if (painelModelos.value && !modelosNvidia.value.length) void carregarModelosNvidia()
+}
+
+function escolherModelo(m: string) {
+  modeloIa.value = m
+  painelModelos.value = false
+  buscaModelo.value = ''
+}
+
 carregar()
+void carregarModelosNvidia()
+
 </script>
 
 <style scoped>
@@ -985,6 +1060,20 @@ carregar()
 .send:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 20px 30px -18px rgba(44, 30, 22, .95); }
 .send:active:not(:disabled) { transform: translateY(0); }
 .send:disabled { opacity: .4; cursor: not-allowed; box-shadow: none; }
+
+.stage-actions { display: flex; align-items: center; gap: 10px; }
+.model-atual { font-size: 11px; color: var(--tinta-suave); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-btn { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--borda); background: #fff; color: var(--cafe-800); font-size: 12.5px; cursor: pointer; }
+.model-btn:hover:not(:disabled) { border-color: var(--cafe-400); color: var(--cafe-900); }
+.model-btn:disabled { opacity: .5; }
+.model-panel { position: absolute; top: 70px; right: 26px; z-index: 5; width: 360px; max-height: 360px; overflow: auto; background: #fff; border: 1px solid var(--borda); border-radius: 14px; box-shadow: 0 18px 40px -20px rgba(44,30,22,.6); padding: 12px; }
+.model-panel header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.model-search { width: 100%; box-sizing: border-box; padding: 8px 10px; margin-bottom: 8px; border: 1px solid var(--borda); border-radius: 8px; font-size: 12px; outline: none; color: var(--tinta); }
+.model-search:focus { border-color: var(--cafe-400); }
+.model-list { display: flex; flex-direction: column; gap: 4px; }
+.model-item { text-align: left; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: var(--tinta); cursor: pointer; font-size: 12px; }
+.model-item:hover { background: var(--creme); }
+.model-item.active { background: var(--creme); border-color: var(--cafe-400); }
 
 /* ---------- Motion ---------- */
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
