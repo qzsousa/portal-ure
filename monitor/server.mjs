@@ -22,7 +22,11 @@ import { MonitorRede } from './src/monitor.mjs'
 
 const AQUI = dirname(fileURLToPath(import.meta.url))
 const ARQUIVO_CONFIG = process.env.MONITOR_CONFIG || join(AQUI, 'config.json')
-const NIVEIS_PADRAO = ['ADMIN', 'TECNICO']
+// Só o ADMIN vê o monitoramento: o Técnico atende chamado e vai à escola, e o
+// portal esconde a tela para ele (ver `meta.roles` em src/router/index.ts). O
+// monitor confere o nível de novo porque é a única trava que sobrevive a quem
+// chamar a API direto.
+const NIVEIS_PADRAO = ['ADMIN']
 
 function log(prefixo) {
   return (...partes) => console.log(`[${new Date().toISOString()}] ${prefixo}`, ...partes)

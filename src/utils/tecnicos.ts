@@ -3,9 +3,10 @@ import type { TecnicoDestino } from '@/api/chamados'
 /**
  * Escala da equipe de atendimento.
  *
- * Estas listas definem QUEM aparece nos selects de "responsável pelo
- * atendimento" e EM QUE ORDEM — a lista é a ordem do select, não um filtro
- * sobre o cadastro de usuários (o `id` continua vindo do backend).
+ * Estas listas definem a ORDEM em que os selects de "responsável pelo
+ * atendimento" apresentam as pessoas. Quem PODE receber é outra pergunta, e a
+ * resposta não é a escala: é o perfil (Escopo de tipos de chamado, marcado pelo
+ * ADMIN em Cadastro de usuários) mais o filtro do backend.
  */
 
 /** Equipe que atende os chamados em geral, na ordem em que aparece no select. */
@@ -25,13 +26,22 @@ export const EQUIPE_ATENDIMENTO = [
 ] as const
 
 /**
- * Chamados de Sistemas e E-mail têm equipe própria: só estas cinco pessoas
- * atendem esse tipo de chamado, e JESSICA e MATHEUS vêm antes das demais.
+ * Ordem da equipe de Sistemas e E-mail: quem atende esse assunto vem antes
+ * dos demais, com JESSICA e MATHEUS na frente.
+ *
+ * É SÓ ORDEM. Quem pode receber esses chamados é quem tem a categoria marcada
+ * em "Escopo de tipos" no perfil — o backend já devolve só eles, em
+ * `CATEGORIAS_COM_LIBERACAO` (espelha o backend).
  */
 export const EQUIPE_SISTEMAS_EMAIL = ['JESSICA', 'MATHEUS', 'PABLO', 'FERNANDA', 'FABIO'] as const
 
-/** Chaves de categoria do formulário público com equipe restrita ('e-mail' cobre a grafia com hífen). */
-export const CATEGORIAS_EQUIPE_REDUZIDA = ['sistemas', 'email', 'e-mail'] as const
+/**
+ * Categorias que exigem liberação no perfil do técnico, por chave do
+ * formulário. Espelha `CATEGORIAS_COM_LIBERACAO` do backend: as duas listas
+ * precisam contar as mesmas, senão a tela oferece alguém que o servidor recusa.
+ * 'e-mail' cobre a grafia com hífen.
+ */
+export const CATEGORIAS_COM_LIBERACAO = ['sistemas', 'email', 'e-mail'] as const
 
 /** Rótulo do grupo com quem atende a unidade do chamado (vem primeiro no select). */
 export const GRUPO_UNIDADE = 'Atende esta unidade'
@@ -71,8 +81,8 @@ function posicaoNaEscala(nome: string, posicao: Map<string, number>): number | n
   return null
 }
 
-/** As chaves acima já normalizadas ('SISTEMAS', 'EMAIL'). */
-const CATEGORIAS_REDUZIDAS = new Set<string>(CATEGORIAS_EQUIPE_REDUZIDA.map(normalizar))
+/** As chaves acima já normalizadas ('SISTEMAS', 'EMAIL', 'E-MAIL'). */
+const CATEGORIAS_LIBERADAS = new Set<string>(CATEGORIAS_COM_LIBERACAO.map(normalizar))
 
 /** O que a tela precisa do chamado para descobrir a categoria dele. */
 export interface ChamadoComCategoria {
@@ -98,14 +108,19 @@ export function chaveDaCategoria(chamado?: ChamadoComCategoria | null): string {
   return ''
 }
 
-/** true quando a categoria do chamado usa a equipe restrita (Sistemas/E-mail). */
-export function ehCategoriaEquipeReduzida(categoriaChave?: string | null): boolean {
-  return CATEGORIAS_REDUZIDAS.has(normalizar(categoriaChave || ''))
+/**
+ * Esta categoria só chega a quem a marcou no perfil?
+ *
+ * Espelha `categoriaExigeLiberacao` do backend. Vale para a lista que a tela
+ * monta; quem decide mesmo é o servidor, no encaminhamento.
+ */
+export function ehCategoriaComLiberacao(categoriaChave?: string | null): boolean {
+  return CATEGORIAS_LIBERADAS.has(normalizar(categoriaChave || ''))
 }
 
-/** A equipe que pode receber um chamado da categoria informada. */
+/** A ordem da escala desta categoria: a de Sistemas/E-mail ou a geral. */
 export function equipeDaCategoria(categoriaChave?: string | null): readonly string[] {
-  return ehCategoriaEquipeReduzida(categoriaChave) ? EQUIPE_SISTEMAS_EMAIL : EQUIPE_ATENDIMENTO
+  return ehCategoriaComLiberacao(categoriaChave) ? EQUIPE_SISTEMAS_EMAIL : EQUIPE_ATENDIMENTO
 }
 
 export interface OrdenarTecnicosOpcoes {
@@ -118,20 +133,31 @@ export interface OrdenarTecnicosOpcoes {
 /**
  * Ordena (e filtra) a lista de destinos de um select de responsável.
  *
- * - A escala é a lista FECHADA de quem pode atender: o que não está nela não
- *   entra no select, mesmo sendo ADMIN ou TECNICO ativo. É o que impede a
- *   conta de teste ("Teste Local") e o homônimo ("Pablo - Estagiário" ao lado
- *   do "Pablo") de aparecerem como destino.
- * - A ordem é a de `EQUIPE_ATENDIMENTO` / `EQUIPE_SISTEMAS_EMAIL`. Quem atende
- *   a unidade entra antes, no grupo `GRUPO_UNIDADE`, que preserva essa ordem.
- * - Única exceção: o técnico já salvo na regra (`extrasIds`) continua na lista
- *   para uma regra antiga não abrir vazia — sem isso o select ficaria sem
- *   seleção e o "Salvar" viraria "Técnico da unidade" sem ninguém querer.
+ * Nas categorias comuns a escala é a lista FECHADA de quem pode atender: o que
+ * não está nela não entra no select, mesmo sendo ADMIN ou TECNICO ativo. É o
+ * que impede a conta de teste ("Teste Local") e o homônimo ("Pablo - Estagiário"
+ * ao lado do "Pablo") de aparecerem como destino.
+ *
+ * A ordem é a de `EQUIPE_ATENDIMENTO` / `EQUIPE_SISTEMAS_EMAIL`. Quem atende
+ * a unidade entra antes, no grupo `GRUPO_UNIDADE`, que preserva essa ordem.
+ *
+ * EXCEÇÃO — Sistemas e E-mail (categorias com liberação): lá quem pode receber
+ * é quem tem a categoria marcada no perfil, e o backend já devolve só essas
+ * pessoas. A escala entra como ORDEM, não como filtro: repetir o filtro aqui
+ * esconderia do select o técnico que o ADMIN acabou de liberar, e o
+ * encaminhamento automático cairia em outra pessoa. Quem o backend mandou e não
+ * está na escala entra depois dela, em vez de sumir.
+ *
+ * Única exceção em qualquer das duas: o técnico já salvo na regra
+ * (`extrasIds`) nunca some, para uma regra antiga não abrir vazia — sem isso o
+ * select ficaria sem seleção e o "Salvar" viraria "Técnico da unidade" sem
+ * ninguém querer.
  */
 export function ordenarTecnicos(
   tecnicos: TecnicoDestino[],
   opcoes: OrdenarTecnicosOpcoes = {},
 ): TecnicoDestino[] {
+  const liberada = ehCategoriaComLiberacao(opcoes.categoriaChave)
   const equipe = equipeDaCategoria(opcoes.categoriaChave)
   const posicao = new Map(equipe.map((nome, i) => [normalizar(nome), i]))
   const extras = new Set(opcoes.extrasIds || [])
@@ -152,6 +178,8 @@ export function ordenarTecnicos(
   daEscala.sort((a, b) => (ordem.get(a.id) ?? 0) - (ordem.get(b.id) ?? 0))
 
   const extrasPresentes = foraDaEscala.filter((t) => extras.has(t.id))
+  if (!liberada) return [...daEscala, ...extrasPresentes]
 
-  return [...daEscala, ...extrasPresentes]
+  const outros = foraDaEscala.filter((t) => !extras.has(t.id))
+  return [...daEscala, ...extrasPresentes, ...outros]
 }

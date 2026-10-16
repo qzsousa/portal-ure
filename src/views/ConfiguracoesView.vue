@@ -187,6 +187,10 @@ async function carregarRegras() {
  * Opções do select de destino da categoria: só a equipe de atendimento, na
  * ordem da escala. O técnico já salvo na regra nunca some da lista — sem isso
  * uma regra antiga apontaria para uma opção invisível e o select abriria vazio.
+ *
+ * Esta tela lista TODOS os técnicos ativos (a rota de regras não filtra por
+ * categoria): em Sistemas/E-mail a escala é só ordem, e a trava é o perfil —
+ * apontar a regra para quem não tem a categoria liberada é recusado ao salvar.
  */
 function tecnicosDaCategoria(chave: string): TecnicoDestino[] {
   const atual = enc.destino[chave] || ''

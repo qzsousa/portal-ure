@@ -69,8 +69,12 @@ chamados). Não há usuário, senha nem sessão paralela para o monitor.
 > pode acabar gerando um segredo novo: aí o monitor responde `401` para token
 > válido, e parece "quebrado".
 
-Perfis liberados: `ADMIN` e `TECNICO` (variável `NIVEIS_PERMITIDOS`). Um
-`GESTOR` recebe `403` — a tela fica na matriz, como as demais restritas.
+Perfis liberados: **só `ADMIN`** (variável `NIVEIS_PERMITIDOS`, cujo padrão é
+`['ADMIN']` em `monitor/server.mjs`). `TECNICO` e `GESTOR` recebem `403` — o
+técnico atende chamado e vai à escola, não acompanha o monitoramento, e o
+portal também esconde a tela e recusa a URL para ele
+(`meta.roles` em `src/router/index.ts`). São as duas camadas: a do portal é
+experiência, a do monitor é a trava.
 
 ---
 

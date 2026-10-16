@@ -37,6 +37,9 @@ const ehEscola = computed(() => ['GESTOR', 'VISUALIZADOR'].includes(auth.user?.n
 /* Cards auxiliares (unidades, modelos, avaliação) são da matriz — a escola
  * (Gestor/Visualizador) não os vê; o Gestor tem a visão dividida abaixo. */
 const cardsDaMatriz = computed(() => !['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
+/* A rosca de avaliação é ADMIN: `/feedback/stats` é ADMIN-only, e o Técnico
+ * veria uma rosca vazia com "—" no lugar da nota. */
+const ehAdmin = computed(() => auth.user?.nivel === 'ADMIN')
 
 /* Atalhos do menu de Acesso Rápido (só escola). `externo: true` abre em nova aba. */
 interface AtalhoRapido {
@@ -101,7 +104,9 @@ async function carregarExtras() {
     /* silencioso */
   }
   try {
-    statsAvaliacao.value = await getFeedbackStats()
+    // Só o ADMIN tem a nota: pedir para o Técnico só rende um 403 engolido
+    // pelo catch e um pedido inútil a cada carregamento do painel.
+    if (ehAdmin.value) statsAvaliacao.value = await getFeedbackStats()
   } catch {
     /* silencioso */
   }
@@ -321,6 +326,7 @@ useAutoRefresh(async () => {
           </div>
         </div>
         <DonutCard
+          v-if="ehAdmin"
           titulo="Avaliação de atendimento"
           :fatias="fatiasAvaliacao"
           :cores="CORES_AVALIACAO"

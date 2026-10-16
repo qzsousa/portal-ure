@@ -23,7 +23,10 @@ export interface FiltrosChamado {
   categoriaChave?: string
   status?: StatusChamado | ''
   urgencia?: string
-  /** Nome do técnico responsável — o backend casa por nome, não por id. */
+  /**
+   * Nome do técnico ATENDENTE, como no cadastro. O backend devolve os chamados
+   * das escolas dele (`Usuario.filial`), não os que ele é responsável.
+   */
   responsavel?: string
   page?: number
   limit?: number
@@ -174,9 +177,19 @@ export interface TecnicoDestino {
 /** `UNIDADE` = técnico da própria unidade (escolhido pelo backend); `TECNICO` = o escolhido. */
 export type ModoEncaminhamento = 'UNIDADE' | 'TECNICO'
 
-/** Todos os técnicos ativos — usado como lista de destinos. */
-export async function listarTecnicos(): Promise<TecnicoDestino[]> {
-  const { data } = await chamadosApi.get<{ data: TecnicoDestino[] }>('/chamados/encaminhar/tecnicos')
+/**
+ * Todos os técnicos ativos — usado como lista de destinos.
+ *
+ * `categoriaChave` limita a lista aos liberados para aquela categoria (ver
+ * `CATEGORIAS_COM_LIBERACAO`): em Sistemas/E-mail o perfil decide quem entra, e
+ * oferecer no select quem o POST vai recusar só gera encaminhamento que volta
+ * como 422. Sem o parâmetro vem a lista inteira — é o que a tela de Regras de
+ * Encaminhamento usa para escolher o técnico fixo de qualquer categoria.
+ */
+export async function listarTecnicos(categoriaChave?: string | null): Promise<TecnicoDestino[]> {
+  const { data } = await chamadosApi.get<{ data: TecnicoDestino[] }>('/chamados/encaminhar/tecnicos', {
+    params: categoriaChave ? { categoriaChave } : undefined,
+  })
   return data.data
 }
 

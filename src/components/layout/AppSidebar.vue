@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BarChart3,
+  Bot,
   BookOpen,
   Camera,
   Headset,
@@ -50,13 +51,14 @@ const { menuAberto, fechar } = useSidebar()
 
 const items: MenuItem[] = [
   { to: '/painel', label: 'Painel', icon: LayoutDashboard, rota: 'dashboard' },
+  { to: '/chat', label: 'Chat IA', icon: Bot, adminOnly: true, rota: 'dashboard' },
   { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, semEscopoTipos: true, rota: 'equipamentos' },
   { to: '/manutencao', label: 'Manutenção', icon: Wrench, semEscopoTipos: true, rota: 'equipamentos' },
   { to: '/chamados', label: 'Chamados', icon: Headset, rota: 'chamados' },
   { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen, semEscopoTipos: true, rota: 'tutoriais' },
   { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
-  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, matrizOnly: true, semEscopoTipos: true, rota: 'equipamentos' },
-  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, matrizOnly: true, semEscopoTipos: true, rota: 'feedback' },
+  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, adminOnly: true, semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, adminOnly: true, semEscopoTipos: true, rota: 'feedback' },
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3, semEscopoTipos: true, rota: 'chamados' },
   { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true, rota: 'usuarios' },
   { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true, rota: 'formulario' },

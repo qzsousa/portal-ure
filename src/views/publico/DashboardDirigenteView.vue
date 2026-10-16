@@ -30,8 +30,10 @@ const CORES_STATUS_COD: Record<string, string> = {
 }
 const CORES_STATUS_ROTULO: Record<string, string> = {
   Aberto: '#dc2626',
+  Encaminhado: '#d97706',
   'Em atendimento': '#2563eb',
-  'Aguardando escola': '#9333ea',
+  'Aguardando resposta': '#9333ea',
+  'Aguardando conferência': '#7c3aed',
   'Concluído': '#16a34a',
 }
 
@@ -113,9 +115,15 @@ const porUnidade = computed(() => {
 
 /* ------- Resolvidos por técnico ------- */
 const porTecnico = computed(() => {
-  const entradas = Object.entries(dados.value?.graficos.resolvidosPorTecnico || {}).sort(
-    (a, b) => b[1] - a[1],
-  ).slice(0, 10)
+  const mapa = new Map<string, number>()
+  for (const c of dados.value?.chamados || []) {
+    if (c.status !== 'RESOLVIDO') continue
+    const tecnico = (c.responsavel || '').trim()
+    if (!tecnico) continue
+    mapa.set(tecnico, (mapa.get(tecnico) || 0) + 1)
+  }
+  const fonte = mapa.size > 0 ? mapa : new Map(Object.entries(dados.value?.graficos.resolvidosPorTecnico || {}))
+  const entradas = [...fonte.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
   return {
     labels: entradas.map(([t]) => t),
     series: [{ label: 'Resolvidos', data: entradas.map(([, n]) => n), cor: '#2563eb' }],

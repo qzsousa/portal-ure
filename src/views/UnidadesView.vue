@@ -4,6 +4,7 @@ import { AlertTriangle, Download, Package, PackageX, School, Search } from '@luc
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
+import UnidadeDetalheModal from '@/components/unidades/UnidadeDetalheModal.vue'
 import { listarPainelUnidades, ROTULO_INVENTARIO, type UnidadePainel } from '@/api/escolas'
 import { listarUnidadesResumo, type UnidadeResumo } from '@/api/sce'
 import { casarNomeEscola } from '@/utils/escola'
@@ -105,6 +106,8 @@ function cieDaEscola(nome: string): string {
 const PAGE_SIZE = 10
 
 interface UnidadeLinha extends UnidadePainel {
+  /** CIE resolvido do mapa local no momento da mesclagem (evita recalcular no template). */
+  cie: string
   equip: { total: number; disponiveis: number; manutencao: number; quebrados: number; extraviados: number }
 }
 
@@ -124,6 +127,23 @@ const busca = ref('')
 const filtroEquip = ref<'' | 'com' | 'sem'>('')
 const sortCol = ref<'total' | 'disponiveis' | 'manutencao' | 'quebrados' | 'extraviados' | null>(null)
 const sortDir = ref<'asc' | 'desc'>('desc')
+
+const detalheAberto = ref(false)
+const unidadeSelecionada = ref<UnidadeLinha | null>(null)
+
+/**
+ * Abre o detalhe da unidade.
+ *
+ * DEFESA: `getSelection()` é obrigatório porque a linha é clicável INTEIRA —
+ * sem isso, arrastar o mouse para seleccionar um número e soltar dentro da
+ * linha abriria o modal no meio de uma seleção de texto. Mesma defesa usada
+ * em `ChamadosView`.
+ */
+function abrirDetalhe(u: UnidadeLinha) {
+  if (window.getSelection()?.toString()) return
+  unidadeSelecionada.value = u
+  detalheAberto.value = true
+}
 
 function toggleSort(col: 'total' | 'disponiveis' | 'manutencao' | 'quebrados' | 'extraviados') {
   if (sortCol.value === col) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
@@ -197,7 +217,11 @@ function mesclarEquipamentos(
     }
   }
 
-  const linhas = unidades.map((u) => ({ ...u, equip: totais.get(u.nome) || zero() }))
+  const linhas = unidades.map((u) => ({
+    ...u,
+    cie: cieDaEscola(u.nome),
+    equip: totais.get(u.nome) || zero(),
+  }))
   naoAtribuidos.sort((a, b) => b.total - a.total)
   return { linhas, naoAtribuidos }
 }
@@ -268,7 +292,7 @@ function exportarCsv() {
     'Usuários ativos', 'Chamados (total)', 'Chamados abertos',
   ]
   const linhas = filtradas.value.map((u) => [
-    u.nome, u.grupo, u.irma || '', cieDaEscola(u.nome), u.tecnico, rotuloInventario(u.inventarioStatus),
+    u.nome, u.grupo, u.irma || '', u.cie, u.tecnico, rotuloInventario(u.inventarioStatus),
     u.equip.total > 0 ? 'Sim' : 'Não',
     u.equip.total, u.equip.disponiveis, u.equip.manutencao, u.equip.quebrados, u.equip.extraviados,
     u.usuariosAtivos, u.chamadosTotal, u.chamadosAbertos,
@@ -417,13 +441,20 @@ onMounted(() => {
                 {{ estado.erro ? 'Sem dados para exibir.' : 'Nenhuma unidade encontrada.' }}
               </td>
             </tr>
-            <tr v-for="(u, i) in paginaAtual" :key="u.nome">
+            <tr
+              v-for="(u, i) in paginaAtual"
+              :key="u.nome"
+              class="linha"
+              @click="abrirDetalhe(u)"
+            >
               <td class="nowrap"><strong>{{ codigo(i) }}</strong></td>
               <td>
-                {{ u.nome }}
+                <button class="link-unidade" type="button" @click.stop="abrirDetalhe(u)">
+                  {{ u.nome }}
+                </button>
                 <div v-if="u.irma" class="unidade-irma">divide o prédio com {{ u.irma }}</div>
               </td>
-              <td class="nowrap">{{ cieDaEscola(u.nome) }}</td>
+              <td class="nowrap">{{ u.cie }}</td>
               <td>{{ u.tecnico || '—' }}</td>
               <td><StatusPill :status="rotuloInventario(u.inventarioStatus)" /></td>
               <td>
@@ -449,6 +480,12 @@ onMounted(() => {
         @change="(p) => { estado.page = p }"
       />
     </div>
+
+    <UnidadeDetalheModal
+      :aberto="detalheAberto"
+      :unidade="unidadeSelecionada"
+      @fechar="detalheAberto = false"
+    />
   </div>
 </template>
 
@@ -554,6 +591,31 @@ th.sortable:hover {
 .unidade-irma {
   font-size: 11.5px;
   color: var(--text-muted);
+}
+
+.linha {
+  cursor: pointer;
+}
+
+.linha:hover {
+  background: var(--surface-muted);
+}
+
+/* O nome é um <button> de verdade: é o caminho do teclado (Tab/Enter) para
+   abrir o detalhe sem trocar a semântica de <td> por link. */
+.link-unidade {
+  font-weight: 600;
+  text-align: left;
+}
+
+.link-unidade:hover {
+  text-decoration: underline;
+}
+
+.link-unidade:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .chamados-total {
