@@ -317,7 +317,11 @@ const tools: any[] = [
     function: {
       name: 'resumo_chamados',
       description:
-        'Conta chamados agregando por tipo, status e unidade. Filtros opcionais por responsavel (tecnico), status e unidade. Use SEMPRE para perguntas do tipo "quais tipos o tecnico X resolveu", "quantos chamados por tipo", "tipos mais comum".',
+        'Conta chamados agregando por tipo, status, unidade e responsavel (tecnico). ' +
+        'Filtros opcionais por responsavel (tecnico), status e unidade. ' +
+        'Os responsaveis ja vem normalizados (sem diferenca de caixa ou espaco), entao cada chave e uma pessoa so - ' +
+        'NAO invente ressalva de grafia duplicada. ' +
+        'Use SEMPRE para perguntas do tipo "quais tipos o tecnico X resolveu", "quantos chamados por tipo", "tipos mais comum".',
       parameters: {
         type: 'object',
         properties: {
@@ -356,7 +360,18 @@ const tools: any[] = [
 ]
 
 /**
- * Roda `fn` para os índices 0..n-1, no máximo `concorrencia` por vez.
+ * Chave de agrupamento de pessoa: sem caixa e sem espaço sobrando.
+ *
+ * O `responsavel` chega do backend como o texto que alguém digitou no
+ * atendimento: "JESSICA", "Jessica" e " Jessica " são a mesma pessoa e viravam
+ * três linhas no ranking. Quem responde pelo chamado não é pessoa nenhuma
+ * ("SEINTEC", "SEINTEC-LESTE3") e fica como está — mexer nisso é adivinhação.
+ */
+function normalizarNome(valor: unknown): string {
+  return String(valor ?? '').trim().replace(/\s+/g, ' ').toUpperCase()
+}
+
+/** Roda `fn` para os índices 0..n-1, no máximo `concorrencia` por vez.
  *
  * As tools de resumo varrem a base INTEIRA (dezenas de páginas). Pages uma por
  * uma, uma pergunta levava minutos — e o composer fica travado esse tempo
@@ -469,12 +484,12 @@ async function executarToolSemCache(nome: string, args: any) {
     const porStatus: Record<string, number> = {}
     const porUnidade: Record<string, number> = {}
     const porTecnico: Record<string, number> = {}
-    const filtroResp = args.responsavel ? String(args.responsavel).toLowerCase() : ''
+    const filtroResp = args.responsavel ? normalizarNome(args.responsavel) : ''
     const filtroStatus = args.status ? String(args.status).toUpperCase() : ''
     const filtroUnidade = args.unidade ? String(args.unidade).toLowerCase() : ''
     let total = 0
     for (const c of await todosChamados()) {
-      if (filtroResp && !String(c.responsavel || '').toLowerCase().includes(filtroResp)) continue
+      if (filtroResp && !normalizarNome(c.responsavel).includes(filtroResp)) continue
       if (filtroStatus && String(c.status || '').toUpperCase() !== filtroStatus) continue
       if (filtroUnidade && !String(c.unidade || '').toLowerCase().includes(filtroUnidade)) continue
       total++
@@ -484,7 +499,10 @@ async function executarToolSemCache(nome: string, args: any) {
       porTipo[tipo] = (porTipo[tipo] || 0) + 1
       porStatus[status] = (porStatus[status] || 0) + 1
       porUnidade[unidade] = (porUnidade[unidade] || 0) + 1
-      if (c.responsavel) porTecnico[c.responsavel] = (porTecnico[c.responsavel] || 0) + 1
+      if (c.responsavel) {
+        const nome = normalizarNome(c.responsavel)
+        if (nome) porTecnico[nome] = (porTecnico[nome] || 0) + 1
+      }
     }
     const ordenar = (o: Record<string, number>) =>
       Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]))
