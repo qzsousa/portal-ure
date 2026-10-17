@@ -14,7 +14,7 @@
                 <small>Portal URE Leste 3</small>
               </div>
             </div>
-            <button class="new-btn" @click="novaConversa">
+            <button class="new-btn" @click="novaConversa({ persistir: false })">
               <Plus :size="15" /> Nova
             </button>
           </header>
@@ -203,27 +203,53 @@ interface Conv { id: string; title: string; mensagens: Msg[]; atualizado: number
 const conversas = ref<Conv[]>([])
 const convId = ref<string>('')
 
+/**
+ * Abre o chat sempre numa conversa nova.
+ *
+ * Antes era preciso clicar em "Nova" para começar uma conversa limpa: quem
+ * abria a tela caía na última conversa salva e, se mandasse a pergunta ali,
+ * ela se misturava com o assunto anterior.
+ *
+ * A conversa nova nasce vazia e só vai para o `localStorage` quando recebe a
+ * primeira mensagem (o watcher de `mensagens` faz isso). Sem essa espera, cada
+ * F5 deixaria um "Nova conversa" órfão na lista — e o botão "Nova" nem seria
+ * mais necessário para não perder nada.
+ */
 function carregarHistorico() {
   try {
     const raw = localStorage.getItem('chat-conversas')
     if (raw) conversas.value = JSON.parse(raw) as Conv[]
   } catch { conversas.value = [] }
-  if (!conversas.value.length) novaConversa()
-  else {
-    convId.value = conversas.value.slice().sort((a, b) => b.atualizado - a.atualizado)[0].id
-    const c = conversas.value.find((x) => x.id === convId.value)
-    if (c) mensagens.value = Array.isArray(c.mensagens) ? c.mensagens : []
+
+  const iniciada = conversas.value.find((c) => Array.isArray(c.mensagens) && c.mensagens.length)
+  if (!conversas.value.length || iniciada) {
+    novaConversa({ persistir: false })
+    return
   }
+
+  // Todas as conversas salvas estão vazias (ex.: a pessoa entrou e saiu sem
+  // perguntar nada): reaproveita a mais recente em vez de criar outra.
+  convId.value = conversas.value.slice().sort((a, b) => b.atualizado - a.atualizado)[0].id
+  const c = conversas.value.find((x) => x.id === convId.value)
+  if (c) mensagens.value = Array.isArray(c.mensagens) ? c.mensagens : []
 }
+/**
+ * Persiste o histórico descartando conversa sem mensagem.
+ *
+ * É o que garante a lista limpa: a conversa que abre a tela (e a do botão
+ * "Nova") só entra no `localStorage` quando recebe a primeira mensagem. Sem o
+ * filtro, trocar de conversa já gravaria a vazia.
+ */
 function salvarHistorico() {
-  localStorage.setItem('chat-conversas', JSON.stringify(conversas.value))
+  const comConteudo = conversas.value.filter((c) => Array.isArray(c.mensagens) && c.mensagens.length)
+  localStorage.setItem('chat-conversas', JSON.stringify(comConteudo))
 }
-function novaConversa() {
+function novaConversa(opcoes: { persistir?: boolean } = {}) {
   const c: Conv = { id: String(Date.now()), title: 'Nova conversa', mensagens: [], atualizado: Date.now() }
   conversas.value.unshift(c)
   convId.value = c.id
   mensagens.value = []
-  salvarHistorico()
+  if (opcoes.persistir !== false) salvarHistorico()
 }
 function selecionarConv(id?: string) {
   if (id) convId.value = id
@@ -688,6 +714,10 @@ function escolherModelo(m: string) {
   buscaModelo.value = ''
 }
 
+// O historico era lido so pelo botao "Atualizar dados": ao abrir a tela nao
+// havia conversa na lista, o watcher de mensagens nao achava onde salvar e a
+// conversa ficava perdida ate a pessoa clicar naquele botao.
+carregarHistorico()
 carregar()
 void carregarModelosNvidia()
 
