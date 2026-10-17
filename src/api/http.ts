@@ -140,8 +140,8 @@ export const chamadosApi = axios.create({
 
 export const sceApi = axios.create({
   baseURL: SCE_BASE,
-  headers: { 'Content-Type': 'application/json' },
-  timeout: 30000,
+  withCredentials: false,
+  timeout: 120000,
 })
 
 /**

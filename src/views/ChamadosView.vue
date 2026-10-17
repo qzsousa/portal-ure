@@ -4052,4 +4052,19 @@ tr.selecionado td {
     transform: rotate(360deg);
   }
 }
+@media (max-width: 640px) {
+  .equip-unidade .table {
+    font-size: 12px;
+  }
+  .equip-unidade .acao-linha {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .equip-unidade .acao-linha .input,
+  .equip-unidade .acao-linha .select-input,
+  .equip-unidade .acao-linha .btn {
+    width: 100%;
+    max-width: none;
+  }
+}
 </style>
