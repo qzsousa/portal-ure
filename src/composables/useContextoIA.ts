@@ -1,7 +1,6 @@
 import { ref } from 'vue'
-import { listarChamados } from '@/api/chamados'
-import { listarUsuarios } from '@/api/usuarios'
-import { listarEquipamentosGlobal } from '@/api/sce'
+import { chamadosApi } from '@/api/http'
+import { listarEquipamentosGlobal, listarUnidadesResumo } from '@/api/sce'
 
 /**
  * Contexto que a CaféIA leva para a IA: agregados dos DOIS backends do portal.
@@ -28,69 +27,30 @@ function ordenar(o: Record<string, number>) {
 }
 
 async function montarResumo() {
-  const statusChamados: Record<string, number> = {}
-  const abertosPorEscola: Record<string, number> = {}
-  const resolvidosPorTecnico: Record<string, number> = {}
+  // Agregados vêm do backend (SQL groupBy) em uma única chamada — sem paginação.
+  // Equipamentos: /unidades-resumo já traz disponiveis por unidade (servidor);
+  // /equipamentos-global?limite=1 traz total + porStatus agregado.
+  const [resumoCh, unidadesResumo, rEq] = await Promise.all([
+    chamadosApi.get('/ia/resumo'),
+    listarUnidadesResumo(),
+    listarEquipamentosGlobal({ limite: 1, offset: 0 }),
+  ])
 
-  let totalCh = 0
-  let page = 1
-  let paginas = 0
-  while (paginas < 40) {
-    const r = await listarChamados({ page, limit: 100 })
-    const arr = r.data || []
-    if (!arr.length) break
-    totalCh = r.meta?.total ?? totalCh
-    for (const c of arr) {
-      const st = c.status || 'sem status'
-      statusChamados[st] = (statusChamados[st] || 0) + 1
-      if (st === 'ABERTO') abertosPorEscola[c.unidade] = (abertosPorEscola[c.unidade] || 0) + 1
-      if (st === 'RESOLVIDO' && c.responsavel) {
-        resolvidosPorTecnico[c.responsavel] = (resolvidosPorTecnico[c.responsavel] || 0) + 1
-      }
-    }
-    page++
-    paginas++
-    if (arr.length < 100) break
-  }
+  const d = resumoCh.data || {}
+  const statusChamados: Record<string, number> = d.statusChamados || {}
+  const abertosPorEscola: Record<string, number> = d.abertosPorEscola || {}
+  const resolvidosPorTecnico: Record<string, number> = d.resolvidosPorTecnico || {}
+  const tecnicoEscolas: Record<string, string> = d.tecnicoEscolas || {}
+  const totalCh = Number(d.totalCh ?? 0)
 
-  //TECNICOS CADASTRADOS: quem atende quais escolas vem daqui (filial),
-  // e nao do historico de chamados - uma escola pode ter tecnico sem chamado.
-  const tecnicoEscolas: Record<string, string> = {}
-  let pu = 1
-  let puPaginas = 0
-  while (puPaginas < 40) {
-    const ru = await listarUsuarios({ page: pu, limit: 100 })
-    const arrU = ru.data || []
-    if (!arrU.length) break
-    for (const u of arrU) {
-      if (u.nivel === 'TECNICO' && u.filial) tecnicoEscolas[u.nome] = u.filial
-    }
-    pu++
-    puPaginas++
-    if (arrU.length < 100) break
-  }
-
-  //Top 10 unidades por equipamento disponivel: o SCE so devolve o agregado de
-  // status geral, entao a contagem por unidade e feita aqui.
   const disponiveisPorUnidade: Record<string, number> = {}
-  let off = 0
-  let pp = 0
-  while (pp < 60) {
-    const re = await listarEquipamentosGlobal({ limite: 500, offset: off })
-    const arrE = re.data || []
-    if (!arrE.length) break
-    for (const e of arrE) {
-      if (String(e.status || '').toLowerCase().includes('dispon')) {
-        disponiveisPorUnidade[e.unidade] = (disponiveisPorUnidade[e.unidade] || 0) + 1
-      }
-    }
-    off += 500
-    pp++
-    if (arrE.length < 500) break
+  for (const u of unidadesResumo || []) {
+    if (u && u.disponiveis > 0) disponiveisPorUnidade[u.nome] = u.disponiveis
   }
   const topDisp = Object.entries(disponiveisPorUnidade).sort((a, b) => b[1] - a[1]).slice(0, 10)
 
-  const rEq = await listarEquipamentosGlobal({ limite: 1, offset: 0 })
+  const totalEq = Number(rEq?.total ?? 0)
+  const porStatusEq = rEq?.stats?.porStatus || {}
 
   resumo.value = [
     `TOTAL chamados: ${totalCh}`,
@@ -98,12 +58,12 @@ async function montarResumo() {
     `Chamados abertos por escola: ${JSON.stringify(ordenar(abertosPorEscola))}`,
     `Chamados resolvidos por tecnico: ${JSON.stringify(ordenar(resolvidosPorTecnico))}`,
     `Tecnicos e escolas cadastradas (filial): ${JSON.stringify(tecnicoEscolas)}`,
-    `EQUIPAMENTOS total: ${rEq.total}`,
-    `Equipamentos por status (geral): ${JSON.stringify(rEq.stats?.porStatus || {})}`,
+    `EQUIPAMENTOS total: ${totalEq}`,
+    `Equipamentos por status (geral): ${JSON.stringify(porStatusEq)}`,
     `Top 10 unidades por equipamentos disponiveis: ${JSON.stringify(topDisp)}`,
   ].join('\n')
 
-  status.value = `Base carregada: ${totalCh} chamados, ${rEq.total} equipamentos.`
+  status.value = `Base carregada: ${totalCh} chamados, ${totalEq} equipamentos.`
 }
 
 async function carregar(forcar = false) {

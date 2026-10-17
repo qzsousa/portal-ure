@@ -391,36 +391,53 @@ async function emLotes<T>(n: number, concorrencia: number, fn: (i: number) => Pr
   return resultados.flat() as T[]
 }
 
+/** Cache de sessão: evita revarrer a base a cada pergunta. */
+let cacheTodosChamados: { dados: any[]; ts: number } | null = null
 /** Todos os chamados, paginados em paralelo. */
 async function todosChamados(): Promise<any[]> {
+  const TTL = 5 * 60 * 1000
+  if (cacheTodosChamados && Date.now() - cacheTodosChamados.ts < TTL) return cacheTodosChamados.dados
   const LIMITE = 100
   const MAX_PAGINAS = 40
   const primeira: any = await listarChamados({ page: 1, limit: LIMITE })
   const base = primeira.data || []
   const total = Number(primeira.meta?.total ?? base.length)
   const paginas = Math.min(Math.ceil(total / LIMITE), MAX_PAGINAS) - 1
-  if (paginas <= 0) return base
+  if (paginas <= 0) {
+    cacheTodosChamados = { dados: base, ts: Date.now() }
+    return base
+  }
   const resto = await emLotes(paginas, 5, async (i) => {
     const r: any = await listarChamados({ page: i + 2, limit: LIMITE })
     return r.data || []
   })
-  return [...base, ...resto]
+  const dados = [...base, ...resto]
+  cacheTodosChamados = { dados, ts: Date.now() }
+  return dados
 }
 
+let cacheTodosEquipamentos: { dados: any[]; ts: number } | null = null
 /** Todos os equipamentos, paginados em paralelo. */
 async function todosEquipamentos(): Promise<any[]> {
+  const TTL = 5 * 60 * 1000
+  if (cacheTodosEquipamentos && Date.now() - cacheTodosEquipamentos.ts < TTL) return cacheTodosEquipamentos.dados
   const LIMITE = 500
   const MAX_PAGINAS = 60
   const primeira: any = await listarEquipamentosGlobal({ limite: LIMITE, offset: 0 })
   const base = primeira.data || []
   const total = Number(primeira.total ?? base.length)
   const paginas = Math.min(Math.ceil(total / LIMITE), MAX_PAGINAS) - 1
-  if (paginas <= 0) return base
+  if (paginas <= 0) {
+    cacheTodosEquipamentos = { dados: base, ts: Date.now() }
+    return base
+  }
   const resto = await emLotes(paginas, 5, async (i) => {
     const r: any = await listarEquipamentosGlobal({ limite: LIMITE, offset: (i + 1) * LIMITE })
     return r.data || []
   })
-  return [...base, ...resto]
+  const dados = [...base, ...resto]
+  cacheTodosEquipamentos = { dados, ts: Date.now() }
+  return dados
 }
 
 /**
@@ -639,6 +656,9 @@ const msgs: any[] = [
 }
 
 function recarregar() {
+  cacheTools.clear()
+  cacheTodosChamados = null
+  cacheTodosEquipamentos = null
   carregarHistorico()
   recarregarBase()
 }
