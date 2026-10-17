@@ -26,7 +26,9 @@ import { listarUsuarios } from '@/api/usuarios'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { chaveEscola } from '@/utils/escola'
+import { buscarLinkInternetPorEscola } from '@/utils/linksInternet'
 import { formatDateTime } from '@/utils/format'
+import type { LinkInternetUnidade } from '@/data/linksInternetData'
 import { apiError } from '@/utils/apiError'
 import { rotuloPerfil, type Chamado, type Equipamento, type StatusChamado, type User } from '@/types'
 
@@ -88,6 +90,32 @@ async function copiarCie() {
  * confunde — mas não é clicável para quem levaria 403.
  */
 const podeListarUsuarios = computed(() => auth.user?.nivel === 'ADMIN' || auth.user?.nivel === 'GESTOR')
+
+const linksInternet = computed(() => {
+  const u = props.unidade
+  if (!u) return [] as { nome: string; link: LinkInternetUnidade }[]
+  const nomes = [u.nome, u.irma].filter((n): n is string => !!n && !!n.trim())
+  const out: { nome: string; link: LinkInternetUnidade }[] = []
+  const vistos = new Set<string>()
+  for (const nome of nomes) {
+    const link = buscarLinkInternetPorEscola(nome)
+    if (link && !vistos.has(link.escola)) {
+      vistos.add(link.escola)
+      out.push({ nome, link })
+    }
+  }
+  return out
+})
+
+function firewallUrl(cie: string | null): string | null {
+  const code = (cie || '').trim()
+  return code ? `https://fw-${code}/login` : null
+}
+
+function abrirFirewall(cie: string | null) {
+  const url = firewallUrl(cie)
+  if (url) window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 type Painel = 'equipamentos' | 'chamados' | 'usuarios'
 
@@ -549,6 +577,52 @@ watch(
           </div>
         </div>
       </div>
+
+      <!-- ---------- 2º link de internet ---------- -->
+      <section v-if="linksInternet.length" class="banda">
+        <h4 class="rotulo-secao">2º link de internet</h4>
+        <div v-for="{ nome, link } in linksInternet" :key="link.escola" class="link-card">
+          <div v-if="linksInternet.length > 1" class="link-escola">{{ nome }}</div>
+          <div class="link-grid">
+            <div class="link-campo">
+              <span class="link-rotulo">Possui 2º link</span>
+              <span class="pill-mini" :class="link.possuiSegundoLink ? 'pill-sim' : 'pill-nao'">
+                {{ link.possuiLabel || (link.possuiSegundoLink ? 'Sim' : 'Não') }}
+              </span>
+            </div>
+            <div class="link-campo">
+              <span class="link-rotulo">Empresa</span>
+              <strong>{{ link.empresa || '—' }}</strong>
+            </div>
+            <div class="link-campo">
+              <span class="link-rotulo">Velocidade</span>
+              <strong>{{ link.velocidadeMbps != null ? `${link.velocidadeMbps} Mbps` : '—' }}</strong>
+            </div>
+            <div class="link-campo">
+              <span class="link-rotulo">Status</span>
+              <strong>{{ link.status || '—' }}</strong>
+            </div>
+            <div class="link-campo">
+              <span class="link-rotulo">Data prev./inst.</span>
+              <strong>{{ link.dataPrevistaInstalacao ? new Date(link.dataPrevistaInstalacao).toLocaleDateString('pt-BR') : '—' }}</strong>
+            </div>
+            <div class="link-campo">
+              <span class="link-rotulo">Responsável</span>
+              <strong>{{ link.responsavel || '—' }}</strong>
+            </div>
+            <div class="link-campo">
+              <span class="link-rotulo">CIE</span>
+              <strong>{{ link.cie || '—' }}</strong>
+            </div>
+          </div>
+          <p v-if="link.observacoes" class="link-obs">{{ link.observacoes }}</p>
+          <div class="link-acoes">
+            <button v-if="firewallUrl(link.cie)" class="btn btn-mini" type="button" @click="abrirFirewall(link.cie)" title="Acessar Firewall">
+              Acessar Firewall
+            </button>
+          </div>
+        </div>
+      </section>
 
       <!-- ---------- Parque ---------- -->
       <section class="banda">
@@ -1224,4 +1298,63 @@ watch(
 .painel :deep(.table thead th) {
   background: var(--surface);
 }
+
+/* ---------- 2º link de internet ---------- */
+.link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.link-escola {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.link-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+.link-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.link-rotulo {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.link-campo strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.link-obs {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: pre-line;
+  margin: 0;
+}
+.link-acoes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pill-mini {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pill-sim { background: var(--green-soft); color: var(--green); }
+.pill-nao { background: var(--red-soft); color: var(--red); }
 </style>

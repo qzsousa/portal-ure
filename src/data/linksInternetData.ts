@@ -18,7 +18,7 @@ export interface LinkInternetUnidade {
 export const LINKS_INTERNET: LinkInternetUnidade[] = [
   {
     "id": null,
-    "escola": "ADHEMAR ANTONIO PRADO",
+    "escola": "E.E. ADHEMAR ANTONIO PRADO",
     "endereco": "R. Fernandes Tourinho, 133",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -34,7 +34,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ALCIDES BOSCOLO",
+    "escola": "E.E. ALCIDES BOSCOLO",
     "endereco": "R. Miguel Ferreira de Melo, 50",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -50,7 +50,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ANDRÉ NUNES JUNIOR",
+    "escola": "E.E. ANDRÉ NUNES JUNIOR",
     "endereco": "R. Salvador de Paiva, 145",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -66,7 +66,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ANTONIETA SOUZA  ALCÂNTARA",
+    "escola": "E.E. ANTONIETA DE SOUZA ALCÂNTARA",
     "endereco": "R. Piramide dos Piques,101",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -82,7 +82,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM",
+    "escola": "E.E. ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM - TOM JOBIM",
     "endereco": "Trav. Sinhá Moça, 53",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -98,7 +98,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ANÍSIO TEIXEIRA",
+    "escola": "E.E. ANÍSIO TEIXEIRA",
     "endereco": "R. Rio Uruu, 09",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -114,7 +114,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "AQUILINO RIBEIRO",
+    "escola": "E.E. AQUILINO RIBEIRO",
     "endereco": "R. Onofre Leite Meireles, 01",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -130,7 +130,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "BARRO BRANCO II",
+    "escola": "E.E. BARRO BRANCO II",
     "endereco": "R. Eduardo Reuter, 415-B",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -146,7 +146,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "BELIZE",
+    "escola": "E.E. BELIZE",
     "endereco": "Estrada da Vovó Carolina, S/N",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -162,7 +162,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "BERNARDIM RIBEIRO",
+    "escola": "E.E. BERNARDIM RIBEIRO",
     "endereco": "R. Utaro Kanai, 501",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -178,7 +178,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "BRENNO ROSSI",
+    "escola": "E.E. BRENO ROSSI, MAESTRO",
     "endereco": "R. José Pardo, 41",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -194,7 +194,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "CARLOS HENRIQUE LIBERALLI",
+    "escola": "E.E. CARLOS HENRIQUE LIBERALLI",
     "endereco": "R. Dona Mª Ferraz do Amaral, 128",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -210,7 +210,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "CARMELINDA M. PEREIRA",
+    "escola": "E.E. CARMELINDA M. PEREIRA",
     "endereco": "R. Borzerguim, 90",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -226,7 +226,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "CESAR DONATO CALABREZ",
+    "escola": "E.E. CESAR DONATO CALABREZ",
     "endereco": "R. Inácio Monteiro, 1391",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -242,7 +242,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "CLAUDIA DUTRA VIANA",
+    "escola": "E.E. CLAUDIA DUTRA VIANA",
     "endereco": "R. Wilson Fernando S.  Carvalho,35",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -258,7 +258,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "COHAB CARRÃOZINHO",
+    "escola": "E.E. COHAB CARRÃOZINHO",
     "endereco": "Av. Gonçalves da Costa, 317",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -274,7 +274,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "COHAB ITAQUERA IV-I",
+    "escola": "E.E. COHAB ITAQUERA IV",
     "endereco": "R. Aquarela do Brasil, 20",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -290,7 +290,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "CÂNDIDO PROCÓPIO F. CAMARGO",
+    "escola": "E.E. CÂNDIDO PROCÓPIO F. CAMARGO",
     "endereco": "R. Sara Kubitschek, 215",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -306,7 +306,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "DÉCIO FERRAZ ALVIM",
+    "escola": "E.E. DÉCIO FERRAZ ALVIM",
     "endereco": "R. Edmundo da Cunha, 95",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -322,7 +322,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ERNESTINA DEL B. TRAMA",
+    "escola": "E.E. ERNESTINA DEL B. TRAMA",
     "endereco": "R. Feliciano de Mendonça, 418",
     "ure": "Leste 3",
     "possuiSegundoLink": false,
@@ -338,7 +338,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ESTHER DE FIGUEIREDO FERRAZ",
+    "escola": "E.E. ESTHER FIGUEIREDO FERRAZ",
     "endereco": "Av. Paulo Gracindo, 267",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -354,7 +354,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "FABIO AGAZZI",
+    "escola": "E.E. FABIO AGAZZI",
     "endereco": "R. Álvaro da Costa, 60",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -370,7 +370,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "FADLO HAIDAR",
+    "escola": "E.E. FADLO HAIDAR",
     "endereco": "R. Murmúrios da Tarde, 200",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -386,7 +386,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "FERNANDO MAURO P. DA ROCHA",
+    "escola": "E.E. FERNANDO MAURO P. ROCHA, DEPUTADO",
     "endereco": "R. José Pinto, 10",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -402,7 +402,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "FERNANDO PESSOA",
+    "escola": "E.E. FERNANDO PESSOA",
     "endereco": "R. Padre Aldemar Moreira, 200",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -418,7 +418,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "FRANCISCO DE ASSIS P.  CORRÊA",
+    "escola": "E.E. FRANCISCO DE ASSIS P. CORRÊA",
     "endereco": "R. Silvianopólis, 20",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -434,7 +434,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "FREDERICO MARIANO",
+    "escola": "E.E. FREDERICO MARIANO",
     "endereco": "R. Jerônimo Prado, 115",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -450,7 +450,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "GERALDINO DOS SANTOS",
+    "escola": "E.E. GERALDINO DOS SANTOS, DEPUTADO",
     "endereco": "Av. Dos Sertanistas, 1175",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -466,7 +466,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "GUERRA JUNQUEIRO",
+    "escola": "E.E. GUERRA JUNQUEIRO",
     "endereco": "R. Floriano Arresti, 52",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -482,7 +482,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "HAYDÉE HIDALGO",
+    "escola": "E.E. HAYDEÉ HIDALGO",
     "endereco": "R. Jacarandá Paulista, 80",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -498,7 +498,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "HUMBERTO BAPTISTELLI  FILHO",
+    "escola": "E.E. HUMBERTO BAPTISTELLI",
     "endereco": "R. Miguel Ferreira de Melo, 50-A",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -514,7 +514,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "HUMBERTO DANTAS",
+    "escola": "E.E. HUMBERTO DANTAS",
     "endereco": "R. Serra do Mar, 50",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -530,7 +530,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "INDIANA ZUYCHER S. DE  JESUS",
+    "escola": "E.E. INDIANA ZUYCHER S. DE JESUS",
     "endereco": "R. Inácio Donatti, 200",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -546,7 +546,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ISAAC SCHRAIBER",
+    "escola": "E.E. ISAAC SCHRAIBER",
     "endereco": "R. Álvaro Prado, 165",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -562,7 +562,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JARDIM DOM ANGELICO",
+    "escola": "E.E. JARDIM DOM ANGÉLICO",
     "endereco": "R. Alfonse Joailler, 6",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -578,7 +578,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JARDIM IGUATEMI",
+    "escola": "E.E. JARDIM IGUATEMI",
     "endereco": "R. Confederação dos Tamoios, 182",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -594,7 +594,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JARDIM LIMOEIRO III",
+    "escola": "E.E. JARDIM LIMOEIRO III",
     "endereco": "R. Golfo da California, 08",
     "ure": "Leste 3",
     "possuiSegundoLink": false,
@@ -610,7 +610,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JARDIM PEDRA BRANCA",
+    "escola": "E.E. JARDIM PEDRA BRANCA",
     "endereco": "R. Begonia Real, 200",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -626,7 +626,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JARDIM WILMA FLOR",
+    "escola": "E.E. JARDIM WILMA FLOR",
     "endereco": "R. Wilma Flor, S/N",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -642,7 +642,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JOAQUIM SILVÉRIO G. DOS REIS",
+    "escola": "E.E. JOAQUIM SILVÉRIO G. DOS REIS",
     "endereco": "R. Guilherme Valência, 45",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -658,7 +658,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JORGE LUIS BORGES",
+    "escola": "E.E. JORGE LUIS BORGES",
     "endereco": "R. Milagre dos xes, 700",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -674,7 +674,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JOÃO CASTELLANO",
+    "escola": "E.E. JOÃO CASTELLANO",
     "endereco": "R. Tomoichi Shimizu, 758",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -690,7 +690,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "JUAN CARLOS ONETTI",
+    "escola": "E.E. JUAN CARLOS ONETTI",
     "endereco": "Rua Camutanga,sS/N",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -706,7 +706,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "LUIS VAZ DE CAMÕES",
+    "escola": "E.E. LUIZ VAZ DE CAMÕES",
     "endereco": "R. João Pedro de Luna, 132",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -722,7 +722,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "LUIZ ROSANOVA",
+    "escola": "E.E. LUIZ ROSANOVA",
     "endereco": "Av. Miguel Achiole Fonseca, 1447",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -738,7 +738,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "MARCOS ANTONIO COSTA",
+    "escola": "E.E. MARCOS ANTONIO COSTA",
     "endereco": "R. Godoy Bueno, 19",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -754,7 +754,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "MARIA ANTONIETA FERRAZ, BIBLIOTECÁRIA",
+    "escola": "E.E. MARIA ANTONIETA FERRAZ BIBLIOTECARIA",
     "endereco": "R. Rafael Dellamonica, 300",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -770,7 +770,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "MARIA DE LOURDES A A PACHECO",
+    "escola": "E.E. MARIA DE LOURDES A. A. PACHECO",
     "endereco": "R. Ângelo de Andrade, 51",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -786,7 +786,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "MARIUMA BUAZAR MAUAD",
+    "escola": "E.E. MARIUMA BUAZAR MAUAD",
     "endereco": "R: Padre Aldemar Moreira, 461",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -802,7 +802,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "MOACYR AMARAL DOS SANTOS",
+    "escola": "E.E. MOACYR AMARAL DOS SANTOS",
     "endereco": "R. Carlos Belleville, 22",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -818,7 +818,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "MOZART TAVARES DE LIMA",
+    "escola": "E.E. MOZART TAVARES DE LIMA",
     "endereco": "R. Marcos Gonçalves Correia, 21",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -834,7 +834,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "OSWALDO GAGLIARDI",
+    "escola": "E.E. OSWALDO GAGLIARDI",
     "endereco": "R. Inácio Monteiro, 3206",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -850,7 +850,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "PAULO ROLIM ROSA",
+    "escola": "E.E. PAULO ROLIM ROSA",
     "endereco": "R. Igarapé da Bela Aurora, 435",
     "ure": "Leste 3",
     "possuiSegundoLink": false,
@@ -866,7 +866,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "PAULO SARASATE",
+    "escola": "E.E. PAULO SARASATE GOVERNADOR",
     "endereco": "R. Inácio Pinto Lima, 199",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -882,7 +882,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "PEDRO TAQUES",
+    "escola": "E.E. PEDRO TAQUES",
     "endereco": "R. Comandante Carlos Ruhl, 56",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -898,7 +898,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "RECANTO VERDE SOL",
+    "escola": "E.E. RECANTO VERDE SOL",
     "endereco": "Av. Recanto do Sol, S/N",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -914,7 +914,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "RITA PINTO DE ARAÚJO",
+    "escola": "E.E. RITA PINTO DE ARAUJO",
     "endereco": "Av. Sapopemba, 30500",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -930,7 +930,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ROCCA DORDALL",
+    "escola": "E.E. ROCCA DORDALL",
     "endereco": "R. Dr. Rodrigues de Almeida, 143",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -946,7 +946,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ROQUE THEOPHILO",
+    "escola": "E.E. ROQUE THEOPHILO",
     "endereco": "R. Cavaleiro de Jorge, 280",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -962,7 +962,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "RUY DE MELLO JUNQUEIRA",
+    "escola": "E.E. RUY DE MELLO JUNQUEIRA",
     "endereco": "Av. Dos Metalúrgicos, 150",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -978,7 +978,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SALIM FARAH MALUF",
+    "escola": "E.E. SALIM FARAH MALUF",
     "endereco": "Av. Jardim Tamoio, 100",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -994,7 +994,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SALVADOR ALLENDE GOSSENS",
+    "escola": "E.E. SALVADOR ALLENDE GOSSENS",
     "endereco": "R. Domingos Lisboa, 139",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1010,7 +1010,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SATURNINO PEREIRA",
+    "escola": "E.E. SATURNINO PEREIRA",
     "endereco": "R. Bernardino Antunes, 200",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1026,7 +1026,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SEBASTIÃO FARIA ZIMBRES",
+    "escola": "E.E. SEBASTIÃO FARIAS ZIMBRES",
     "endereco": "R. Quinta do Paco, 45",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1042,7 +1042,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SERGIO ESTANISLAU CAMARGO",
+    "escola": "E.E. SERGIO ESTANISTLAU DE CAMARGO",
     "endereco": "R. Otelo Augusto Ribeiro, 1306",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1058,7 +1058,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SERGIO ROCHA KIEHL",
+    "escola": "E.E. SERGIO ROCHA KIEHL",
     "endereco": "Av. Dr. Guilherme A. Sodré,1503",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1074,7 +1074,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SILVANA EVANGELISTA",
+    "escola": "E.E. SILVANA EVANGELISTA",
     "endereco": "Av. Rodolfo Pirani, 392",
     "ure": "Leste 3",
     "possuiSegundoLink": false,
@@ -1090,7 +1090,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SIMÃO MATHIAS",
+    "escola": "E.E. SIMÃO MATHIAS",
     "endereco": "R. Ragueb Chohfi, 4757",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1106,7 +1106,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "SUMIE IWATA",
+    "escola": "E.E. SUMIE IWATA",
     "endereco": "R. Lucila Cerqueira, 100",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1122,7 +1122,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "VILA BELA",
+    "escola": "E.E. VILA BELA",
     "endereco": "Trav. Terra Tombada, S/N",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1138,7 +1138,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "YERVANT KISSAJIKIAN",
+    "escola": "E.E. YERVANT KISSAJIKIAN",
     "endereco": "R. Paisagem Noturna, 353",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
@@ -1154,7 +1154,7 @@ export const LINKS_INTERNET: LinkInternetUnidade[] = [
   },
   {
     "id": null,
-    "escola": "ZIPORA RUBINSTEIN",
+    "escola": "E.E. Z�PORA RUBISTEIN",
     "endereco": "R. Irmão Deodoro, 830",
     "ure": "Leste 3",
     "possuiSegundoLink": true,
