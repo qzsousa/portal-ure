@@ -198,6 +198,7 @@ function irParaSenhaEsquecida() {
 }
 
 function voltarParaEmail() {
+  etapa.value = 'email'
   form.codigo = ''
   form.senha = ''
   form.novaSenha = ''
