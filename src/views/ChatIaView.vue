@@ -135,7 +135,7 @@
               <span class="who-name">Caf&eacute;IA</span>
               <div class="bubble typing">
                 <span class="dot-wave"><i></i><i></i><i></i></span>
-                <span class="typing-note">consultando os backends</span>
+                <span class="typing-note">{{ ferramentaAtual ? ROTULO_TOOL[ferramentaAtual] || 'consultando os backends' : 'consultando os backends' }}</span>
               </div>
             </div>
           </article>
@@ -355,7 +355,89 @@ const tools: any[] = [
   },
 ]
 
+/**
+ * Roda `fn` para os índices 0..n-1, no máximo `concorrencia` por vez.
+ *
+ * As tools de resumo varrem a base INTEIRA (dezenas de páginas). Pages uma por
+ * uma, uma pergunta levava minutos — e o composer fica travado esse tempo
+ * todo, parecendo que a mensagem não saiu. Aqui a varredura encurta para
+ * segundos sem trocar o número de registros lido.
+ */
+async function emLotes<T>(n: number, concorrencia: number, fn: (i: number) => Promise<T[]>): Promise<T[]> {
+  const resultados: T[][] = []
+  let proxima = 0
+  const trabalhadores = Array.from({ length: Math.min(concorrencia, Math.max(n, 1)) }, async () => {
+    while (proxima < n) {
+      const i = proxima++
+      resultados.push(await fn(i))
+    }
+  })
+  await Promise.all(trabalhadores)
+  return resultados.flat() as T[]
+}
+
+/** Todos os chamados, paginados em paralelo. */
+async function todosChamados(): Promise<any[]> {
+  const LIMITE = 100
+  const MAX_PAGINAS = 40
+  const primeira: any = await listarChamados({ page: 1, limit: LIMITE })
+  const base = primeira.data || []
+  const total = Number(primeira.meta?.total ?? base.length)
+  const paginas = Math.min(Math.ceil(total / LIMITE), MAX_PAGINAS) - 1
+  if (paginas <= 0) return base
+  const resto = await emLotes(paginas, 5, async (i) => {
+    const r: any = await listarChamados({ page: i + 2, limit: LIMITE })
+    return r.data || []
+  })
+  return [...base, ...resto]
+}
+
+/** Todos os equipamentos, paginados em paralelo. */
+async function todosEquipamentos(): Promise<any[]> {
+  const LIMITE = 500
+  const MAX_PAGINAS = 60
+  const primeira: any = await listarEquipamentosGlobal({ limite: LIMITE, offset: 0 })
+  const base = primeira.data || []
+  const total = Number(primeira.total ?? base.length)
+  const paginas = Math.min(Math.ceil(total / LIMITE), MAX_PAGINAS) - 1
+  if (paginas <= 0) return base
+  const resto = await emLotes(paginas, 5, async (i) => {
+    const r: any = await listarEquipamentosGlobal({ limite: LIMITE, offset: (i + 1) * LIMITE })
+    return r.data || []
+  })
+  return [...base, ...resto]
+}
+
+/**
+ * Cache das tools durante UMA pergunta.
+ *
+ * O modelo repete a mesma chamada com os mesmos argumentos com frequência (a
+ * descrição das tools manda contar por tipo E por status). Sem cache, cada
+ * repetição varria a base de novo.
+ */
+const cacheTools = new Map<string, unknown>()
+
+/** Nome da tool rodando agora, para o "consultando" dizer o que está fazendo. */
+const ferramentaAtual = ref('')
+
+const ROTULO_TOOL: Record<string, string> = {
+  listar_chamados: 'lendo os chamados',
+  listar_equipamentos: 'lendo os equipamentos',
+  resumo_chamados: 'contando os chamados',
+  resumo_equipamentos: 'contando os equipamentos',
+  consultar_tecnicos: 'consultando os técnicos',
+}
+
 async function executarTool(nome: string, args: any) {
+  const chave = `${nome}:${JSON.stringify(args ?? {})}`
+  if (cacheTools.has(chave)) return cacheTools.get(chave)
+  ferramentaAtual.value = nome
+  const saida = await executarToolSemCache(nome, args)
+  cacheTools.set(chave, saida)
+  return saida
+}
+
+async function executarToolSemCache(nome: string, args: any) {
   if (nome === 'listar_chamados') {
     const r: any = await listarChamados({ status: args.status, unidade: args.unidade, page: 1, limit: Math.min(args.limite || 50, 100) })
     const dados = (r.data || []).map((c: any) => ({ protocolo: c.protocolo, tipo: c.tipo, status: c.status, unidade: c.unidade, urgencia: c.urgencia, responsavel: c.responsavel, abertura: c.timestamp, descricao: c.descricao?.slice(0, 200) }))
@@ -367,17 +449,18 @@ async function executarTool(nome: string, args: any) {
     return { total: r.total, dados: dadosEq }
   }
   if (nome === 'consultar_tecnicos') {
+    const primeira: any = await listarUsuarios({ page: 1, limit: 100 })
+    const total = Number(primeira.meta?.total ?? (primeira.data || []).length)
+    const paginas = Math.min(Math.ceil(total / 100), 39)
+    const restantes = paginas > 1
+      ? await emLotes(paginas - 1, 4, async (i) => {
+          const r: any = await listarUsuarios({ page: i + 2, limit: 100 })
+          return r.data || []
+        })
+      : []
     const lista: any[] = []
-    let pu = 1
-    while (pu < 40) {
-      const ru: any = await listarUsuarios({ page: pu, limit: 100 })
-      const arr = ru.data || []
-      if (!arr.length) break
-      for (const u of arr) {
-        if (u.nivel === 'TECNICO') lista.push({ nome: u.nome, escolas: u.filial })
-      }
-      pu++
-      if (arr.length < 100) break
+    for (const u of [...(primeira.data || []), ...restantes.flat()]) {
+      if (u.nivel === 'TECNICO') lista.push({ nome: u.nome, escolas: u.filial })
     }
     return { tecnicos: lista }
   }
@@ -390,28 +473,18 @@ async function executarTool(nome: string, args: any) {
     const filtroStatus = args.status ? String(args.status).toUpperCase() : ''
     const filtroUnidade = args.unidade ? String(args.unidade).toLowerCase() : ''
     let total = 0
-    let page = 1
-    let paginas = 0
-    while (paginas < 40) {
-      const r: any = await listarChamados({ page, limit: 100 })
-      const arr = r.data || []
-      if (!arr.length) break
-      for (const c of arr) {
-        if (filtroResp && !String(c.responsavel || '').toLowerCase().includes(filtroResp)) continue
-        if (filtroStatus && String(c.status || '').toUpperCase() !== filtroStatus) continue
-        if (filtroUnidade && !String(c.unidade || '').toLowerCase().includes(filtroUnidade)) continue
-        total++
-        const tipo = c.tipo || 'sem tipo'
-        const status = c.status || 'sem status'
-        const unidade = c.unidade || 'sem unidade'
-        porTipo[tipo] = (porTipo[tipo] || 0) + 1
-        porStatus[status] = (porStatus[status] || 0) + 1
-        porUnidade[unidade] = (porUnidade[unidade] || 0) + 1
-        if (c.responsavel) porTecnico[c.responsavel] = (porTecnico[c.responsavel] || 0) + 1
-      }
-      page++
-      paginas++
-      if (arr.length < 100) break
+    for (const c of await todosChamados()) {
+      if (filtroResp && !String(c.responsavel || '').toLowerCase().includes(filtroResp)) continue
+      if (filtroStatus && String(c.status || '').toUpperCase() !== filtroStatus) continue
+      if (filtroUnidade && !String(c.unidade || '').toLowerCase().includes(filtroUnidade)) continue
+      total++
+      const tipo = c.tipo || 'sem tipo'
+      const status = c.status || 'sem status'
+      const unidade = c.unidade || 'sem unidade'
+      porTipo[tipo] = (porTipo[tipo] || 0) + 1
+      porStatus[status] = (porStatus[status] || 0) + 1
+      porUnidade[unidade] = (porUnidade[unidade] || 0) + 1
+      if (c.responsavel) porTecnico[c.responsavel] = (porTecnico[c.responsavel] || 0) + 1
     }
     const ordenar = (o: Record<string, number>) =>
       Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]))
@@ -426,28 +499,18 @@ async function executarTool(nome: string, args: any) {
     const filtroStatus = args.status ? String(args.status).toLowerCase() : ''
     const filtroUnidade = args.unidade ? String(args.unidade).toLowerCase() : ''
     let total = 0
-    let off = 0
-    let paginas = 0
-    while (paginas < 60) {
-      const r: any = await listarEquipamentosGlobal({ limite: 500, offset: off })
-      const arr = r.data || []
-      if (!arr.length) break
-      for (const e of arr) {
-        if (filtroStatus && !String(e.status || '').toLowerCase().includes(filtroStatus)) continue
-        if (filtroUnidade && !String(e.unidade || '').toLowerCase().includes(filtroUnidade)) continue
-        total++
-        const st = e.status || 'sem status'
-        const cat = e.categoria || 'sem categoria'
-        const mod = [e.marca, e.modelo].filter(Boolean).join(' ') || 'sem modelo'
-        const uni = e.unidade || 'sem unidade'
-        porStatus[st] = (porStatus[st] || 0) + 1
-        porCategoria[cat] = (porCategoria[cat] || 0) + 1
-        porModelo[mod] = (porModelo[mod] || 0) + 1
-        porUnidade[uni] = (porUnidade[uni] || 0) + 1
-      }
-      off += 500
-      paginas++
-      if (arr.length < 500) break
+    for (const e of await todosEquipamentos()) {
+      if (filtroStatus && !String(e.status || '').toLowerCase().includes(filtroStatus)) continue
+      if (filtroUnidade && !String(e.unidade || '').toLowerCase().includes(filtroUnidade)) continue
+      total++
+      const st = e.status || 'sem status'
+      const cat = e.categoria || 'sem categoria'
+      const mod = [e.marca, e.modelo].filter(Boolean).join(' ') || 'sem modelo'
+      const uni = e.unidade || 'sem unidade'
+      porStatus[st] = (porStatus[st] || 0) + 1
+      porCategoria[cat] = (porCategoria[cat] || 0) + 1
+      porModelo[mod] = (porModelo[mod] || 0) + 1
+      porUnidade[uni] = (porUnidade[uni] || 0) + 1
     }
     const ordenar = (o: Record<string, number>) =>
       Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]))
@@ -460,6 +523,13 @@ async function executarTool(nome: string, args: any) {
 async function enviar() {
   if (enviando.value) return
   if (!entrada.value.trim()) return
+  const texto = entrada.value.trim()
+  entrada.value = ''
+  mensagens.value.push({ role: 'user', content: texto })
+  enviando.value = true
+  ferramentaAtual.value = ''
+  cacheTools.clear()
+  rolarParaBaixo()
 const msgs: any[] = [
     {
       role: 'system',
@@ -477,15 +547,23 @@ const msgs: any[] = [
   // do bundle e destrava a NVIDIA, que nao libera CORS para o navegador. O
   // backend devolve no mesmo formato da OpenAI, entao o loop de tools abaixo e
   // identico ao de antes - so muda o destino da requisição.
-  async function perguntarAoBackend(): Promise<string> {
-const { data: res } = await chamadosApi.post<any>('/ia/chat', {
+  //
+  // `passo` limita o vaivem de tools: um modelo que fica pedindo ferramenta sem
+  // chegar na resposta_finalrecursaria para sempre e, com o composer travado
+  // durante o envio, nao haveria como destravar a tela.
+  const MAX_PASSOS_TOOLS = 6
+  async function perguntarAoBackend(passo = 0): Promise<string> {
+    if (passo > MAX_PASSOS_TOOLS) throw new Error('Modelo excedeu o limite de consultas')
+// 120 s: o default do client (30 s) e curto demais para uma pergunta com
+    // tools — `resumo_chamados` pagina a base inteira antes de responder.
+    const { data: res } = await chamadosApi.post<any>('/ia/chat', {
       messages: msgs,
       tools,
       tool_choice: 'auto',
       temperature: 0.2,
       max_tokens: 4000,
       modelo: modeloIa.value,
-    })
+    }, { timeout: 120000 })
 
     const choice = res?.choices?.[0]
     const message = choice?.message
@@ -503,7 +581,7 @@ const { data: res } = await chamadosApi.post<any>('/ia/chat', {
         const result = await executarTool(tc.function.name, args)
         msgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
       }
-      return perguntarAoBackend()
+      return perguntarAoBackend(passo + 1)
     }
 
     // `reasoning_content` e `reasoning` sao o rascunho interno do modelo. Nunca
@@ -523,10 +601,11 @@ const { data: res } = await chamadosApi.post<any>('/ia/chat', {
   }
   if (erroFinal) {
     const msg = erroFinal
-    let texto = 'Nï¿½o foi possï¿½vel obter resposta. Tente novamente.'
-    if (msg.includes('429')) texto = 'Limite de requisiï¿½ï¿½es da IA atingido. Aguarde alguns segundos e envie novamente.'
-    else if (msg.includes('413')) texto = 'A pergunta gerou muitos dados. Tente ser mais especï¿½fico.'
-    else if (msg.includes('404')) texto = 'Modelo da IA indisponï¿½vel. Verifique a configuraï¿½ï¿½o.'
+    let texto = 'Não foi possível obter resposta. Tente novamente.'
+    if (msg.includes('429')) texto = 'Limite de requisições da IA atingido. Aguarde alguns segundos e envie novamente.'
+    else if (msg.includes('413')) texto = 'A pergunta gerou muitos dados. Tente ser mais específico.'
+    else if (msg.includes('404')) texto = 'Modelo da IA indisponível. Escolha outro modelo no botão "Modelos NIM".'
+    else if (msg.includes('limite de consultas')) texto = 'O modelo consultou os dados demais vezes e parou. Tente uma pergunta mais específica ou outro modelo.'
     mensagens.value.push({ role: 'assistant', content: texto })
   } else {
     mensagens.value.push({ role: 'assistant', content: resposta })
@@ -540,7 +619,18 @@ function recarregar() {
   recarregarBase()
 }
 
-const modeloIa = ref('z-ai/glm-5.3-flash')
+/**
+ * Modelo padrão do painel.
+ *
+ * O GLM 5.3 flash é o primeiro da lista da NIM e foi o default historicamente,
+ * mas na API hospedada ele responde VAZIO depois de ~100 s de raciocínio: a
+ * tela ficava travada com "consultando os backends" e o balão saía em branco.
+ * O Nemotron 3 Super responde a mesma tool em ~5 s. Trocar de modelo pelo
+ * painel continua possível — este é só o ponto de partida.
+ */
+const MODELO_PADRAO = 'nvidia/nemotron-3-super-120b-a12b'
+
+const modeloIa = ref(MODELO_PADRAO)
 const modelosNvidia = ref<string[]>([])
 const carregandoModelos = ref(false)
 const painelModelos = ref(false)
@@ -558,8 +648,8 @@ async function carregarModelosNvidia() {
     const { data } = await chamadosApi.get('/ia/modelos')
     modelosNvidia.value = Array.isArray(data?.modelos) ? data.modelos : []
     if (modelosNvidia.value.length && !modelosNvidia.value.includes(modeloIa.value)) {
-      modeloIa.value = modelosNvidia.value.includes('z-ai/glm-5.3-flash')
-        ? 'z-ai/glm-5.3-flash'
+      modeloIa.value = modelosNvidia.value.includes(MODELO_PADRAO)
+        ? MODELO_PADRAO
         : modelosNvidia.value[0]
     }
   } catch {

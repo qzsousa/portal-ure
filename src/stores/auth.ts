@@ -153,7 +153,10 @@ const senhaProvisoria = computed(() => user.value?.senhaProvisoria === true)
       const { data } = await axios.post<LoginResponse>(
         `${CHAMADOS_BASE}/auth/refresh`,
         {},
-        { withCredentials: true },
+        // Sem timeout, uma conexão que trava no meio (socket reaproveitado que o
+        // servidor fecha) deixa a promise pendurada para sempre — e como o
+        // guard do router espera o refresh, a tela fica branca sem explanation.
+        { withCredentials: true, timeout: 15000 },
       )
       setAccessToken(data.accessToken)
       // Mantém a simulação ativa mesmo após o refresh (nível real se atualiza junto)
@@ -173,9 +176,23 @@ const senhaProvisoria = computed(() => user.value?.senhaProvisoria === true)
     nivelOriginal.value = null
   }
 
+  /**
+   * Inicialização em voo.
+   *
+   * Duas navegações podem pedir a sessão ao mesmo tempo (o guard do router e o
+   * `onMounted` do App). Cada uma disparava seu próprio refresh, e como o token
+   * de refresh é rotacionado, o segundo invalidava o primeiro: a sessão caía e
+   * a tela piscava para o login. Compartilhar a promise elimina a corrida.
+   */
+  let initEmVoo: Promise<void> | null = null
+
   async function initialize() {
     if (isInitialized.value) return
+    if (!initEmVoo) initEmVoo = inicializar()
+    await initEmVoo
+  }
 
+  async function inicializar() {
     // Liga os clientes HTTP à store (sem dependência circular)
     configureAuthHooks({
       getToken: () => accessToken.value,
@@ -186,16 +203,22 @@ const senhaProvisoria = computed(() => user.value?.senhaProvisoria === true)
     // Não há token em storage para recuperar: quem reconstrói a sessão é o
     // cookie httpOnly, via /auth/refresh. Se não houver cookie, o 401 é
     // esperado e o usuário segue deslogado.
-    const renovou = await refreshTokens()
-    if (renovou) {
-      try {
-        await fetchMe()
-      } catch {
-        clearSession()
+    //
+    // `finally` no `isInitialized` é o que impede a tela branca: qualquer falha
+    // aqui vira "deslogado" (e o guard manda para o login), nunca uma espera
+    // eterna por uma promise que não resolve.
+    try {
+      const renovou = await refreshTokens()
+      if (renovou) {
+        try {
+          await fetchMe()
+        } catch {
+          clearSession()
+        }
       }
+    } finally {
+      isInitialized.value = true
     }
-
-    isInitialized.value = true
   }
 
   async function login(credentials: LoginRequest): Promise<LoginResponse> {
