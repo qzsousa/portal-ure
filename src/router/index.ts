@@ -125,6 +125,15 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Unidades Escolares', breadcrumb: 'Unidades Escolares', roles: ['ADMIN', 'TECNICO'] as Nivel[], rota: 'escolas' },
       },
       {
+        // Agenda de atendimento por escola — a matriz escala quem atende cada dia.
+        // Mesma restrição de rota de Unidades ( domínio 'escolas'): as duas contam
+        // a mesma lista do backend.
+        path: 'agenda',
+        name: 'agenda',
+        component: () => import('@/views/AgendaView.vue'),
+        meta: { title: 'Agenda', breadcrumb: 'Agenda', roles: ['ADMIN', 'TECNICO'] as Nivel[], rota: 'escolas' },
+      },
+      {
         path: 'cameras-dvr',
         name: 'cameras-dvr',
         component: () => import('@/views/MonitorDvrsView.vue'),
