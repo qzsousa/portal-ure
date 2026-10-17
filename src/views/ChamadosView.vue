@@ -19,6 +19,7 @@ import {
   Layers,
   Loader2,
   Mail,
+  Monitor,
   MessageCircle,
   MessageSquare,
   Paperclip,
@@ -66,6 +67,7 @@ import {
   type TecnicoDestino,
 } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
+import { listarEquipamentosDaFilial, registrarManutencao, atualizarEquipamento } from '@/api/sce'
 import { gerarCodigoPrimeiroAcesso } from '@/api/usuarios'
 import {
   avaliarChamadoPorProtocolo,
@@ -86,6 +88,7 @@ import {
   type ChamadoMensagem,
   type StatusChamado,
   type TipoAtividade,
+  type Equipamento,
 } from '@/types'
 
 const auth = useAuthStore()
@@ -333,6 +336,7 @@ const filtros = reactive<FiltrosChamado>({
 
 /* Matriz (ADMIN/TECNICO) tem controle total; escola (GESTOR/VISUALIZADOR) só responde e conclui. */
 const ehMatriz = computed(() => ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || ''))
+const ehAdmin = computed(() => auth.user?.nivel === 'ADMIN')
 const ehEscola = computed(() => ['GESTOR', 'VISUALIZADOR'].includes(auth.user?.nivel || ''))
 const ehTecnico = computed(() => auth.user?.nivel === 'TECNICO')
 const podeLote = computed(() => ehMatriz.value)
@@ -1108,6 +1112,85 @@ const anexosAtividade = ref<AnexoMensagemPayload[]>([])
 const conclusaoAberta = ref(false)
 const textoConclusao = ref('')
 const anexosConclusao = ref<AnexoMensagemPayload[]>([])
+const equipamentosConclusao = ref('')
+
+/* ---- Equipamentos da unidade do chamado (seleção em lote) ---- */
+const modalEquipamentosAberto = ref(false)
+const carregandoEquipamentosUnidade = ref(false)
+const equipamentosUnidade = ref<Equipamento[]>([])
+const buscaEquipamentoUnidade = ref('')
+const selecionadosEquipamento = ref<Set<string>>(new Set())
+const statusLoteEquipamento = ref('')
+const aplicandoStatusLoteEquipamento = ref(false)
+
+const equipamentosUnidadeFiltrados = computed(() => {
+  const termo = buscaEquipamentoUnidade.value.trim().toLowerCase()
+  if (!termo) return equipamentosUnidade.value
+  return equipamentosUnidade.value.filter((e) => {
+    const p = (e.patrimonio || '').toLowerCase()
+    const s = (e.numeroSerie || '').toLowerCase()
+    const t = (e.numeroEtiqueta || '').toLowerCase()
+    const m = (e.modelo || '').toLowerCase()
+    return p.includes(termo) || s.includes(termo) || t.includes(termo) || m.includes(termo)
+  })
+})
+
+async function abrirEquipamentosDaUnidade() {
+  if (!detalhe.value) return
+  modalEquipamentosAberto.value = true
+  carregandoEquipamentosUnidade.value = true
+  selecionadosEquipamento.value = new Set()
+  buscaEquipamentoUnidade.value = ''
+  statusLoteEquipamento.value = ''
+  try {
+    const lista = await listarEquipamentosDaFilial()
+    const unidade = detalhe.value.unidade
+    equipamentosUnidade.value = lista.filter((e) => (e.unidade || '').toLowerCase() === unidade.toLowerCase() || (e.unidade || '').toLowerCase().includes(unidade.toLowerCase().split(' ')[0]))
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível carregar os equipamentos da unidade.'))
+    equipamentosUnidade.value = []
+  } finally {
+    carregandoEquipamentosUnidade.value = false
+  }
+}
+
+function toggleSelecaoEquipamento(id: string) {
+  const s = new Set(selecionadosEquipamento.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  selecionadosEquipamento.value = s
+}
+
+async function aplicarStatusLoteEquipamentos() {
+  const alvo = statusLoteEquipamento.value
+  const ids = [...selecionadosEquipamento.value]
+  if (!alvo || ids.length === 0) return
+  if (!window.confirm(`Alterar o status de ${ids.length} equipamento(s) para "${alvo}"?`)) return
+  aplicandoStatusLoteEquipamento.value = true
+  try {
+    const itens = equipamentosUnidade.value.filter((e) => ids.includes(e.id))
+    const resultados = await Promise.allSettled(itens.map((i) => atualizarEquipamento(i.id, { status: alvo })))
+    const ok = resultados.filter((r) => r.status === 'fulfilled').length
+    const falhas = resultados.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (ok === 0) {
+      ui.error(falhas[0] ? apiError(falhas[0].reason, 'Não foi possível alterar o status.') : 'Não foi possível alterar o status.')
+    } else if (falhas.length) {
+      ui.error(`${ok} atualizado(s), ${falhas.length} falharam.`)
+    } else {
+      ui.success(`${ok} equipamento(s) atualizado(s) para "${alvo}".`)
+    }
+    // reflete localmente
+    equipamentosUnidade.value = equipamentosUnidade.value.map((e) =>
+      ids.includes(e.id) ? { ...e, status: alvo } : e,
+    )
+    selecionadosEquipamento.value = new Set()
+    statusLoteEquipamento.value = ''
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao aplicar o status em lote.'))
+  } finally {
+    aplicandoStatusLoteEquipamento.value = false
+  }
+}
 
 /* ---- Conferência da escola ---- */
 const conferenciaAberta = ref(false)
@@ -1158,12 +1241,46 @@ async function salvarConclusao() {
   }
   acaoFluxo.value = true
   try {
-    const atualizado = await concluirChamado(detalhe.value.id, { texto, anexos: anexosConclusao.value })
+    const atualizado = await concluirChamado(detalhe.value.id, {
+      texto,
+      anexos: anexosConclusao.value,
+      equipamentos: equipamentosConclusao.value
+        .split(/[\n,;]+/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    })
     detalhe.value = atualizado
     novoStatus.value = atualizado.status
     conclusaoAberta.value = false
     anexosConclusao.value = []
     ui.success('Atendimento concluído. A escola foi avisada para conferir.')
+    // Integração com SCE: registra manutenção nos equipamentos atribuídos.
+    const eqs = equipamentosConclusao.value
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    equipamentosConclusao.value = ''
+    if (eqs.length) {
+      try {
+        const lista = await listarEquipamentosDaFilial()
+        const alvo = new Set(eqs.map((e) => e.toLowerCase()))
+        const encontrados = lista.filter((eq) => {
+          const p = (eq.patrimonio || '').toLowerCase()
+          const s = (eq.numeroSerie || '').toLowerCase()
+          return alvo.has(p) || alvo.has(s) || alvo.has(eq.id.toLowerCase())
+        })
+        await Promise.all(
+          encontrados.map((eq) =>
+            registrarManutencao(eq.id, texto, 'Concluído').catch(() => {}),
+          ),
+        )
+        if (encontrados.length) {
+          ui.success(`${encontrados.length} equipamento(s) atualizado(s) no inventário.`)
+        }
+      } catch {
+        /* silencioso */
+      }
+    }
     await Promise.all([carregar(), carregarStats()])
   } catch (e) {
     ui.error(apiError(e, 'Falha ao concluir o atendimento.'))
@@ -1741,7 +1858,7 @@ useAutoRefresh(async () => {
                   <RowActions
                     :itens="[
                       { rotulo: 'Ver detalhes', acao: () => abrirDetalhe(c) },
-                      ...(ehMatriz
+                      ...(ehAdmin
                         ? [
                             { rotulo: 'Encaminhar para técnico', icone: UserPlus, acao: () => abrirEncaminhar(c) },
                             { rotulo: 'Excluir', perigo: true, acao: () => excluirChamado(c) },
@@ -2124,6 +2241,10 @@ useAutoRefresh(async () => {
                   </button>
                 </li>
               </ul>
+              <div class="field">
+                <label>Equipamentos manutenidos (patrimônio/série, opcional)</label>
+                <textarea v-model="equipamentosConclusao" class="input textarea" placeholder="Um por linha" rows="2"></textarea>
+              </div>
               <div class="acao-linha">
                 <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoConclusao.trim()" @click="salvarConclusao">
                   Enviar para conferência
@@ -2133,6 +2254,17 @@ useAutoRefresh(async () => {
                 </button>
               </div>
             </template>
+          </div>
+
+          <div class="acao-box">
+            <h4><Monitor :size="15" /> Equipamentos da unidade</h4>
+            <p class="acao-dica">
+              Abre a tabela de equipamentos da escola deste chamado para você procurar por patrimônio,
+              série ou etiqueta e alterar o status em lote.
+            </p>
+            <button class="btn btn-outline btn-largo" type="button" @click="abrirEquipamentosDaUnidade">
+              <Monitor :size="15" /> Ver equipamentos da unidade
+            </button>
           </div>
 
           <p v-if="detalhe.status === 'AGUARDANDO_CONFERENCIA'" class="acao-dica">
@@ -2237,7 +2369,7 @@ useAutoRefresh(async () => {
         >
           <template #icone><Settings :size="16" /></template>
 
-          <template v-if="ehMatriz">
+          <template v-if="ehAdmin">
             <!-- Encaminhar para técnico: categoria errada na abertura, equipamento,
                  ou qualquer chamado que precise chegar a um técnico específico. -->
             <div class="acao-box acao-encaminhar">
@@ -2660,7 +2792,78 @@ useAutoRefresh(async () => {
           Copiar código
         </button>
       </div>
-    </BaseModal>
+     </BaseModal>
+
+     <!-- Modal: equipamentos da unidade do chamado -->
+     <BaseModal
+       :aberto="modalEquipamentosAberto"
+       titulo="Equipamentos da unidade"
+       @fechar="modalEquipamentosAberto = false"
+     >
+       <div v-if="detalhe" class="equip-unidade">
+         <p class="acao-dica">
+           Unidade: <strong>{{ detalhe.unidade }}</strong>. Marque os equipamentos e escolha o
+           status para aplicar em lote.
+         </p>
+         <div class="acao-linha">
+           <input
+             v-model="buscaEquipamentoUnidade"
+             class="input"
+             placeholder="Buscar por patrimônio, série, etiqueta ou modelo..."
+           />
+           <select v-model="statusLoteEquipamento" class="select-input">
+             <option value="">Status...</option>
+             <option value="Disponível">Disponível</option>
+             <option value="Manutenção">Manutenção</option>
+           </select>
+           <button
+             class="btn btn-primary"
+             type="button"
+             :disabled="aplicandoStatusLoteEquipamento || selecionadosEquipamento.size === 0 || !statusLoteEquipamento"
+             @click="aplicarStatusLoteEquipamentos"
+           >
+             <Loader2 v-if="aplicandoStatusLoteEquipamento" class="spin" :size="14" />
+             Aplicar ({{ selecionadosEquipamento.size }})
+           </button>
+         </div>
+
+         <div v-if="carregandoEquipamentosUnidade" class="acao-dica">Carregando equipamentos...</div>
+         <div v-else-if="equipamentosUnidadeFiltrados.length === 0" class="acao-dica">
+           Nenhum equipamento encontrado para esta unidade.
+         </div>
+         <div v-else class="table-wrap">
+           <table class="table">
+             <thead>
+               <tr>
+                 <th></th>
+                 <th>Modelo</th>
+                 <th>Patrimônio</th>
+                 <th>Série</th>
+                 <th>Etiqueta</th>
+                 <th>Status</th>
+               </tr>
+             </thead>
+             <tbody>
+               <tr v-for="e in equipamentosUnidadeFiltrados" :key="e.id">
+                 <td>
+                   <input
+                     type="checkbox"
+                     :checked="selecionadosEquipamento.has(e.id)"
+                     @change="toggleSelecaoEquipamento(e.id)"
+                   />
+                 </td>
+                 <td>{{ e.modelo }}</td>
+                 <td>{{ e.patrimonio || '—' }}</td>
+                 <td>{{ e.numeroSerie || '—' }}</td>
+                 <td>{{ e.numeroEtiqueta || '—' }}</td>
+                 <td>{{ e.status }}</td>
+               </tr>
+             </tbody>
+           </table>
+         </div>
+       </div>
+     </BaseModal>
+
   </div>
 </template>
 

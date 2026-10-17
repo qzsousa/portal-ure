@@ -78,6 +78,7 @@ export async function atualizarStatusChamado(id: string, payload: AtualizarStatu
 export interface ResponderChamadoPayload {
   texto: string
   anexos?: AnexoMensagemPayload[]
+  equipamentos?: string[]
 }
 
 export async function responderChamado(id: string, payload: ResponderChamadoPayload): Promise<Chamado> {
@@ -119,6 +120,7 @@ export async function concluirChamado(
   const { data } = await chamadosApi.post<Chamado>(`/chamados/${id}/concluir`, {
     descricaoResolucao: payload.texto,
     anexos: payload.anexos,
+    equipamentos: payload.equipamentos,
   })
   return data
 }

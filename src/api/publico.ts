@@ -49,6 +49,11 @@ export interface NovoChamadoPayload {
     tipo: string
     base64: string
   }>
+  /**
+   * Patrimônios/séries dos equipamentos quebrados informados pela escola
+   * (opcional). O técnico confirma/corrige na conclusão.
+   */
+  equipamentos?: string[]
 }
 
 export async function listarEscolasPublico(): Promise<string[]> {

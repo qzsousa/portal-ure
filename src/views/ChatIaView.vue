@@ -446,13 +446,19 @@ const msgs: any[] = [
   // backend devolve no mesmo formato da OpenAI, entao o loop de tools abaixo e
   // identico ao de antes - so muda o destino da requisição.
   async function perguntarAoBackend(): Promise<string> {
-const { data: res } = await chamadosApi.post<any>('/ia/chat', {
-      messages: msgs,
-      tools,
-      tool_choice: 'auto',
-      temperature: 0.2,
-      max_tokens: 4000,
-    })
+const { data: res } = await chamadosApi.post<any>(
+      '/ia/chat',
+      {
+        messages: msgs,
+        tools,
+        tool_choice: 'auto',
+        temperature: 0.2,
+        max_tokens: 4000,
+      },
+      // 120s: o default do client e 30s, e uma ida ao modelo ja passa disso
+      // quando o provedor esta frio ou a chamada vem da rede do Render.
+      { timeout: 120000 },
+    )
 
     const choice = res?.choices?.[0]
     const message = choice?.message
