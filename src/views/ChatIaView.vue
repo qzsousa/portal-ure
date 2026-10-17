@@ -566,28 +566,34 @@ const msgs: any[] = [
   // backend devolve no mesmo formato da OpenAI, entao o loop de tools abaixo e
   // identico ao de antes - so muda o destino da requisição.
   //
-  // `passo` limita o vaivem de tools: um modelo que fica pedindo ferramenta sem
-  // chegar na resposta_final recursaria para sempre e, com o composer travado
-  // durante o envio, nao haveria como destravar a tela.
-  const MAX_PASSOS_TOOLS = 6
+  // `passo` limita o vaivem de tools. Antes parava em 6 e mostrava "consultou
+  // demais vezes"; agora damos muito mais espaço e, ao chegar no limite, fazemos
+  // uma chamada FINAL sem tools para forcar a resposta (em vez de desistir).
+  const MAX_PASSOS_TOOLS = 24
   async function perguntarAoBackend(passo = 0): Promise<string> {
-    if (passo > MAX_PASSOS_TOOLS) throw new Error('Modelo excedeu o limite de consultas')
+    if (passo > MAX_PASSOS_TOOLS + 1) throw new Error('Modelo excedeu o limite de consultas')
+    const forcarResposta = passo >= MAX_PASSOS_TOOLS
     // 120 s: o default do client (30 s) e curto demais para uma pergunta com
     // tools — `resumo_chamados` pagina a base inteira antes de responder.
-    const { data: res } = await chamadosApi.post<any>('/ia/chat', {
+    const payload: any = {
       messages: msgs,
-      tools,
-      tool_choice: 'auto',
       temperature: 0.2,
       max_tokens: 4000,
       modelo: modeloIa.value,
-    }, { timeout: 120000 })
+    }
+    if (forcarResposta) {
+      payload.tool_choice = 'none'
+    } else {
+      payload.tools = tools
+      payload.tool_choice = 'auto'
+    }
+    const { data: res } = await chamadosApi.post<any>('/ia/chat', payload, { timeout: 120000 })
 
     const choice = res?.choices?.[0]
     const message = choice?.message
     if (!message) throw new Error('Resposta sem message')
 
-    if (choice.finish_reason === 'tool_calls' && message.tool_calls?.length) {
+    if (!forcarResposta && choice.finish_reason === 'tool_calls' && message.tool_calls?.length) {
       msgs.push(message)
       for (const tc of message.tool_calls) {
         let args: any = {}
@@ -623,7 +629,7 @@ const msgs: any[] = [
     if (msg.includes('429')) texto = 'Limite de requisições da IA atingido. Aguarde alguns segundos e envie novamente.'
     else if (msg.includes('413')) texto = 'A pergunta gerou muitos dados. Tente ser mais específico.'
     else if (msg.includes('404')) texto = 'Modelo da IA indisponível. Escolha outro modelo no botão "Modelos NIM".'
-    else if (msg.includes('limite de consultas')) texto = 'O modelo consultou os dados demais vezes e parou. Tente uma pergunta mais específica ou outro modelo.'
+    else if (msg.includes('limite de consultas')) texto = 'A pergunta gerou muitas consultas. Tente ser mais específico.'
     mensagens.value.push({ role: 'assistant', content: texto })
   } else {
     mensagens.value.push({ role: 'assistant', content: resposta })
@@ -1106,6 +1112,14 @@ void carregarModelosNvidia()
   35% { transform: translateY(-5px); opacity: 1; }
 }
 .typing-note { font-size: 12px; color: var(--tinta-suave); font-style: italic; }
+.bubble.typing {
+  animation: typing-pulse 1.6s ease-in-out infinite;
+}
+@keyframes typing-pulse {
+  0%, 100% { box-shadow: 0 10px 24px -20px rgba(44, 30, 22, .6); }
+  50% { box-shadow: 0 14px 30px -18px rgba(169, 113, 75, .55); }
+}
+.who-avatar.assistant img.ava-logo { animation: float 3.2s ease-in-out infinite; }
 
 .composer {
   display: flex;
@@ -1205,8 +1219,9 @@ void carregarModelosNvidia()
 .stream::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #dcb896, var(--cafe-400)); }
 .fade-slide-enter-active, .fade-slide-leave-active { transition: opacity .22s, transform .22s; }
 .fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateX(-10px); }
-.msg-enter-active { transition: opacity .26s, transform .26s; }
-.msg-enter-from { opacity: 0; transform: translateY(10px); }
+.msg-enter-active { transition: opacity .34s cubic-bezier(.2, .7, .3, 1), transform .34s cubic-bezier(.2, .7, .3, 1); }
+.msg-enter-from { opacity: 0; transform: translateY(16px) scale(.985); }
+.msg-enter-to { opacity: 1; transform: none; }
 
 @media (max-width: 900px) {
   .chat-shell { grid-template-columns: 52px 1fr; }
