@@ -2795,11 +2795,12 @@ useAutoRefresh(async () => {
      </BaseModal>
 
      <!-- Modal: equipamentos da unidade do chamado -->
-     <BaseModal
-       :aberto="modalEquipamentosAberto"
-       titulo="Equipamentos da unidade"
-       @fechar="modalEquipamentosAberto = false"
-     >
+      <BaseModal
+        :aberto="modalEquipamentosAberto"
+        titulo="Equipamentos da unidade"
+        largura="960px"
+        @fechar="modalEquipamentosAberto = false"
+      >
        <div v-if="detalhe" class="equip-unidade">
          <p class="acao-dica">
            Unidade: <strong>{{ detalhe.unidade }}</strong>. Marque os equipamentos e escolha o
@@ -4054,7 +4055,7 @@ tr.selecionado td {
 }
 @media (max-width: 640px) {
   .equip-unidade .table {
-    font-size: 12px;
+    font-size: 11px;
   }
   .equip-unidade .acao-linha {
     flex-direction: column;
@@ -4065,6 +4066,10 @@ tr.selecionado td {
   .equip-unidade .acao-linha .btn {
     width: 100%;
     max-width: none;
+  }
+  .equip-unidade .table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
   }
 }
 </style>
