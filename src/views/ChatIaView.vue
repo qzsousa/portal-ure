@@ -549,12 +549,12 @@ const msgs: any[] = [
   // identico ao de antes - so muda o destino da requisição.
   //
   // `passo` limita o vaivem de tools: um modelo que fica pedindo ferramenta sem
-  // chegar na resposta_finalrecursaria para sempre e, com o composer travado
+  // chegar na resposta_final recursaria para sempre e, com o composer travado
   // durante o envio, nao haveria como destravar a tela.
   const MAX_PASSOS_TOOLS = 6
   async function perguntarAoBackend(passo = 0): Promise<string> {
     if (passo > MAX_PASSOS_TOOLS) throw new Error('Modelo excedeu o limite de consultas')
-// 120 s: o default do client (30 s) e curto demais para uma pergunta com
+    // 120 s: o default do client (30 s) e curto demais para uma pergunta com
     // tools — `resumo_chamados` pagina a base inteira antes de responder.
     const { data: res } = await chamadosApi.post<any>('/ia/chat', {
       messages: msgs,

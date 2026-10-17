@@ -153,6 +153,7 @@ function selecionarCategoria(cat: FormularioCategoria) {
   eqModelo.value = ''
   eqMarcaCustom.value = ''
   eqModeloCustom.value = ''
+  eqPatrimonios.value = ''
   eqCategorias.value = []
   eqMarcas.value = []
   eqModelos.value = []
@@ -251,6 +252,7 @@ const eqMarca = ref('')
 const eqModelo = ref('')
 const eqMarcaCustom = ref('')
 const eqModeloCustom = ref('')
+const eqPatrimonios = ref('')
 const carregandoEquip = ref(false)
 
 const ehEquipamento = computed(() => categoriaSelecionada.value?.chave === 'equipamento')
@@ -536,6 +538,12 @@ async function enviar() {
       descricao: descricaoFinal(),
       urgencia: ident.urgencia,
       email: ident.email.trim(),
+      equipamentos: ehEquipamento.value
+        ? eqPatrimonios.value
+            .split(/[\n,;]+/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : undefined,
     }
     // Validação ANTES de ler qualquer arquivo em base64: ler 8MB para depois
     // recusar é tempo e memória jogados fora. As perguntas de anexo são
@@ -601,6 +609,7 @@ function novoChamado() {
   eqModelo.value = ''
   eqMarcaCustom.value = ''
   eqModeloCustom.value = ''
+  eqPatrimonios.value = ''
   eqCategorias.value = []
   eqMarcas.value = []
   eqModelos.value = []
@@ -1008,6 +1017,11 @@ onMounted(async () => {
             <p v-else class="bloco-info neutro">
               {{ eqCategorias.length }} equipamento(s) no catálogo. Complete a seleção acima.
             </p>
+            <div class="field" style="margin-top:12px">
+              <label for="eq-patrimonios">Patrimônios / séries dos equipamentos quebrados <span class="opcional">(opcional)</span></label>
+              <textarea id="eq-patrimonios" v-model="eqPatrimonios" class="input textarea" placeholder="Um por linha (ex.: 123456, ABC-789)" rows="3"></textarea>
+              <p class="bloco-info neutro">O técnico confirma/corrige na conclusão do chamado.</p>
+            </div>
           </section>
         </div>
 

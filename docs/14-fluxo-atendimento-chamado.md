@@ -401,3 +401,19 @@ Detalhe que sÃ³ aparece quem tenta: a CSP do `index.html` fixa as portas de
 desenvolvimento em outra porta Ã© bloqueado **em silÃªncio** â€” a tela mostra
 "NÃ£o foi possÃ­vel carregar" e o navegador cancela a requisiÃ§Ã£o antes dela sair.
 Vale saber disso antes de procurar bug em outro lugar.
+
+---
+
+## Vinculação de equipamentos (fluxo novo)
+
+A abertura em \/chamado/novo\ permite informar, de forma opcional, os
+patrimônios/séries dos equipamentos quebrados. O técnico, ao concluir, atribui
+os equipamentos em que realizou manutenção, atualizando o inventário (SCE).
+
+![Abertura de chamado](screenshots/fluxo-equip-01-novo-chamado.png)
+![Abertura com equipamentos](screenshots/fluxo-equip-02-novo-chamado-equipamento.png)
+![Lista de chamados](screenshots/fluxo-equip-03-chamados-lista.png)
+![Detalhe do chamado](screenshots/fluxo-equip-04-chamado-detalhe.png)
+![Conclusão com equipamentos](screenshots/fluxo-equip-05-conclusao-equipamentos.png)
+![Inventário de equipamentos](screenshots/fluxo-equip-06-equipamentos.png)
+![Manutenção](screenshots/fluxo-equip-07-manutencao.png)

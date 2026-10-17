@@ -8,6 +8,7 @@ import {
   type ModeloCategoria,
 } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
+import { apiError } from '@/utils/apiError'
 import type { EmprestimoAtivo, Equipamento } from '@/types'
 
 /**
@@ -327,7 +328,10 @@ export function useEquipamentos(pageSizeInicial = 10) {
       state.items = anexarEmprestimos(state.items)
     } catch (e) {
       if (silencioso) return
-      state.erro = e instanceof Error ? e.message : 'Falha ao carregar equipamentos.'
+      // Pelo `apiError`, não por `e.message`: um erro do SCE chega como AxiosError
+      // e o `e.message` do axios é o genérico "Request failed with status code
+      // 401", que não diz nada. O SCE manda a causa em `error` no corpo.
+      state.erro = apiError(e, 'Falha ao carregar equipamentos.')
       state.items = []
       state.total = 0
     } finally {
