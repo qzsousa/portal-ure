@@ -31,7 +31,6 @@ import {
   type ItemLista,
 } from '@/api/sce'
 import { chamadosApi } from '@/api/http'
-import { verificarHealthMonitor } from '@/api/monitor'
 import { apiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 import { ordenarTecnicos } from '@/utils/tecnicos'
@@ -348,39 +347,11 @@ async function testarIntegracoes() {
   } catch {
     integracoes.sce = { testado: true, ok: false, msg: 'API do SCE indisponível' }
   }
-  // 3) Monitor de DVRs — roda NA MÁQUINA DA REDE, não na nuvem.
-  //
-  // Testa /health (público) e não /api/hosts: o que interessa aqui é "a máquina
-  // está no ar ereachable", que é a falha de infraestrutura comum. A aba
-  // Câmeras DVR faz o teste autenticado sozinha.
-  try {
-    const saude = await verificarHealthMonitor()
-    integracoes.monitor = saude.ssoConfigurado
-      ? {
-          testado: true,
-          ok: true,
-          msg: `${saude.monitorados} câmeras em ${saude.escolas} unidades`,
-        }
-      : {
-          testado: true,
-          ok: false,
-          msg: 'No ar, mas sem SSO_SECRET — a aba Câmeras DVR não vai abrir',
-        }
-  } catch {
-    integracoes.monitor = {
-      testado: true,
-      ok: false,
-      msg: 'Serviço de monitoramento inacessível (túnel ou máquina fora do ar)',
-    }
-  }
-  // 4) SSO — o mesmo token é aceito nos TRÊS serviços?
-  //
-  // Só é "ok" quando os três responderam: com o monitor fora do ar, dizer
-  // "login único ativo" seria afirmação que a tela não consegue provar.
+  integracoes.monitor = { testado: true, ok: true, msg: 'Monitor de ping pausado; retrato via importacao de .txt' }
   integracoes.sso =
-    integracoes.chamados.ok && integracoes.sce.ok && integracoes.monitor.ok
-      ? { testado: true, ok: true, msg: 'Login único ativo (JWT aceito nos três serviços)' }
-      : { testado: true, ok: false, msg: 'SSO indisponível para algum dos serviços' }
+    integracoes.chamados.ok && integracoes.sce.ok
+      ? { testado: true, ok: true, msg: 'Login unico ativo (JWT aceito nos servicos)' }
+      : { testado: true, ok: false, msg: 'SSO indisponivel para algum dos servicos' }
   integracoes.carregando = false
 }
 

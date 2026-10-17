@@ -25,27 +25,21 @@ import {
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
-import {
-  forcarVarredura,
-  obterMonitoramento,
-  verificarHealthMonitor,
-  type DvrHost,
-  type DvrStatus,
-  type DvrTipo,
-  type EscolaResumo,
-  type MonitorSnapshot,
-} from '@/api/monitor'
-import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
+import { obterDvr, importarDvr, type DvrHost, type DvrSnapshot, type DvrStatus, type DvrTipo, type EscolaResumo } from '@/api/dvr'
+import { arquivoParaBase64 } from '@/api/tutoriais'
+import { ACCEPT_ANEXO, validarArquivo } from '@/utils/anexos'
 import { apiError } from '@/utils/apiError'
+import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 
 const PAGE_SIZE = 25
 
 const ui = useUiStore()
+const auth = useAuthStore()
 
 const carregando = ref(true)
 const erro = ref('')
-const snap = ref<MonitorSnapshot | null>(null)
+const snap = ref<DvrSnapshot | null>(null)
 const page = ref(1)
 
 const busca = ref('')
@@ -68,7 +62,7 @@ const agora = ref(Date.now())
 async function carregar(silencioso = false) {
   if (!silencioso) carregando.value = true
   try {
-    snap.value = await obterMonitoramento()
+    snap.value = await obterDvr()
     erro.value = ''
   } catch (e) {
     if (!silencioso) erro.value = apiError(e, 'Não foi possível falar com o serviço de monitoramento.')
@@ -77,38 +71,52 @@ async function carregar(silencioso = false) {
   }
 }
 
-async function varrerAgora() {
-  try {
-    await forcarVarredura()
-    ui.info('Varredura solicitada. Os dados atualizam em instantes.')
-  } catch (e) {
-    // 429 é o esperado: o serviço recusa repetição para não inundar a rede de
-    // ping. Não é falha — é o serviço se protegendo.
-    const mensagem = apiError(e, '')
-    if (/há pouco|15 s/i.test(mensagem)) ui.info('Varredura pedida há pouco — o ciclo automático já cobre.')
-    else ui.error(mensagem || 'Não foi possível pedir uma nova varredura.')
-    return
-  }
-  setTimeout(() => void carregar(true), 1500)
-}
+/* ---------------- importacao de .txt do pingInfoView ---------------- */
+
 
 onMounted(() => {
   agora.value = Date.now()
   void carregar()
-  // Health check público: distingue "o serviço caiu" de "o painel está velho".
-  void verificarHealthMonitor().catch(() => {
-    /* o banner vermelho já cobre a falha quando a carga principal falha */
-  })
 })
 
-// Acompanha o ciclo do serviço (30 s). `agora` entra no mesmo tick para os
-// carimbos não ficarem congelados entre uma leitura e outra.
-useAutoRefresh(() => {
-  agora.value = Date.now()
-  void carregar(true)
-}, AUTO_REFRESH_MS.monitor)
+// Sem monitoramento ao vivo: o retrato so muda quando a matriz importa um novo .txt.
+// O carimbo "offline ha X" envelhece a cada re-render manual (botao "Atualizar").
 
-/* ---------------- apresentação ---------------- */
+/* ---------------- apresentacao ---------------- */
+
+const importando = ref(false)
+const inputArquivo = ref<HTMLInputElement | null>(null)
+
+function selecionarArquivo() {
+  inputArquivo.value?.click()
+}
+
+async function onArquivoChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const arquivo = input.files?.[0]
+  if (!arquivo) return
+  const problema = validarArquivo(arquivo)[0]
+  if (problema) {
+    ui.error(problema)
+    input.value = ''
+    return
+  }
+  importando.value = true
+  try {
+    const base64 = await arquivoParaBase64(arquivo)
+    const res = await importarDvr(arquivo.name, base64)
+    ui.success(
+      'Importado: ' + res.online + ' online, ' + res.offline + ' offline em ' + res.total + ' DVRs.' +
+        (res.naoCorrespondidos.length ? ' Enderecos sem escola: ' + res.naoCorrespondidos.length + '.' : '')
+    )
+    await carregar()
+  } catch (e) {
+    ui.error(apiError(e, 'Nao foi possivel importar o arquivo.'))
+  } finally {
+    importando.value = false
+    input.value = ''
+  }
+}
 
 const ROTULO_STATUS: Record<DvrStatus, string> = {
   online: 'Ligada',
@@ -312,8 +320,12 @@ const pagina = computed(() => ordenados.value.slice((page.value - 1) * PAGE_SIZE
           {{ snap.concorrencia }} verificações em paralelo
         </span>
 
-        <button class="btn btn-outline btn-mini" type="button" @click="varrerAgora">
-          <RefreshCw :size="15" /> Verificar agora
+        <button v-if="auth.isAdmin" class="btn btn-outline btn-mini" type="button" @click="selecionarArquivo" :disabled="importando">
+          <RefreshCw :size="15" /> {{ importando ? 'Importando...' : 'Importar .txt' }}
+        </button>
+        <input ref="inputArquivo" type="file" :accept="ACCEPT_ANEXO" @change="onArquivoChange" style="display:none" />
+        <button class="btn btn-outline btn-mini" type="button" @click="carregar()">
+          <RefreshCw :size="15" /> Atualizar
         </button>
       </div>
     </div>

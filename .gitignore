@@ -38,3 +38,5 @@ monitor/*.err
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
+
+ping_*.txt

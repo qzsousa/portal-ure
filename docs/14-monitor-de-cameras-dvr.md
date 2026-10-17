@@ -217,3 +217,23 @@ Ver também: [Arquitetura](./02-arquitetura.md) ·
 [Backends e endpoints](./06-backends-e-endpoints.md) ·
 [Tratamento de erros](./09-tratamento-de-erros.md) ·
 [`monitor/README.md`](../monitor/README.md)
+---
+
+## Atualizacao (2026-10-16): importacao do .txt do pingInfoView
+
+O servico de ping (pasta `monitor/`) ficou em modo pausado: a maquina da rede
+privada nao esta mais exposta (o Cloudflare Tunnel nao subiu de forma estavel).
+Em vez de depender do tunnel, a matriz exporta o `Relatorio` do pingInfoView para
+um arquivo .txt (codificado em UTF-16 LE com BOM) e importa pelo botao
+"Importar .txt" na aba Cameras DVR. O retrato resultante e servido pelo backend
+de chamados:
+
+  POST /api/dvr/importacoes   (ADMIN)  corpo { arquivo, conteudoBase64 }
+  GET  /api/dvr              (autenticado)  retrato atual no formato MonitorSnapshot
+  GET  /api/dvr/importacoes?limite=30  (autenticado)  importacoes recentes
+
+O arquivo importado e um INSTANTANEO: a tela mostra de quando e o retrato e ha
+quanto tempo. Enquanto nao houver uma nova importacao, o estado nao muda.
+
+O codigo do servico `monitor/` permanece no repositorio por se a equipe retomar
+o tunnel; a tela nao o consulta mais.

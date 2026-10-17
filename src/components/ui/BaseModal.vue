@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { X } from '@lucide/vue'
 
-defineProps<{ titulo: string; aberto: boolean }>()
+/**
+ * `largura` estreita/abre a caixa: o padrão (640px) serve para formulário e
+ * confirmação, mas painel com KPI + tabela precisa de mais espaço. Vazio = 640px,
+ * como sempre foi.
+ */
+withDefaults(defineProps<{ titulo: string; aberto: boolean; largura?: string }>(), { largura: '' })
 const emit = defineEmits<{ (e: 'fechar'): void }>()
 </script>
 
@@ -9,7 +14,7 @@ const emit = defineEmits<{ (e: 'fechar'): void }>()
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="aberto" class="modal-backdrop" @click.self="emit('fechar')">
-        <div class="modal">
+        <div class="modal" :style="largura ? { maxWidth: largura } : undefined">
           <header class="modal-header">
             <h3>{{ titulo }}</h3>
             <button class="modal-close" type="button" @click="emit('fechar')">
