@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, type ComponentPublicInstance } from 'vue'
-import { CalendarDays, ChevronLeft, ChevronRight, Info } from '@lucide/vue'
+import { CalendarDays, ChevronLeft, ChevronRight } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { listarTecnicos, type TecnicoDestino } from '@/api/chamados'
+import { atribuirDia, listarAtribuicoes, removerAtribuicao } from '@/api/agenda'
 import { listarEscolas } from '@/api/usuarios'
 import { ordenarTecnicos } from '@/utils/tecnicos'
+import { corDoTecnico } from '@/utils/cores'
 import { useAuthStore } from '@/stores/auth'
+import type { AtribuicaoAgenda } from '@/types'
 
 /* Mesmas constantes de AppTopbar.vue, espelhadas porque o AppTopbar está fora
    do escopo desta task. Pendência: extrair para src/utils/calendario.ts quando
@@ -36,25 +39,17 @@ const MESES = [
 /** Cabeçalho das colunas, derivado dos mesmos nomes ("Domingo" → "Dom"). */
 const DIAS_SEMANA_CURTO = DIAS_SEMANA.map((d) => d.slice(0, 3))
 
-/** Atribuição de um dia: escola atendida + técnico responsável. */
-interface Atribuicao {
-  escola: string
-  tecnicoId: string
-  tecnicoNome: string
-}
-
-const STORAGE_KEY = 'agenda-atendimento-v1'
-
 /* ---------- Estado ---------- */
 const estado = reactive({
   loading: true,
   erro: '',
   escolas: [] as string[],
   tecnicos: [] as TecnicoDestino[],
+  salvando: false,
 })
 
-/** Atribuições por dia (chave = "yyyy-mm-dd"). */
-const atribuicoes = reactive<Record<string, Atribuicao>>({})
+/** Atribuições por dia (chave = "yyyy-mm-dd"). Espelha `AtribuicaoAgenda` do backend. */
+const atribuicoes = reactive<Record<string, AtribuicaoAgenda>>({})
 
 const auth = useAuthStore()
 /** Remover atribuição é decisão da matriz: só o ADMIN desfaz o dia. */
@@ -74,6 +69,7 @@ function mesAnterior() {
     anoMes.mes--
   }
   ajustarFoco()
+  void carregarAtribuicoes()
 }
 
 function proximoMes() {
@@ -84,12 +80,14 @@ function proximoMes() {
     anoMes.mes++
   }
   ajustarFoco()
+  void carregarAtribuicoes()
 }
 
 function irParaHoje() {
   anoMes.ano = hoje.getFullYear()
   anoMes.mes = hoje.getMonth()
   ajustarFoco()
+  void carregarAtribuicoes()
 }
 
 /* ---------- Células do calendário (construído do zero, sem biblioteca) ---------- */
@@ -100,6 +98,8 @@ interface CelulaDia {
   ehHoje: boolean
   escola: string
   tecnicoNome: string
+  /** Cor do técnico (validada) ou '' quando o dia está vazio. */
+  cor: string
 }
 
 /** "yyyy-mm-dd" em horário local — evita virada de dia por fuso. */
@@ -117,6 +117,44 @@ function mesmoDia(a: Date, b: Date): boolean {
   )
 }
 
+/**
+ * Chave do dia a partir do `data` que o backend devolve (ISO, meia-noite UTC).
+ *
+ * O calendário é montado em horário local, mas o backend normaliza a data para
+ * meia-noite UTC do dia. Extrair os 10 primeiros caracteres (a parte "AAAA-MM-DD"
+ * do UTC) é o que faz a atribuição cair na célula que o usuário clicou, em
+ * qualquer fuso horário.
+ */
+function chaveDaData(isoUtc: string): string {
+  return isoUtc.slice(0, 10)
+}
+
+/**
+ * Primeiro dia do mês exibido e primeiro dia do seguinte, para o filtro de
+ * intervalo da API.
+ *
+ * O `fim` é o primeiro dia do mês seguinte (exclusivo): assim o último dia do
+ * mês entra tanto se o backend tratar `fim` como exclusivo quanto como
+ * inclusivo. Usa `new Date(ano, mes + 1, 1)` porque o mês 13 é normalizado para
+ * janeiro do ano seguinte — montar a string na mão daria "2026-13-01" em
+ * dezembro.
+ */
+function intervaloAtual(): { inicio: string; fim: string } {
+  return {
+    inicio: isoDe(new Date(anoMes.ano, anoMes.mes, 1)),
+    fim: isoDe(new Date(anoMes.ano, anoMes.mes + 1, 1)),
+  }
+}
+
+/** Iniciais do técnico (1 ou 2 letras) para o selo colorido da célula. */
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean)
+  if (!partes.length) return ''
+  const primeiro = (partes[0]?.[0] ?? '').toUpperCase()
+  const ultimo = partes.length > 1 ? (partes[partes.length - 1]?.[0] ?? '').toUpperCase() : ''
+  return `${primeiro}${ultimo}`
+}
+
 const celulas = computed<CelulaDia[]>(() => {
   const primeiro = new Date(anoMes.ano, anoMes.mes, 1)
   const offset = primeiro.getDay() // 0 = Domingo
@@ -127,7 +165,7 @@ const celulas = computed<CelulaDia[]>(() => {
   // Dias do mês anterior que completam a primeira semana.
   for (let i = offset - 1; i >= 0; i--) {
     const d = new Date(anoMes.ano, anoMes.mes - 1, diasMesAnterior - i)
-    saida.push({ dia: d.getDate(), iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '' })
+    saida.push({ dia: d.getDate(), iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '', cor: '' })
   }
   for (let d = 1; d <= diasNoMes; d++) {
     const data = new Date(anoMes.ano, anoMes.mes, d)
@@ -140,13 +178,14 @@ const celulas = computed<CelulaDia[]>(() => {
       ehHoje: mesmoDia(data, hoje),
       escola: attr?.escola || '',
       tecnicoNome: attr?.tecnicoNome || '',
+      cor: attr ? corDoTecnico(attr.tecnicoId, attr.tecnicoCor) : '',
     })
   }
   // Dias do próximo mês para fechar a grade em múltiplos de 7.
   let prox = 1
   while (saida.length % 7 !== 0) {
     const d = new Date(anoMes.ano, anoMes.mes + 1, prox)
-    saida.push({ dia: prox, iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '' })
+    saida.push({ dia: prox, iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '', cor: '' })
     prox++
   }
   return saida
@@ -211,51 +250,46 @@ function abrirDia(c: CelulaDia) {
   modalAberto.value = true
 }
 
-function salvar() {
+async function salvar() {
   if (!diaSel.value || !escolaSel.value || !tecnicoSel.value) return
   const tecnico = estado.tecnicos.find((t) => t.id === tecnicoSel.value)
-  atribuicoes[diaSel.value] = {
-    escola: escolaSel.value,
-    tecnicoId: tecnicoSel.value,
-    tecnicoNome: tecnico?.nome || '',
+  estado.salvando = true
+  try {
+    const criada = await atribuirDia({
+      escola: escolaSel.value,
+      data: diaSel.value,
+      tecnicoId: tecnicoSel.value,
+      tecnicoNome: tecnico?.nome || '',
+    })
+    atribuicoes[chaveDaData(criada.data)] = criada
+  } catch {
+    estado.erro = 'Não foi possível salvar a atribuição. Tente novamente.'
+  } finally {
+    estado.salvando = false
   }
-  salvarAtribuicoes()
   modalAberto.value = false
 }
 
-function remover() {
-  delete atribuicoes[diaSel.value]
-  salvarAtribuicoes()
+/**
+ * Remove a atribuição do dia.
+ *
+ * A permissão é revalidada AQUI, e não só no `v-if` do botão: o `v-if` é
+ * decisão de template, e a função é o que de fato fala com o backend. Se o
+ * nível do usuário não for ADMIN, a função retorna sem chamar a API — o
+ * servidor é a autoridade final, mas o portal não manda o que sabe que será
+ * recusado.
+ */
+async function remover() {
+  if (auth.user?.nivel !== 'ADMIN') return
+  const attr = atribuicoes[diaSel.value]
+  if (!attr?.id) return
+  try {
+    await removerAtribuicao(attr.id)
+    delete atribuicoes[diaSel.value]
+  } catch {
+    estado.erro = 'Não foi possível remover a atribuição. Tente novamente.'
+  }
   modalAberto.value = false
-}
-
-/* ---------- Persistência local (ainda sem endpoint no backend) ---------- */
-function carregarAtribuicoes(): void {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
-    const dados = JSON.parse(raw) as Record<string, Atribuicao>
-    for (const [dia, attr] of Object.entries(dados)) {
-      if (
-        attr &&
-        typeof attr.escola === 'string' &&
-        typeof attr.tecnicoId === 'string' &&
-        typeof attr.tecnicoNome === 'string'
-      ) {
-        atribuicoes[dia] = attr
-      }
-    }
-  } catch {
-    /* localStorage corrompido ou indisponível: agenda começa vazia */
-  }
-}
-
-function salvarAtribuicoes(): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(atribuicoes))
-  } catch {
-    /* sem espaço ou bloqueado: a atribuição não persiste, mas a tela funciona */
-  }
 }
 
 /* ---------- Carga ---------- */
@@ -266,6 +300,7 @@ async function carregar() {
     const [escolas, tecnicos] = await Promise.all([listarEscolas(), listarTecnicos()])
     estado.escolas = escolas
     estado.tecnicos = ordenarTecnicos(tecnicos)
+    await carregarAtribuicoes()
   } catch {
     estado.tecnicos = []
     estado.erro =
@@ -275,8 +310,77 @@ async function carregar() {
   }
 }
 
+/**
+ * Carrega as atribuições do mês exibido.
+ *
+ * O filtro de intervalo vai para a API, mas o corte também é feito aqui: se o
+ * backend ignorar os parâmetros (ou os nomes das chaves mudarem), a tela
+ * continua mostrando só o mês, em vez de derrubar atribuições de outros meses
+ * na grade.
+ */
+async function carregarAtribuicoes() {
+  try {
+    const { inicio, fim } = intervaloAtual()
+    const lista = await listarAtribuicoes({ inicio, fim })
+    for (const a of lista) {
+      const chave = chaveDaData(a.data)
+      if (chave >= inicio && chave < fim) atribuicoes[chave] = a
+    }
+    if (!Object.keys(atribuicoes).length) await migrarDoNavegador()
+  } catch {
+    estado.erro = 'Não foi possível carregar a agenda. Tente novamente mais tarde.'
+  }
+}
+
+/**
+ * Migração única das atribuições que estavam no localStorage.
+ *
+ * Quem usou a agenda antes do endpoint existir tinha os dias salvos só no
+ * navegador. Sem isto, essas atribuições desapareceriam em silêncio quando o
+ * endpoint entrasse. A migração lê o storage antigo e faz um POST por dia,
+ * uma única vez, e remove a chave — mesmo que algum POST falhe, para não
+ * repetir a tentativa a cada carregamento.
+ *
+ * Só roda quando o backend não devolveu atribuição nenhuma: se já há dados
+ * no servidor, os do navegador são duplicata e ficam para trás.
+ */
+async function migrarDoNavegador() {
+  const STORAGE_KEY = 'agenda-atendimento-v1'
+  let dados: Record<string, { escola: string; tecnicoId: string; tecnicoNome: string }> | null = null
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) dados = JSON.parse(raw)
+  } catch {
+    dados = null
+  }
+  if (!dados) return
+
+  const entradas = Object.entries(dados).filter(
+    ([dia, a]) =>
+      typeof dia === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(dia) &&
+      !!a &&
+      typeof a.escola === 'string' &&
+      typeof a.tecnicoId === 'string' &&
+      typeof a.tecnicoNome === 'string',
+  )
+
+  if (entradas.length) {
+    await Promise.all(
+      entradas.map(([dia, a]) =>
+        atribuirDia({
+          escola: a.escola,
+          data: dia,
+          tecnicoId: a.tecnicoId,
+          tecnicoNome: a.tecnicoNome,
+        }).catch(() => null),
+      ),
+    )
+  }
+  localStorage.removeItem(STORAGE_KEY)
+}
+
 onMounted(() => {
-  carregarAtribuicoes()
   ajustarFoco()
   void carregar()
 })
@@ -316,28 +420,26 @@ onMounted(() => {
           :tabindex="idx === focoIdx ? 0 : -1"
           :aria-label="rotuloDia(c)"
           :aria-pressed="!!c.escola"
+          :style="c.cor ? { borderLeftColor: c.cor } : undefined"
           @focus="focoIdx = idx"
           @click="abrirDia(c)"
         >
           <span class="dia-num">{{ c.dia }}</span>
           <span v-if="c.escola" class="dia-info">
             <span class="dia-escola">{{ c.escola }}</span>
-            <span class="dia-tecnico">{{ c.tecnicoNome }}</span>
+            <span class="dia-tecnico">
+              <span class="dia-tecnico-iniciais" :style="{ backgroundColor: c.cor }">
+                {{ iniciais(c.tecnicoNome) }}
+              </span>
+              {{ c.tecnicoNome }}
+            </span>
           </span>
         </button>
       </div>
 
       <p class="agenda-ajuda">
-        Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra verde já têm
-        escola e técnico atribuídos.
-      </p>
-    </div>
-
-    <div class="aviso-local card">
-      <Info :size="18" />
-      <p>
-        As atribuições ficam salvas apenas neste navegador (localStorage). Ainda não existe endpoint no
-        backend para a agenda — a persistência em servidor depende de uma task futura.
+        Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra colorida já
+        têm escola e técnico atribuídos — cada técnico tem a sua cor.
       </p>
     </div>
 
@@ -388,10 +490,10 @@ onMounted(() => {
         <button
           class="btn btn-primary"
           type="button"
-          :disabled="!escolaSel || !tecnicoSel"
+          :disabled="!escolaSel || !tecnicoSel || estado.salvando"
           @click="salvar"
         >
-          Salvar
+          {{ estado.salvando ? 'Salvando...' : 'Salvar' }}
         </button>
       </template>
     </BaseModal>
@@ -542,6 +644,9 @@ onMounted(() => {
 }
 
 .dia-tecnico {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 10.5px;
   color: var(--text-muted);
   overflow: hidden;
@@ -549,30 +654,24 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.dia-tecnico-iniciais {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
 .agenda-ajuda {
   margin: 12px 2px 0;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.aviso-local {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 16px;
-  border-left: 4px solid var(--yellow);
-  background: var(--yellow-soft);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.aviso-local :deep(svg) {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.aviso-local p {
-  margin: 0;
 }
 
 .erro {

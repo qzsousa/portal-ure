@@ -326,6 +326,24 @@ direto.
 | DELETE | `/encaminhamentos/:id` | "Remover regra" |
 | POST | `/encaminhamentos/aplicar` | "Aplicar agora aos abertos" |
 
+#### Agenda de atendimento
+
+| Método | Rota | Quem chama |
+|---|---|---|
+| GET | `/agenda` | `AgendaView` — atribuições do mês exibido |
+| POST | `/agenda` | `AgendaView` › modal › "Salvar" (atribui um dia) |
+| DELETE | `/agenda/:id` | `AgendaView` › "Remover atribuição" (só ADMIN) |
+
+Vive no backend de **chamados** (cliente `chamadosApi`). O `GET` aceita `inicio`,
+`fim`, `tecnicoId` e `escola` — todos opcionais. O payload traz `tecnicoCor` (o
+campo `cor` do Usuário), que começa **nulo para todo mundo**; o portal cai num
+hash estável por `tecnicoId` sobre a paleta de 8 cores de `DonutCard` quando vem
+null, para a célula nunca ficar só porque o cadastro ainda não foi atualizado.
+
+O frontend **não** adiciona `'agenda'` à lista `ROTAS_USUARIO`: a rota `/agenda`
+guarda pelo domínio `'escolas'` (o mesmo de `/unidades`), como decidido na task
+que criou a tela.
+
 #### Feedback autenticado
 
 | Método | Rota | Quem chama |
