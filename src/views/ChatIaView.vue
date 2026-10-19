@@ -810,7 +810,13 @@ const msgs: any[] = [
   try {
     resposta = await perguntarAoBackend()
   } catch (e: any) {
-    erroFinal = String(e?.message || e)
+    const data = e?.response?.data
+    let detalhe = ''
+    if (data) {
+      if (typeof data === 'string') detalhe = data
+      else detalhe = data.message || data.error || (data.details ? JSON.stringify(data.details) : '') || JSON.stringify(data)
+    }
+    erroFinal = detalhe || String(e?.message || e)
     console.error('[CafeIA] falhou', e)
   }
   if (erroFinal) {
