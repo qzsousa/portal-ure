@@ -175,8 +175,9 @@ import {
 } from '@lucide/vue'
 import { listarChamados } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
-import { listarUsuarios } from '@/api/usuarios'
-import { listarEquipamentosGlobal } from '@/api/sce'
+import { listarUsuarios, listarEscolas } from '@/api/usuarios'
+import { listarNotificacoes } from '@/api/notificacoes'
+import { listarEquipamentosGlobal, listarEmprestimosAtivos } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
 import { ACOES_TOOLS, executarAcao, WRITE_TOOLS } from '@/ia/acoes'
 import { useContextoIA } from '@/composables/useContextoIA'
@@ -303,13 +304,17 @@ const TOOLS_LEITURA: any[] = [
     type: 'function',
     function: {
       name: 'listar_equipamentos',
-      description: 'Lista equipamentos com filtro por status e unidade (escola).',
+      description: 'Lista equipamentos com filtro por status, unidade, busca, categoria, marca e modelo.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'Status do equipamento' },
           unidade: { type: 'string', description: 'Nome (ou parte) da escola/unidade' },
-          limite: { type: 'number', description: 'Quantidade (max 100)' },
+          busca: { type: 'string', description: 'Busca livre (patrimonio, serie, modelo)' },
+          categoria: { type: 'string', description: 'Categoria do equipamento' },
+          marca: { type: 'string', description: 'Marca' },
+          modelo: { type: 'string', description: 'Modelo' },
+          limite: { type: 'number', description: 'Quantidade (max 500)' },
         },
         required: [],
       },
@@ -341,12 +346,15 @@ const TOOLS_LEITURA: any[] = [
     function: {
       name: 'resumo_equipamentos',
       description:
-        'Conta equipamentos agregando por status, categoria, modelo e unidade. Filtros opcionais por status e unidade. Use para perguntas do tipo "quantos quebrados tem", "que modelo mais existe", "categoria mais comum".',
+        'Conta equipamentos agregando por status, categoria, modelo e unidade. Filtros opcionais por status, unidade, categoria, marca e modelo.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'Ex.: Disponivel, Quebrado, Em Manutencao' },
           unidade: { type: 'string', description: 'Nome (ou parte) da escola' },
+          categoria: { type: 'string', description: 'Categoria' },
+          marca: { type: 'string', description: 'Marca' },
+          modelo: { type: 'string', description: 'Modelo' },
         },
         required: [],
       },
@@ -357,6 +365,30 @@ const TOOLS_LEITURA: any[] = [
     function: {
       name: 'consultar_tecnicos',
       description: 'Lista técnicos cadastrados e as escolas (filial) que atendem.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_escolas',
+      description: 'Lista escolas cadastradas (nomes).',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_notificacoes',
+      description: 'Lista notificacoes do usuario logado e quantas nao lidas.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_emprestimos_ativos',
+      description: 'Lista emprestimos ativos de equipamentos (com atraso).',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -479,12 +511,30 @@ async function executarToolSemCache(nome: string, args: any) {
   const resultadoAcao = await executarAcao(nome, args)
   if (resultadoAcao !== null) return resultadoAcao
   if (nome === 'listar_chamados') {
-    const r: any = await listarChamados({ status: args.status, unidade: args.unidade, responsavel: args.responsavel, page: 1, limit: Math.min(args.limite || 50, 100) })
+    const r: any = await listarChamados({
+      status: args.status,
+      unidade: args.unidade,
+      responsavel: args.responsavel,
+      categoria: args.categoria,
+      categoriaChave: args.categoriaChave,
+      urgencia: args.urgencia,
+      page: args.pagina || 1,
+      limit: Math.min(args.limite || 50, 100),
+    })
     const dados = (r.data || []).map((c: any) => ({ protocolo: c.protocolo, tipo: c.tipo, status: c.status, unidade: c.unidade, urgencia: c.urgencia, responsavel: c.responsavel, abertura: c.timestamp, descricao: c.descricao?.slice(0, 200) }))
     return { total: r.meta?.total ?? r.data?.length, dados }
   }
   if (nome === 'listar_equipamentos') {
-    const r: any = await listarEquipamentosGlobal({ status: args.status, unidade: args.unidade, limite: Math.min(args.limite || 20, 20), offset: 0 })
+    const r: any = await listarEquipamentosGlobal({
+      status: args.status,
+      unidade: args.unidade,
+      busca: args.busca,
+      categoria: args.categoria,
+      marca: args.marca,
+      modelo: args.modelo,
+      limite: Math.min(args.limite || 100, 500),
+      offset: 0,
+    })
     const dadosEq = (r.data || []).map((e: any) => ({ id: e.id, categoria: e.categoria, marca: e.marca, modelo: e.modelo, status: e.status, unidade: e.unidade, patrimonio: e.patrimonio }))
     return { total: r.total, dados: dadosEq }
   }
@@ -503,6 +553,18 @@ async function executarToolSemCache(nome: string, args: any) {
       if (u.nivel === 'TECNICO') lista.push({ nome: u.nome, escolas: u.filial })
     }
     return { tecnicos: lista }
+  }
+  if (nome === 'listar_escolas') {
+    const escolas = await listarEscolas()
+    return { total: escolas.length, escolas }
+  }
+  if (nome === 'listar_notificacoes') {
+    const r: any = await listarNotificacoes()
+    return { naoLidas: r?.naoLidas ?? 0, notificacoes: r?.data ?? [] }
+  }
+  if (nome === 'listar_emprestimos_ativos') {
+    const r = await listarEmprestimosAtivos()
+    return { total: r.length, emprestimos: r }
   }
   if (nome === 'resumo_chamados') {
     const porTipo: Record<string, number> = {}
@@ -541,10 +603,16 @@ async function executarToolSemCache(nome: string, args: any) {
     const porUnidade: Record<string, number> = {}
     const filtroStatus = args.status ? String(args.status).toLowerCase() : ''
     const filtroUnidade = args.unidade ? String(args.unidade).toLowerCase() : ''
+    const filtroCategoria = args.categoria ? String(args.categoria).toLowerCase() : ''
+    const filtroMarca = args.marca ? String(args.marca).toLowerCase() : ''
+    const filtroModelo = args.modelo ? String(args.modelo).toLowerCase() : ''
     let total = 0
     for (const e of await todosEquipamentos()) {
       if (filtroStatus && !String(e.status || '').toLowerCase().includes(filtroStatus)) continue
       if (filtroUnidade && !String(e.unidade || '').toLowerCase().includes(filtroUnidade)) continue
+      if (filtroCategoria && !String(e.categoria || '').toLowerCase().includes(filtroCategoria)) continue
+      if (filtroMarca && !String(e.marca || '').toLowerCase().includes(filtroMarca)) continue
+      if (filtroModelo && !String(e.modelo || '').toLowerCase().includes(filtroModelo)) continue
       total++
       const st = e.status || 'sem status'
       const cat = e.categoria || 'sem categoria'
@@ -586,6 +654,8 @@ const msgs: any[] = [
         'listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool ' +
         'correspondente. Ao perguntar sobre uma pessoa/tecnico, use o nome exato e chame resumo_chamados/listar_chamados ' +
         'com responsavel; nao infira a partir de perguntas anteriores. ' +
+        'Use os filtros disponiveis nas tools (status, unidade, categoria, marca, modelo, busca, responsavel) ' +
+        'em vez de baixar tudo. ' +
         'Voce tambem pode EXECUTAR ACOES (agendar tecnico, encaminhar/atualizar/concluir/conferir chamados, ' +
         'gerenciar usuarios, equipamentos, regras de encaminhamento, notificacoes). Toda acao de escrita exige ' +
         'confirmacao explicita: primeiro apresente um resumo claro do que sera feito e peca "Confirma?"; ' +
