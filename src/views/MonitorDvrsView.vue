@@ -15,13 +15,13 @@ import { computed, onMounted, ref } from 'vue'
 import {
   AlertTriangle,
   Camera,
-  CircleDot,
   Loader2,
   RefreshCw,
   Search,
   Video,
   VideoOff,
 } from '@lucide/vue'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
@@ -46,6 +46,7 @@ const busca = ref('')
 const filtroStatus = ref<'' | DvrStatus>('')
 const filtroTipo = ref<'' | DvrTipo>('')
 const filtroEscola = ref('')
+const escolaModal = ref<EscolaResumo | null>(null)
 
 /** Relógio local: os carimbos "offline há 12 min" envelheceriam sem isso. */
 const agora = ref(Date.now())
@@ -168,8 +169,8 @@ function nomeCurto(rotulo: string): string {
 
 const escolas = computed<EscolaResumo[]>(() => snap.value?.porFaixa ?? [])
 
-const escolasComFalha = computed(() =>
-  escolas.value.filter((e) => e.offline > 0).sort((a, b) => b.offline - a.offline),
+const escolasSemNenhumOnline = computed(() =>
+  escolas.value.filter((e) => e.total > 0 && e.online === 0).sort((a, b) => b.offline - a.offline),
 )
 
 /**
@@ -201,11 +202,23 @@ function dvrPorRede(e: EscolaResumo, tipo: DvrTipo): DvrHost[] {
     .sort((a, b) => a.hostname.localeCompare(b.hostname))
 }
 
-const percentualRede = computed(() => snap.value?.percentualOnline ?? 0)
-const latenciaMedia = computed(() => {
-  const v = snap.value?.latenciaMediaMs
-  return v === null || v === undefined ? '—' : `${String(v).replace('.', ',')} ms`
+function abrirEscola(e: EscolaResumo) {
+  escolaModal.value = e
+}
+
+function fecharEscolaModal() {
+  escolaModal.value = null
+}
+
+const hostsModal = computed<DvrHost[]>(() => {
+  const e = escolaModal.value
+  if (!e) return []
+  return (snap.value?.hosts ?? [])
+    .filter((h) => h.faixa === e.id)
+    .sort((a, b) => (a.status === 'offline' ? 0 : 1) - (b.status === 'offline' ? 0 : 1) || a.tipo.localeCompare(b.tipo) || a.hostname.localeCompare(b.hostname))
 })
+
+const percentualRede = computed(() => snap.value?.percentualOnline ?? 0)
 
 /**
  * Câmeras fora do ar da rede ADM — as que Usually caem primeiro, porque a rede
@@ -263,13 +276,13 @@ const pagina = computed(() => ordenados.value.slice((page.value - 1) * PAGE_SIZE
       </div>
     </div>
 
-    <div v-else-if="escolasComFalha.length > 0" class="banner-alerta card">
+    <div v-else-if="escolasSemNenhumOnline.length > 0" class="banner-alerta card">
       <VideoOff :size="18" />
       <div>
-        <strong>{{ escolasComFalha.length }} unidades com DVR desligado</strong>
+        <strong>{{ escolasSemNenhumOnline.length }} unidades com todos os DVRs desligados</strong>
         <span>
           {{
-            escolasComFalha
+            escolasSemNenhumOnline
               .slice(0, 4)
               .map((e) => `${nomeCurto(e.rotulo)} (${e.offline})`)
               .join(' · ')
@@ -296,9 +309,6 @@ const pagina = computed(() => ordenados.value.slice((page.value - 1) * PAGE_SIZE
         :detail="snap?.caidosAgora ? `${snap.caidosAgora} caíram agora` : 'sem queda recente'"
       >
         <VideoOff :size="22" />
-      </StatCard>
-      <StatCard label="Latência média" :value="latenciaMedia" tone="slate" :detail="`ciclo de ${snap?.intervaloSegundos ?? 30}s`">
-        <CircleDot :size="22" />
       </StatCard>
     </div>
 
@@ -339,7 +349,7 @@ const pagina = computed(() => ordenados.value.slice((page.value - 1) * PAGE_SIZE
           :key="e.id"
           class="escola-card"
           :class="{ falha: foraDoAr(e) }"
-          @click="filtroEscola = filtroEscola === e.id ? '' : e.id"
+          @click="abrirEscola(e)"
         >
           <div class="escola-topo">
             <strong>{{ nomeCurto(e.rotulo) }}</strong>
@@ -460,6 +470,45 @@ const pagina = computed(() => ordenados.value.slice((page.value - 1) * PAGE_SIZE
       </div>
       <PaginationBar :page="page" :page-size="PAGE_SIZE" :total="ordenados.length" @change="(p) => (page = p)" />
     </div>
+
+    <BaseModal
+      :aberto="!!escolaModal"
+      :titulo="escolaModal ? `${nomeCurto(escolaModal.rotulo)} — DVRs` : 'Unidade'"
+      largura="min(760px, 96vw)"
+      @fechar="fecharEscolaModal"
+    >
+      <div v-if="escolaModal" class="dvr-modal">
+        <div class="dvr-modal-resumo">
+          <span><strong>{{ escolaModal.online }}</strong> ligados</span>
+          <span><strong>{{ escolaModal.offline }}</strong> desligados</span>
+          <span><strong>{{ escolaModal.total }}</strong> total</span>
+        </div>
+
+        <section v-for="tipo in ['ADM', 'PED']" :key="tipo" class="dvr-modal-rede">
+          <h4>{{ tipo === 'ADM' ? 'Rede administrativa (ADM)' : 'Rede pedagógica (PED)' }}</h4>
+          <div class="dvr-modal-lista">
+            <div
+              v-for="h in hostsModal.filter((x) => x.tipo === tipo)"
+              :key="h.ip"
+              class="dvr-modal-item"
+              :class="h.status"
+            >
+              <span class="dvr-modal-status">
+                <i class="bolinha" :class="h.status" />
+                {{ ROTULO_STATUS[h.status] }}
+              </span>
+              <code class="dvr">{{ h.hostname }}</code>
+              <code class="ip">{{ h.ip }}</code>
+              <span class="dim">{{ h.latenciaMs !== null ? `${h.latenciaMs} ms` : '—' }}</span>
+              <span class="dim tempo">{{ tempoNoEstado(h) }}</span>
+            </div>
+            <p v-if="!hostsModal.some((x) => x.tipo === tipo)" class="dim vazio-modal">
+              Sem DVRs cadastrados nesta rede.
+            </p>
+          </div>
+        </section>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -640,5 +689,46 @@ const pagina = computed(() => ordenados.value.slice((page.value - 1) * PAGE_SIZE
 @media (max-width: 640px) {
   .btn-mini { margin-left: 0; }
   .spark i { width: 4px; height: 12px; }
+}
+
+/* ---- modal de DVRs da unidade ---- */
+.dvr-modal { display: flex; flex-direction: column; gap: 16px; }
+.dvr-modal-resumo {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.dvr-modal-resumo strong { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.dvr-modal-rede h4 { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+.dvr-modal-lista { display: flex; flex-direction: column; gap: 6px; }
+.dvr-modal-item {
+  display: grid;
+  grid-template-columns: 110px 90px 1fr 70px auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 12.5px;
+}
+.dvr-modal-item.offline { background: color-mix(in srgb, var(--red) 5%, var(--surface)); border-color: color-mix(in srgb, var(--red) 30%, var(--border)); }
+.dvr-modal-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.bolinha { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.bolinha.online { background: var(--green); }
+.bolinha.offline { background: var(--red); }
+.bolinha.desconhecido { background: var(--slate-soft); }
+.dvr-modal-item .ip { color: var(--text-primary); font-weight: 600; }
+.dvr-modal-item .tempo { white-space: nowrap; }
+.vazio-modal { padding: 6px 2px; font-size: 12px; }
+
+@media (max-width: 640px) {
+  .dvr-modal-item { grid-template-columns: 1fr; }
 }
 </style>
