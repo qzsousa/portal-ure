@@ -4072,4 +4072,16 @@ tr.selecionado td {
     overflow-x: auto;
   }
 }
+
+.equip-unidade {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.equip-unidade .table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
 </style>
