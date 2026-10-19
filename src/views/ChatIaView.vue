@@ -565,6 +565,9 @@ async function executarToolSemCache(nome: string, args: any) {
 async function enviar() {
   if (enviando.value) return
   if (!entrada.value.trim()) return
+  if (!convId.value || !conversas.value.find((c) => c.id === convId.value)) {
+    novaConversa()
+  }
   const texto = entrada.value.trim()
   entrada.value = ''
   mensagens.value.push({ role: 'user', content: texto })
@@ -727,6 +730,7 @@ function escolherModelo(m: string) {
   buscaModelo.value = ''
 }
 
+carregarHistorico()
 carregar()
 void carregarModelosNvidia()
 
