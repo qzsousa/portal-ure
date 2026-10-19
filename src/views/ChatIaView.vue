@@ -286,12 +286,13 @@ const TOOLS_LEITURA: any[] = [
     type: 'function',
     function: {
       name: 'listar_chamados',
-      description: 'Lista chamados com filtro por status e unidade (escola).',
+      description: 'Lista chamados com filtro por status, unidade (escola) e responsavel (tecnico).',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'Status do chamado (ex.: ABERTO, RESOLVIDO)' },
           unidade: { type: 'string', description: 'Nome (ou parte) da escola/unidade' },
+          responsavel: { type: 'string', description: 'Nome do tecnico responsavel (ou parte)' },
           limite: { type: 'number', description: 'Quantidade (max 100)' },
         },
         required: [],
@@ -478,7 +479,7 @@ async function executarToolSemCache(nome: string, args: any) {
   const resultadoAcao = await executarAcao(nome, args)
   if (resultadoAcao !== null) return resultadoAcao
   if (nome === 'listar_chamados') {
-    const r: any = await listarChamados({ status: args.status, unidade: args.unidade, page: 1, limit: Math.min(args.limite || 50, 100) })
+    const r: any = await listarChamados({ status: args.status, unidade: args.unidade, responsavel: args.responsavel, page: 1, limit: Math.min(args.limite || 50, 100) })
     const dados = (r.data || []).map((c: any) => ({ protocolo: c.protocolo, tipo: c.tipo, status: c.status, unidade: c.unidade, urgencia: c.urgencia, responsavel: c.responsavel, abertura: c.timestamp, descricao: c.descricao?.slice(0, 200) }))
     return { total: r.meta?.total ?? r.data?.length, dados }
   }
@@ -583,7 +584,8 @@ const msgs: any[] = [
         'Use as tools para TODO detalhe que nao esteja no resumo - elas consultam a base inteira dos dois backends. ' +
         'Para contar tipos/categorias/status use resumo_chamados e resumo_equipamentos; para ver registros use ' +
         'listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool ' +
-        'correspondente. ' +
+        'correspondente. Ao perguntar sobre uma pessoa/tecnico, use o nome exato e chame resumo_chamados/listar_chamados ' +
+        'com responsavel; nao infira a partir de perguntas anteriores. ' +
         'Voce tambem pode EXECUTAR ACOES (agendar tecnico, encaminhar/atualizar/concluir/conferir chamados, ' +
         'gerenciar usuarios, equipamentos, regras de encaminhamento, notificacoes). Toda acao de escrita exige ' +
         'confirmacao explicita: primeiro apresente um resumo claro do que sera feito e peca "Confirma?"; ' +
