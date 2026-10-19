@@ -23,12 +23,12 @@ export async function listarAtribuicoes(
   intervalo: IntervaloAgenda = {},
 ): Promise<AtribuicaoAgenda[]> {
   const params: Record<string, string> = {}
-  if (intervalo.inicio?.trim()) params.inicio = intervalo.inicio.trim()
-  if (intervalo.fim?.trim()) params.fim = intervalo.fim.trim()
+  if (intervalo.inicio?.trim()) params.de = intervalo.inicio.trim()
+  if (intervalo.fim?.trim()) params.ate = intervalo.fim.trim()
   if (intervalo.tecnicoId?.trim()) params.tecnicoId = intervalo.tecnicoId.trim()
   if (intervalo.escola?.trim()) params.escola = intervalo.escola.trim()
-  const { data } = await chamadosApi.get<{ data: AtribuicaoAgenda[] }>('/agenda', { params })
-  return data.data
+  const { data } = await chamadosApi.get<AtribuicaoAgenda[]>('/agenda', { params })
+  return data
 }
 
 /** Atribui um dia a um técnico (modal de atribuição). */
