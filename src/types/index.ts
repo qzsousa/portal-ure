@@ -295,6 +295,54 @@ export interface Chamado {
   avaliacao?: { nota: number; comentario: string | null } | null
 }
 
+/* ---------- Agenda de atendimento (backend chamados) */
+
+/**
+ * Atribuição de um dia da agenda de atendimento.
+ *
+ * COPIA MANUAL do contrato do backend (`shared/types/api.ts` no repo do
+ * backend). O portal não importa `@shared/api` — não tem essa dependência no
+ * `package.json` — então as chaves vivem aqui e precisam bater exatamente com
+ * o zod do servidor. Se mudar lá, muda aqui.
+ */
+export interface AtribuicaoAgenda {
+  id: string
+  escola: string
+  /** ISO datetime, meia-noite UTC do dia. */
+  data: string
+  tecnicoId: string
+  tecnicoNome: string
+  /**
+   * "#RRGGBB" ou null — o campo `cor` do Usuário. A coluna começa nula para
+   * todo mundo, então o portal cai no hash estável do `tecnicoId` quando vem
+   * null: a Agenda não pode ficar sem cor só porque o cadastro ainda não foi
+   * atualizado.
+   */
+  tecnicoCor: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Payload do `POST /api/agenda` (atribuir um dia). */
+export interface AtribuicaoAgendaCreate {
+  escola: string
+  /**
+   * "AAAA-MM-DD" ou ISO completo; o handler do backend normaliza para o dia
+   * (meia-noite UTC).
+   */
+  data: string
+  tecnicoId: string
+  tecnicoNome: string
+}
+
+/** Filtros do `GET /api/agenda` — todos opcionais. */
+export interface FiltrosAtribuicaoAgenda {
+  inicio?: string
+  fim?: string
+  tecnicoId?: string
+  escola?: string
+}
+
 /* ---------- Notificações (backend chamados) ---------- */
 
 export interface Notificacao {
