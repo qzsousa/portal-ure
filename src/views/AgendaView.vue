@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onMounted, reactive, ref, type ComponentPublicInstance } from 'vue'
 import { CalendarDays, ChevronLeft, ChevronRight } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
@@ -10,22 +10,22 @@ import { corDoTecnico } from '@/utils/cores'
 import { useAuthStore } from '@/stores/auth'
 import type { AtribuicaoAgenda } from '@/types'
 
-/* Mesmas constantes de AppTopbar.vue, espelhadas porque o AppTopbar está fora
-   do escopo desta task. Pendência: extrair para src/utils/calendario.ts quando
-   o topbar puder ser editado — os dois precisam contar os mesmos nomes. */
+/* Mesmas constantes de AppTopbar.vue, espelhadas porque o AppTopbar estÃ¡ fora
+   do escopo desta task. PendÃªncia: extrair para src/utils/calendario.ts quando
+   o topbar puder ser editado â€” os dois precisam contar os mesmos nomes. */
 const DIAS_SEMANA = [
   'Domingo',
   'Segunda-Feira',
-  'Terça-Feira',
+  'TerÃ§a-Feira',
   'Quarta-Feira',
   'Quinta-Feira',
   'Sexta-Feira',
-  'Sábado',
+  'SÃ¡bado',
 ]
 const MESES = [
   'Janeiro',
   'Fevereiro',
-  'Março',
+  'MarÃ§o',
   'Abril',
   'Maio',
   'Junho',
@@ -36,7 +36,7 @@ const MESES = [
   'Novembro',
   'Dezembro',
 ]
-/** Cabeçalho das colunas, derivado dos mesmos nomes ("Domingo" → "Dom"). */
+/** CabeÃ§alho das colunas, derivado dos mesmos nomes ("Domingo" â†’ "Dom"). */
 const DIAS_SEMANA_CURTO = DIAS_SEMANA.map((d) => d.slice(0, 3))
 
 /* ---------- Estado ---------- */
@@ -48,14 +48,14 @@ const estado = reactive({
   salvando: false,
 })
 
-/** Atribuições por dia (chave = "yyyy-mm-dd"). Espelha `AtribuicaoAgenda` do backend. */
-const atribuicoes = reactive<Record<string, AtribuicaoAgenda>>({})
+/** AtribuiÃ§Ãµes por dia (chave = "yyyy-mm-dd"). Espelha `AtribuicaoAgenda` do backend. */
+const atribuicoes = reactive<Record<string, AtribuicaoAgenda[]>>({})
 
 const auth = useAuthStore()
-/** Remover atribuição é decisão da matriz: só o ADMIN desfaz o dia. */
+/** Remover atribuiÃ§Ã£o Ã© decisÃ£o da matriz: sÃ³ o ADMIN desfaz o dia. */
 const podeRemover = computed(() => auth.user?.nivel === 'ADMIN')
 
-/* ---------- Mês exibido ---------- */
+/* ---------- MÃªs exibido ---------- */
 const hoje = new Date()
 const anoMes = reactive({ ano: hoje.getFullYear(), mes: hoje.getMonth() })
 
@@ -90,19 +90,17 @@ function irParaHoje() {
   void carregarAtribuicoes()
 }
 
-/* ---------- Células do calendário (construído do zero, sem biblioteca) ---------- */
+/* ---------- CÃ©lulas do calendÃ¡rio (construÃ­do do zero, sem biblioteca) ---------- */
 interface CelulaDia {
   dia: number
   iso: string
   mesAtual: boolean
   ehHoje: boolean
-  escola: string
-  tecnicoNome: string
-  /** Cor do técnico (validada) ou '' quando o dia está vazio. */
-  cor: string
+  /** Atribuiï¿½ï¿½ï¿½ï¿½es do dia (pode haver mais de um tÇ¸cnico). */
+  attrs: AtribuicaoAgenda[]
 }
 
-/** "yyyy-mm-dd" em horário local — evita virada de dia por fuso. */
+/** "yyyy-mm-dd" em horÃ¡rio local â€” evita virada de dia por fuso. */
 function isoDe(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const dia = String(d.getDate()).padStart(2, '0')
@@ -120,23 +118,23 @@ function mesmoDia(a: Date, b: Date): boolean {
 /**
  * Chave do dia a partir do `data` que o backend devolve (ISO, meia-noite UTC).
  *
- * O calendário é montado em horário local, mas o backend normaliza a data para
+ * O calendÃ¡rio Ã© montado em horÃ¡rio local, mas o backend normaliza a data para
  * meia-noite UTC do dia. Extrair os 10 primeiros caracteres (a parte "AAAA-MM-DD"
- * do UTC) é o que faz a atribuição cair na célula que o usuário clicou, em
- * qualquer fuso horário.
+ * do UTC) Ã© o que faz a atribuiÃ§Ã£o cair na cÃ©lula que o usuÃ¡rio clicou, em
+ * qualquer fuso horÃ¡rio.
  */
 function chaveDaData(isoUtc: string): string {
   return isoUtc.slice(0, 10)
 }
 
 /**
- * Primeiro dia do mês exibido e primeiro dia do seguinte, para o filtro de
+ * Primeiro dia do mÃªs exibido e primeiro dia do seguinte, para o filtro de
  * intervalo da API.
  *
- * O `fim` é o primeiro dia do mês seguinte (exclusivo): assim o último dia do
- * mês entra tanto se o backend tratar `fim` como exclusivo quanto como
- * inclusivo. Usa `new Date(ano, mes + 1, 1)` porque o mês 13 é normalizado para
- * janeiro do ano seguinte — montar a string na mão daria "2026-13-01" em
+ * O `fim` Ã© o primeiro dia do mÃªs seguinte (exclusivo): assim o Ãºltimo dia do
+ * mÃªs entra tanto se o backend tratar `fim` como exclusivo quanto como
+ * inclusivo. Usa `new Date(ano, mes + 1, 1)` porque o mÃªs 13 Ã© normalizado para
+ * janeiro do ano seguinte â€” montar a string na mÃ£o daria "2026-13-01" em
  * dezembro.
  */
 function intervaloAtual(): { inicio: string; fim: string } {
@@ -146,7 +144,7 @@ function intervaloAtual(): { inicio: string; fim: string } {
   }
 }
 
-/** Iniciais do técnico (1 ou 2 letras) para o selo colorido da célula. */
+/** Iniciais do tÃ©cnico (1 ou 2 letras) para o selo colorido da cÃ©lula. */
 function iniciais(nome: string): string {
   const partes = nome.trim().split(/\s+/).filter(Boolean)
   if (!partes.length) return ''
@@ -162,36 +160,34 @@ const celulas = computed<CelulaDia[]>(() => {
   const diasMesAnterior = new Date(anoMes.ano, anoMes.mes, 0).getDate()
   const saida: CelulaDia[] = []
 
-  // Dias do mês anterior que completam a primeira semana.
+  // Dias do mÃªs anterior que completam a primeira semana.
   for (let i = offset - 1; i >= 0; i--) {
     const d = new Date(anoMes.ano, anoMes.mes - 1, diasMesAnterior - i)
-    saida.push({ dia: d.getDate(), iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '', cor: '' })
+    saida.push({ dia: d.getDate(), iso: isoDe(d), mesAtual: false, ehHoje: false, attrs: [] })
   }
   for (let d = 1; d <= diasNoMes; d++) {
     const data = new Date(anoMes.ano, anoMes.mes, d)
     const iso = isoDe(data)
-    const attr = atribuicoes[iso]
+    const attrs = atribuicoes[iso] || []
     saida.push({
       dia: d,
       iso,
       mesAtual: true,
       ehHoje: mesmoDia(data, hoje),
-      escola: attr?.escola || '',
-      tecnicoNome: attr?.tecnicoNome || '',
-      cor: attr ? corDoTecnico(attr.tecnicoId, attr.tecnicoCor) : '',
+      attrs,
     })
   }
-  // Dias do próximo mês para fechar a grade em múltiplos de 7.
+  // Dias do prÃ³ximo mÃªs para fechar a grade em mÃºltiplos de 7.
   let prox = 1
   while (saida.length % 7 !== 0) {
     const d = new Date(anoMes.ano, anoMes.mes + 1, prox)
-    saida.push({ dia: prox, iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '', cor: '' })
+    saida.push({ dia: prox, iso: isoDe(d), mesAtual: false, ehHoje: false, attrs: [] })
     prox++
   }
   return saida
 })
 
-/* ---------- Navegação por teclado (setas + Enter) ---------- */
+/* ---------- NavegaÃ§Ã£o por teclado (setas + Enter) ---------- */
 const diaRefs = ref<Array<HTMLButtonElement | null>>([])
 const focoIdx = ref(-1)
 
@@ -206,7 +202,7 @@ function ajustarFoco() {
   focoIdx.value = alvo >= 0 ? alvo : 0
 }
 
-/** Setas movem o dia, Home/End vão ao início/fim da grade. Enter é o clique (botão nativo). */
+/** Setas movem o dia, Home/End vÃ£o ao inÃ­cio/fim da grade. Enter Ã© o clique (botÃ£o nativo). */
 function navegarTeclado(e: KeyboardEvent) {
   const total = celulas.value.length
   if (total === 0) return
@@ -221,22 +217,21 @@ function navegarTeclado(e: KeyboardEvent) {
   diaRefs.value[focoIdx.value]?.focus()
 }
 
-/** Rótulo acessível da célula: data por extenso + atribuição, se houver. */
+/** RÃ³tulo acessÃ­vel da cÃ©lula: data por extenso + atribuiÃ§Ã£o, se houver. */
 function rotuloDia(c: CelulaDia): string {
   const data = new Date(c.iso + 'T12:00:00')
   const base = data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
-  if (!c.escola) return `${base} — sem atribuição`
-  return `${base} — ${c.escola} com ${c.tecnicoNome}`
+  if (!c.attrs.length) return `${base} - sem atribuicao`
+  return `${base} - ${c.attrs.map((a) => `${a.escola} com ${a.tecnicoNome}`).join("; ")}`
 }
 
-/* ---------- Modal de atribuição ---------- */
+/* ---------- Modal de atribuiÃ§Ã£o ---------- */
 const modalAberto = ref(false)
 const diaSel = ref('')
 const escolaSel = ref('')
 const tecnicoSel = ref('')
 
-const diaPreenchido = computed(() => !!atribuicoes[diaSel.value])
-
+const atribuicoesDoDia = computed(() => atribuicoes[diaSel.value] || [])
 const dataModal = computed(() => {
   if (!diaSel.value) return ''
   return new Date(diaSel.value + 'T12:00:00').toLocaleDateString('pt-BR')
@@ -244,9 +239,8 @@ const dataModal = computed(() => {
 
 function abrirDia(c: CelulaDia) {
   diaSel.value = c.iso
-  const attr = atribuicoes[c.iso]
-  escolaSel.value = attr?.escola || ''
-  tecnicoSel.value = attr?.tecnicoId || ''
+  escolaSel.value = ''
+  tecnicoSel.value = ''
   modalAberto.value = true
 }
 
@@ -261,35 +255,39 @@ async function salvar() {
       tecnicoId: tecnicoSel.value,
       tecnicoNome: tecnico?.nome || '',
     })
-    atribuicoes[chaveDaData(criada.data)] = criada
+    const chave = chaveDaData(criada.data)
+    if (!atribuicoes[chave]) atribuicoes[chave] = []
+    atribuicoes[chave].push(criada)
+    escolaSel.value = ''
+    tecnicoSel.value = ''
   } catch {
-    estado.erro = 'Não foi possível salvar a atribuição. Tente novamente.'
+    estado.erro = 'NÃ£o foi possÃ­vel salvar a atribuiÃ§Ã£o. Tente novamente.'
   } finally {
     estado.salvando = false
   }
-  modalAberto.value = false
 }
 
 /**
- * Remove a atribuição do dia.
+ * Remove a atribuiÃ§Ã£o do dia.
  *
- * A permissão é revalidada AQUI, e não só no `v-if` do botão: o `v-if` é
- * decisão de template, e a função é o que de fato fala com o backend. Se o
- * nível do usuário não for ADMIN, a função retorna sem chamar a API — o
- * servidor é a autoridade final, mas o portal não manda o que sabe que será
+ * A permissÃ£o Ã© revalidada AQUI, e nÃ£o sÃ³ no `v-if` do botÃ£o: o `v-if` Ã©
+ * decisÃ£o de template, e a funÃ§Ã£o Ã© o que de fato fala com o backend. Se o
+ * nÃ­vel do usuÃ¡rio nÃ£o for ADMIN, a funÃ§Ã£o retorna sem chamar a API â€” o
+ * servidor Ã© a autoridade final, mas o portal nÃ£o manda o que sabe que serÃ¡
  * recusado.
  */
-async function remover() {
+async function removerItem(id: string) {
   if (auth.user?.nivel !== 'ADMIN') return
-  const attr = atribuicoes[diaSel.value]
-  if (!attr?.id) return
   try {
-    await removerAtribuicao(attr.id)
-    delete atribuicoes[diaSel.value]
+    await removerAtribuicao(id)
+    const chave = diaSel.value
+    if (atribuicoes[chave]) {
+      atribuicoes[chave] = atribuicoes[chave].filter((a) => a.id !== id)
+      if (!atribuicoes[chave].length) delete atribuicoes[chave]
+    }
   } catch {
-    estado.erro = 'Não foi possível remover a atribuição. Tente novamente.'
+    estado.erro = 'Nao foi possivel remover a atribuicao. Tente novamente.'
   }
-  modalAberto.value = false
 }
 
 /* ---------- Carga ---------- */
@@ -304,18 +302,18 @@ async function carregar() {
   } catch {
     estado.tecnicos = []
     estado.erro =
-      'Não foi possível carregar a lista de técnicos. O serviço pode estar indisponível no momento — tente novamente mais tarde.'
+      'NÃ£o foi possÃ­vel carregar a lista de tÃ©cnicos. O serviÃ§o pode estar indisponÃ­vel no momento â€” tente novamente mais tarde.'
   } finally {
     estado.loading = false
   }
 }
 
 /**
- * Carrega as atribuições do mês exibido.
+ * Carrega as atribuiÃ§Ãµes do mÃªs exibido.
  *
- * O filtro de intervalo vai para a API, mas o corte também é feito aqui: se o
- * backend ignorar os parâmetros (ou os nomes das chaves mudarem), a tela
- * continua mostrando só o mês, em vez de derrubar atribuições de outros meses
+ * O filtro de intervalo vai para a API, mas o corte tambÃ©m Ã© feito aqui: se o
+ * backend ignorar os parÃ¢metros (ou os nomes das chaves mudarem), a tela
+ * continua mostrando sÃ³ o mÃªs, em vez de derrubar atribuiÃ§Ãµes de outros meses
  * na grade.
  */
 async function carregarAtribuicoes() {
@@ -324,25 +322,28 @@ async function carregarAtribuicoes() {
     const lista = await listarAtribuicoes({ inicio, fim })
     for (const a of lista) {
       const chave = chaveDaData(a.data)
-      if (chave >= inicio && chave < fim) atribuicoes[chave] = a
+      if (chave >= inicio && chave < fim) {
+        if (!atribuicoes[chave]) atribuicoes[chave] = []
+        atribuicoes[chave].push(a)
+      }
     }
     if (!Object.keys(atribuicoes).length) await migrarDoNavegador()
   } catch {
-    estado.erro = 'Não foi possível carregar a agenda. Tente novamente mais tarde.'
+    estado.erro = 'NÃ£o foi possÃ­vel carregar a agenda. Tente novamente mais tarde.'
   }
 }
 
 /**
- * Migração única das atribuições que estavam no localStorage.
+ * MigraÃ§Ã£o Ãºnica das atribuiÃ§Ãµes que estavam no localStorage.
  *
- * Quem usou a agenda antes do endpoint existir tinha os dias salvos só no
- * navegador. Sem isto, essas atribuições desapareceriam em silêncio quando o
- * endpoint entrasse. A migração lê o storage antigo e faz um POST por dia,
- * uma única vez, e remove a chave — mesmo que algum POST falhe, para não
+ * Quem usou a agenda antes do endpoint existir tinha os dias salvos sÃ³ no
+ * navegador. Sem isto, essas atribuiÃ§Ãµes desapareceriam em silÃªncio quando o
+ * endpoint entrasse. A migraÃ§Ã£o lÃª o storage antigo e faz um POST por dia,
+ * uma Ãºnica vez, e remove a chave â€” mesmo que algum POST falhe, para nÃ£o
  * repetir a tentativa a cada carregamento.
  *
- * Só roda quando o backend não devolveu atribuição nenhuma: se já há dados
- * no servidor, os do navegador são duplicata e ficam para trás.
+ * SÃ³ roda quando o backend nÃ£o devolveu atribuiÃ§Ã£o nenhuma: se jÃ¡ hÃ¡ dados
+ * no servidor, os do navegador sÃ£o duplicata e ficam para trÃ¡s.
  */
 async function migrarDoNavegador() {
   const STORAGE_KEY = 'agenda-atendimento-v1'
@@ -390,15 +391,15 @@ onMounted(() => {
   <div class="agenda-page">
     <header class="agenda-head">
       <div>
-        <h2><CalendarDays :size="22" /> Calendário de atendimento</h2>
-        <p class="agenda-sub">Clique em um dia para atribuir a escola e o técnico que vão atendê-la.</p>
+        <h2><CalendarDays :size="22" /> CalendÃ¡rio de atendimento</h2>
+        <p class="agenda-sub">Clique em um dia para atribuir a escola e o tÃ©cnico que vÃ£o atendÃª-la.</p>
       </div>
       <div class="agenda-nav">
         <button class="btn btn-outline" type="button" @click="irParaHoje">Hoje</button>
-        <button class="nav-btn" type="button" aria-label="Mês anterior" @click="mesAnterior">
+        <button class="nav-btn" type="button" aria-label="MÃªs anterior" @click="mesAnterior">
           <ChevronLeft :size="18" />
         </button>
-        <button class="nav-btn" type="button" aria-label="Próximo mês" @click="proximoMes">
+        <button class="nav-btn" type="button" aria-label="PrÃ³ximo mÃªs" @click="proximoMes">
           <ChevronRight :size="18" />
         </button>
       </div>
@@ -409,42 +410,54 @@ onMounted(() => {
     <div class="card agenda-card">
       <h3 class="agenda-mes">{{ tituloMes }}</h3>
 
-      <div class="grade" role="group" :aria-label="`Calendário de ${tituloMes}`" @keydown="navegarTeclado">
+      <div class="grade" role="group" :aria-label="`CalendÃ¡rio de ${tituloMes}`" @keydown="navegarTeclado">
         <div v-for="(nome, i) in DIAS_SEMANA_CURTO" :key="i" class="grade-col">{{ nome }}</div>
         <button
           v-for="(c, idx) in celulas"
           :key="c.iso"
           :ref="refDia(idx)"
           class="dia"
-          :class="{ fora: !c.mesAtual, hoje: c.ehHoje, preenchida: !!c.escola }"
+          :class="{ fora: !c.mesAtual, hoje: c.ehHoje, preenchida: c.attrs.length > 0 }"
           :tabindex="idx === focoIdx ? 0 : -1"
           :aria-label="rotuloDia(c)"
-          :aria-pressed="!!c.escola"
-          :style="c.cor ? { borderLeftColor: c.cor } : undefined"
+          :aria-pressed="c.attrs.length > 0"
+          
           @focus="focoIdx = idx"
           @click="abrirDia(c)"
         >
           <span class="dia-num">{{ c.dia }}</span>
-          <span v-if="c.escola" class="dia-info">
-            <span class="dia-escola">{{ c.escola }}</span>
-            <span class="dia-tecnico">
-              <span class="dia-tecnico-iniciais" :style="{ backgroundColor: c.cor }">
-                {{ iniciais(c.tecnicoNome) }}
+          <span v-if="c.attrs.length" class="dia-info">
+            <span v-for="a in c.attrs" :key="a.id" class="dia-attr">
+              <span class="dia-escola">{{ a.escola }}</span>
+              <span class="dia-tecnico">
+                <span class="dia-tecnico-iniciais" :style="{ backgroundColor: corDoTecnico(a.tecnicoId, a.tecnicoCor) }">
+                  {{ iniciais(a.tecnicoNome) }}
+                </span>
+                {{ a.tecnicoNome }}
               </span>
-              {{ c.tecnicoNome }}
             </span>
           </span>
         </button>
       </div>
 
       <p class="agenda-ajuda">
-        Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra colorida já
-        têm escola e técnico atribuídos — cada técnico tem a sua cor.
+        Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra colorida jÃ¡
+        tÃªm escola e tÃ©cnico atribuÃ­dos â€” cada tÃ©cnico tem a sua cor.
       </p>
     </div>
 
-    <BaseModal :titulo="`Atendimento — ${dataModal}`" :aberto="modalAberto" @fechar="modalAberto = false">
+    <BaseModal :titulo="`Atendimento â€” ${dataModal}`" :aberto="modalAberto" @fechar="modalAberto = false">
       <div class="modal-campos">
+        <div v-if="atribuicoesDoDia.length" class="atribuicoes-lista">
+          <p class="atribuicoes-titulo">Tecnicos no dia</p>
+          <ul>
+            <li v-for="a in atribuicoesDoDia" :key="a.id">
+              <span class="dia-tecnico-iniciais" :style="{ backgroundColor: corDoTecnico(a.tecnicoId, a.tecnicoCor) }">{{ iniciais(a.tecnicoNome) }}</span>
+              <span>{{ a.tecnicoNome }} - {{ a.escola }}</span>
+              <button v-if="podeRemover" class="btn btn-perigo btn-sm" type="button" @click="removerItem(a.id)">Remover</button>
+            </li>
+          </ul>
+        </div>
         <div class="field">
           <label for="agenda-escola">Escola</label>
           <select
@@ -464,7 +477,7 @@ onMounted(() => {
           </select>
         </div>
         <div class="field">
-          <label for="agenda-tecnico">Técnico</label>
+          <label for="agenda-tecnico">TÃ©cnico</label>
           <select
             id="agenda-tecnico"
             v-model="tecnicoSel"
@@ -474,8 +487,8 @@ onMounted(() => {
             <option value="" disabled>
               {{
                 estado.loading && estado.tecnicos.length === 0
-                  ? 'Carregando técnicos...'
-                  : 'Selecione o técnico'
+                  ? 'Carregando tÃ©cnicos...'
+                  : 'Selecione o tÃ©cnico'
               }}
             </option>
             <option v-for="t in estado.tecnicos" :key="t.id" :value="t.id">{{ t.nome }}</option>
@@ -483,17 +496,14 @@ onMounted(() => {
         </div>
       </div>
       <template #footer>
-        <button v-if="diaPreenchido && podeRemover" class="btn btn-perigo" type="button" @click="remover">
-          Remover atribuição
-        </button>
-        <button class="btn btn-outline" type="button" @click="modalAberto = false">Cancelar</button>
+        <button class="btn btn-outline" type="button" @click="modalAberto = false">Fechar</button>
         <button
           class="btn btn-primary"
           type="button"
           :disabled="!escolaSel || !tecnicoSel || estado.salvando"
           @click="salvar"
         >
-          {{ estado.salvando ? 'Salvando...' : 'Salvar' }}
+          {{ estado.salvando ? 'Salvando...' : 'Adicionar' }}
         </button>
       </template>
     </BaseModal>
