@@ -177,7 +177,11 @@ import { listarChamados } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
 import { listarUsuarios, listarEscolas } from '@/api/usuarios'
 import { listarNotificacoes } from '@/api/notificacoes'
+import { buscarLinkInternetPorEscola } from '@/utils/linksInternet'
+import { LINKS_INTERNET } from '@/data/linksInternetData'
 import { listarEquipamentosGlobal, listarEmprestimosAtivos } from '@/api/sce'
+import { obterDvr } from '@/api/dvr'
+import { listarPainelUnidades } from '@/api/escolas'
 import { useAuthStore } from '@/stores/auth'
 import { ACOES_TOOLS, executarAcao, WRITE_TOOLS } from '@/ia/acoes'
 import { useContextoIA } from '@/composables/useContextoIA'
@@ -392,6 +396,42 @@ const TOOLS_LEITURA: any[] = [
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'obter_dvr',
+      description: 'Resumo do monitor de DVRs: totais, online/offline e por escola.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'buscar_link_internet',
+      description: 'Busca o link de internet de uma escola (provedor, velocidade, status).',
+      parameters: {
+        type: 'object',
+        properties: { escola: { type: 'string', description: 'Nome da escola' } },
+        required: ['escola'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_links_internet',
+      description: 'Lista os links de internet de todas as unidades.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_painel_unidades',
+      description: 'Painel de unidades: tecnico, inventario, chamados por predio.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
 ]
  
 const tools: any[] = [...TOOLS_LEITURA, ...ACOES_TOOLS]
@@ -565,6 +605,51 @@ async function executarToolSemCache(nome: string, args: any) {
   if (nome === 'listar_emprestimos_ativos') {
     const r = await listarEmprestimosAtivos()
     return { total: r.length, emprestimos: r }
+  }
+  if (nome === 'obter_dvr') {
+    const r = await obterDvr()
+    return {
+      total: r.total,
+      online: r.online,
+      offline: r.offline,
+      desconhecido: r.desconhecido,
+      percentualOnline: r.percentualOnline,
+      caidosAgora: r.caidosAgora,
+      porEscola: (r.porFaixa || []).map((e: any) => ({
+        escola: e.rotulo,
+        total: e.total,
+        online: e.online,
+        offline: e.offline,
+        desconhecido: e.desconhecido,
+      })),
+    }
+  }
+  if (nome === 'buscar_link_internet') {
+    const r = buscarLinkInternetPorEscola(String(args.escola || ''))
+    if (!r) return { erro: 'Link nao encontrado para esta escola' }
+    return {
+      escola: r.escola,
+      empresa: r.empresa,
+      velocidadeMbps: r.velocidadeMbps,
+      status: r.status,
+      possuiSegundoLink: r.possuiSegundoLink,
+      endereco: r.endereco,
+      observacoes: r.observacoes,
+    }
+  }
+  if (nome === 'listar_links_internet') {
+    const dados = LINKS_INTERNET.map((r: any) => ({
+      escola: r.escola,
+      empresa: r.empresa,
+      velocidadeMbps: r.velocidadeMbps,
+      status: r.status,
+      possuiSegundoLink: r.possuiSegundoLink,
+    }))
+    return { total: dados.length, links: dados }
+  }
+  if (nome === 'listar_painel_unidades') {
+    const r = await listarPainelUnidades()
+    return { total: r.length, unidades: r }
   }
   if (nome === 'resumo_chamados') {
     const porTipo: Record<string, number> = {}
