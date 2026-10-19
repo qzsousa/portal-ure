@@ -178,6 +178,7 @@ import { chamadosApi } from '@/api/http'
 import { listarUsuarios } from '@/api/usuarios'
 import { listarEquipamentosGlobal } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
+import { ACOES_TOOLS, executarAcao, WRITE_TOOLS } from '@/ia/acoes'
 import { useContextoIA } from '@/composables/useContextoIA'
 
 interface Msg { role: 'user' | 'assistant' | 'tool'; content: string }
@@ -196,6 +197,7 @@ const sugestoes = [
   'Qual tecnico mais resolveu chamados?',
   'Escolas com mais equipamentos disponiveis',
   'Quantos chamados tem em aberto?',
+  'Agende os tecnicos da lista na agenda',
 ]
 
 interface Conv { id: string; title: string; mensagens: Msg[]; atualizado: number }
@@ -279,7 +281,7 @@ function excluirConversa(id: string) {
   salvarHistorico()
 }
 
-const tools: any[] = [
+const TOOLS_LEITURA: any[] = [
   {
     type: 'function',
     function: {
@@ -358,7 +360,9 @@ const tools: any[] = [
     },
   },
 ]
-
+ 
+const tools: any[] = [...TOOLS_LEITURA, ...ACOES_TOOLS]
+ 
 /**
  * Chave de agrupamento de pessoa: sem caixa e sem espaço sobrando.
  *
@@ -462,14 +466,17 @@ const ROTULO_TOOL: Record<string, string> = {
 
 async function executarTool(nome: string, args: any) {
   const chave = `${nome}:${JSON.stringify(args ?? {})}`
-  if (cacheTools.has(chave)) return cacheTools.get(chave)
+  const ehEscrita = WRITE_TOOLS.has(nome)
+  if (!ehEscrita && cacheTools.has(chave)) return cacheTools.get(chave)
   ferramentaAtual.value = nome
   const saida = await executarToolSemCache(nome, args)
-  cacheTools.set(chave, saida)
+  if (!ehEscrita) cacheTools.set(chave, saida)
   return saida
 }
 
 async function executarToolSemCache(nome: string, args: any) {
+  const resultadoAcao = await executarAcao(nome, args)
+  if (resultadoAcao !== null) return resultadoAcao
   if (nome === 'listar_chamados') {
     const r: any = await listarChamados({ status: args.status, unidade: args.unidade, page: 1, limit: Math.min(args.limite || 50, 100) })
     const dados = (r.data || []).map((c: any) => ({ protocolo: c.protocolo, tipo: c.tipo, status: c.status, unidade: c.unidade, urgencia: c.urgencia, responsavel: c.responsavel, abertura: c.timestamp, descricao: c.descricao?.slice(0, 200) }))
@@ -573,7 +580,13 @@ const msgs: any[] = [
         'Use as tools para TODO detalhe que nao esteja no resumo - elas consultam a base inteira dos dois backends. ' +
         'Para contar tipos/categorias/status use resumo_chamados e resumo_equipamentos; para ver registros use ' +
         'listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool ' +
-        'correspondente. Resumo:\n' + resumo.value,
+        'correspondente. ' +
+        'Voce tambem pode EXECUTAR ACOES (agendar tecnico, encaminhar/atualizar/concluir/conferir chamados, ' +
+        'gerenciar usuarios, equipamentos, regras de encaminhamento, notificacoes). Toda acao de escrita exige ' +
+        'confirmacao explicita: primeiro apresente um resumo claro do que sera feito e peca "Confirma?"; ' +
+        'so chame a tool com confirmar=true depois de um "sim" explicito. Se a tool retornar ' +
+        'confirmacao_necessaria, faca isso. Nunca execute acao destrutiva sem confirmacao. ' +
+        'Resumo:\n' + resumo.value,
     },
     ...mensagens.value.slice(-6).map((m) => ({ role: m.role, content: m.content })),
   ]
