@@ -186,7 +186,7 @@ import { useAuthStore } from '@/stores/auth'
 import { ACOES_TOOLS, executarAcao, WRITE_TOOLS } from '@/ia/acoes'
 import { useContextoIA } from '@/composables/useContextoIA'
 
-interface Msg { role: 'user' | 'assistant' | 'tool'; content: string }
+interface Msg { role: 'user' | 'assistant' | 'tool'; content: string; reasoning_content?: string }
 
 const auth = useAuthStore()
 const { resumo, carregando: carregandoDados, status, carregar, recarregar: recarregarBase } = useContextoIA()
@@ -729,6 +729,7 @@ async function enviar() {
   ferramentaAtual.value = ''
   cacheTools.clear()
   rolarParaBaixo()
+  let ultimaReasoning = ''
 const msgs: any[] = [
     {
       role: 'system',
@@ -748,7 +749,7 @@ const msgs: any[] = [
         'confirmacao_necessaria, faca isso. Nunca execute acao destrutiva sem confirmacao. ' +
         'Resumo:\n' + resumo.value,
     },
-    ...mensagens.value.slice(-6).map((m) => ({ role: m.role, content: m.content })),
+    ...mensagens.value.slice(-6).map((m) => ({ role: m.role, content: m.content, ...(m.reasoning_content ? { reasoning_content: m.reasoning_content } : {}) })),
   ]
 
   // A chamada sai para o backend, nunca para o provedor: e o que tira a chave
@@ -801,6 +802,7 @@ const msgs: any[] = [
     // `reasoning_content` e `reasoning` sao o rascunho interno do modelo. Nunca
     // vao para a tela: vazam o system prompt e leem como lixo.
     const conteudo = message.content || ''
+    ultimaReasoning = (message.reasoning_content || message.reasoning || '').trim()
     if (!conteudo.trim()) throw new Error('Resposta vazia')
     return conteudo
   }
@@ -828,7 +830,7 @@ const msgs: any[] = [
     else if (msg.includes('limite de consultas')) texto = 'A pergunta gerou muitas consultas. Tente ser mais específico.'
     mensagens.value.push({ role: 'assistant', content: texto })
   } else {
-    mensagens.value.push({ role: 'assistant', content: resposta })
+    mensagens.value.push({ role: 'assistant', content: resposta, ...(ultimaReasoning ? { reasoning_content: ultimaReasoning } : {}) })
   }
   rolarParaBaixo()
   enviando.value = false
