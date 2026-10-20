@@ -291,6 +291,18 @@ export function rotuloStatusChamado(status: string): string {
  * Fases do fluxo, na ordem. Serve para agrupar os filtros e para a coluna
  * "onde está parado" da lista.
  */
+export interface NovoChamadoInternoPayload {
+  tipo?: string
+  descricao: string
+  urgencia?: string
+  equipamentos?: string[]
+}
+
+export async function criarChamadoInterno(payload: NovoChamadoInternoPayload): Promise<Chamado> {
+  const { data } = await chamadosApi.post<Chamado>('/chamados/interno', payload)
+  return data
+}
+
 export const STATUS_FLUXO: StatusChamado[] = [
   'ABERTO',
   'ENCAMINHADO',

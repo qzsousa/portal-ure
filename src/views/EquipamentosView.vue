@@ -592,6 +592,27 @@ useAutoRefresh(async () => {
       </ul>
     </div>
 
+    <div class="chips" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <button
+        v-for="s in Object.keys(eq.state.porStatus)"
+        :key="s"
+        type="button"
+        class="chip"
+        :class="{ ativo: eq.filtros.status === s }"
+        @click="eq.filtros.status = eq.filtros.status === s ? '' : s; eq.aplicarFiltros()"
+      >
+        {{ s }} ({{ eq.state.porStatus[s] }})
+      </button>
+      <button
+        type="button"
+        class="chip"
+        :class="{ ativo: eq.filtros.status === '' }"
+        @click="eq.filtros.status = ''; eq.aplicarFiltros()"
+      >
+        Todos
+      </button>
+    </div>
+
     <!-- Tabela -->
     <div class="card table-card">
       <div class="table-wrap">
@@ -608,11 +629,11 @@ useAutoRefresh(async () => {
                   @change="marcarPagina(($event.target as HTMLInputElement).checked)"
                 />
               </th>
-              <th :class="thOrdem('modelo')">
-                <button type="button" class="th-sort" @click="eq.alternarOrdem('modelo')">
-                  Equipamento
-                  <ChevronUp v-if="setaOrdem('modelo') === 'up'" :size="13" />
-                  <ChevronDown v-else-if="setaOrdem('modelo') === 'down'" :size="13" />
+              <th :class="thOrdem('numeroSerie')">
+                <button type="button" class="th-sort" @click="eq.alternarOrdem('numeroSerie')">
+                  Nº de Série
+                  <ChevronUp v-if="setaOrdem('numeroSerie') === 'up'" :size="13" />
+                  <ChevronDown v-else-if="setaOrdem('numeroSerie') === 'down'" :size="13" />
                 </button>
               </th>
               <th :class="thOrdem('patrimonio')">
@@ -622,15 +643,6 @@ useAutoRefresh(async () => {
                   <ChevronDown v-else-if="setaOrdem('patrimonio') === 'down'" :size="13" />
                 </button>
               </th>
-              <th :class="thOrdem('numeroSerie')">
-                <button type="button" class="th-sort" @click="eq.alternarOrdem('numeroSerie')">
-                  Nº de Série
-                  <ChevronUp v-if="setaOrdem('numeroSerie') === 'up'" :size="13" />
-                  <ChevronDown v-else-if="setaOrdem('numeroSerie') === 'down'" :size="13" />
-                </button>
-              </th>
-              <th>Categoria</th>
-              <th>Modelo</th>
               <th :class="thOrdem('unidade')">
                 <button type="button" class="th-sort" @click="eq.alternarOrdem('unidade')">
                   Unidade Escolar
@@ -650,10 +662,10 @@ useAutoRefresh(async () => {
           </thead>
           <tbody>
             <tr v-if="eq.state.loading">
-              <td :colspan="somenteLeitura ? 8 : 9" class="td-center">Carregando...</td>
+              <td :colspan="somenteLeitura ? 5 : 6" class="td-center">Carregando...</td>
             </tr>
             <tr v-else-if="eq.state.items.length === 0">
-              <td :colspan="somenteLeitura ? 8 : 9" class="td-center">Nenhum equipamento encontrado.</td>
+              <td :colspan="somenteLeitura ? 5 : 6" class="td-center">Nenhum equipamento encontrado.</td>
             </tr>
             <tr
               v-for="item in eq.state.items"
@@ -669,13 +681,10 @@ useAutoRefresh(async () => {
                 />
               </td>
               <td>
-                <strong class="eq-modelo">{{ item.modelo }}</strong>
-                <span class="eq-sub">{{ item.categoria }} · {{ item.marca }}</span>
+                <strong class="eq-modelo">{{ item.numeroSerie || item.patrimonio || '—' }}</strong>
+                <span class="eq-sub">{{ item.modelo }} · {{ item.marca }} · {{ item.categoria }}</span>
               </td>
               <td>{{ item.patrimonio || '—' }}</td>
-              <td>{{ item.numeroSerie || '—' }}</td>
-              <td>{{ item.categoria }}</td>
-              <td>{{ item.modelo }}</td>
               <td>{{ item.unidade }}</td>
               <td>
                 <StatusPill :status="item.status" />

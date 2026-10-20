@@ -87,7 +87,7 @@ function filtrarLocal(todos: Equipamento[], f: EquipFiltros): Equipamento[] {
     if (f.marca && !mesmoTexto(e.marca, f.marca)) return false
     if (f.modelo && !mesmoTexto(e.modelo, f.modelo)) return false
     if (busca) {
-      const alvo = `${e.modelo || ''} ${e.marca || ''} ${e.patrimonio || ''} ${e.numeroSerie || ''} ${e.unidade || ''}`.toLowerCase()
+      const alvo = `${e.modelo || ''} ${e.marca || ''} ${e.patrimonio || ''} ${e.numeroSerie || ''} ${e.numeroEtiqueta || ''} ${e.unidade || ''}`.toLowerCase()
       if (!alvo.includes(busca)) return false
     }
     return true

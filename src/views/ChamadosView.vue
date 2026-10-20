@@ -57,6 +57,7 @@ import {
   listarTecnicos,
   listarTecnicosDaUnidade,
   listarTecnicosDoFiltro,
+  criarChamadoInterno,
   registrarAtividade,
   responderChamado,
   rotuloStatusChamado,
@@ -1103,6 +1104,103 @@ const podeConferir = computed(
   () => !acaoFluxo.value && ehEscola.value && detalhe.value?.status === 'AGUARDANDO_CONFERENCIA',
 )
 
+/* ---- Abertura de chamado de equipamento (gestor) ---- */
+const modalAbrirEquipamento = ref(false)
+const carregandoEquipamentosUnidadeAbrir = ref(false)
+const equipamentosUnidadeAbrir = ref<Equipamento[]>([])
+const buscaEquipamentoAbrir = ref('')
+const selecionadosAbrir = ref<Set<string>>(new Set())
+const defeitoIndividualAbrir = ref<Record<string, string>>({})
+const defeitoGeralAbrir = ref('')
+const enviandoAbrir = ref(false)
+
+const equipamentosUnidadeAbrirFiltrados = computed(() => {
+  const termo = buscaEquipamentoAbrir.value.trim().toLowerCase()
+  if (!termo) return equipamentosUnidadeAbrir.value
+  return equipamentosUnidadeAbrir.value.filter((e) => {
+    const p = (e.patrimonio || '').toLowerCase()
+    const s = (e.numeroSerie || '').toLowerCase()
+    const m = (e.modelo || '').toLowerCase()
+    return p.includes(termo) || s.includes(termo) || m.includes(termo)
+  })
+})
+
+async function abrirModalAbrirEquipamento() {
+  modalAbrirEquipamento.value = true
+  carregandoEquipamentosUnidadeAbrir.value = true
+  buscaEquipamentoAbrir.value = ''
+  selecionadosAbrir.value = new Set()
+  defeitoIndividualAbrir.value = {}
+  defeitoGeralAbrir.value = ''
+  try {
+    const lista = await listarEquipamentosDaFilial()
+    const unidade = auth.user?.filial || ''
+    equipamentosUnidadeAbrir.value = lista.filter((e) =>
+      (e.unidade || '').toLowerCase() === unidade.toLowerCase() ||
+      (e.unidade || '').toLowerCase().includes(unidade.toLowerCase().split(' ')[0]),
+    )
+  } catch (e) {
+    ui.error(apiError(e, 'Nao foi possivel carregar os equipamentos da unidade.'))
+    equipamentosUnidadeAbrir.value = []
+  } finally {
+    carregandoEquipamentosUnidadeAbrir.value = false
+  }
+}
+
+function toggleSelecionadoAbrir(id: string) {
+  const s = new Set(selecionadosAbrir.value)
+  if (s.has(id)) s.delete(id)
+  else s.add(id)
+  selecionadosAbrir.value = s
+}
+
+async function enviarChamadoEquipamento() {
+  if (enviandoAbrir.value) return
+  if (!selecionadosAbrir.value.size) {
+    ui.error('Selecione ao menos um equipamento.')
+    return
+  }
+  if (!defeitoGeralAbrir.value.trim()) {
+    ui.error('Descreva o defeito geral.')
+    return
+  }
+  enviandoAbrir.value = true
+  try {
+    const selecionados = equipamentosUnidadeAbrir.value.filter((eq) => selecionadosAbrir.value.has(eq.id))
+    const descricao = [
+      `[Defeito geral] ${defeitoGeralAbrir.value.trim()}`,
+      ...selecionados.map((eq) => {
+        const individual = (defeitoIndividualAbrir.value[eq.id] || '').trim()
+        return `[${eq.patrimonio || eq.numeroSerie || eq.id}] ${individual || defeitoGeralAbrir.value.trim()}`
+      }),
+    ].join('\n')
+    const chamado = await criarChamadoInterno({
+      descricao,
+      tipo: 'Equipamento - chamado interno',
+      urgencia: 'Média',
+      equipamentos: selecionados.map((eq) => eq.patrimonio || eq.numeroSerie || eq.id),
+    })
+    // atualiza SCE: status Manutencao
+    await Promise.all(
+      selecionados.map((eq) =>
+        atualizarEquipamento(eq.id, {
+          status: 'Manutenção',
+          statusManutencao: 'Pendente',
+          numeroChamadoManutencao: chamado.protocolo,
+          descricaoQuebrado: (defeitoIndividualAbrir.value[eq.id] || defeitoGeralAbrir.value).trim(),
+        }).catch(() => {}),
+      ),
+    )
+    ui.success(`Chamado ${chamado.protocolo} criado. Equipamentos marcados como manutencao.`)
+    modalAbrirEquipamento.value = false
+    await carregar()
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao abrir o chamado.'))
+  } finally {
+    enviandoAbrir.value = false
+  }
+}
+
 /* ---- Registro do que foi feito ---- */
 const registroAberto = ref(false)
 const textoAtividade = ref('')
@@ -1192,14 +1290,10 @@ async function processarEquipamentosManutencao(texto: string, ids: Set<string>) 
     const lista = await listarEquipamentosDaFilial()
     const selecionados = lista.filter((eq) => ids.has(eq.id))
     await Promise.all(
-      selecionados.map((eq) => registrarManutencao(eq.id, texto, 'Concluído').catch(() => {})),
-    )
-    const quebrados = selecionados.filter((eq) => (eq.status || '').toLowerCase() === 'quebrado')
-    await Promise.all(
-      quebrados.map((eq) => atualizarEquipamento(eq.id, { status: 'Disponível' }).catch(() => {})),
+      selecionados.map((eq) => registrarManutencao(eq.id, texto, 'Em andamento').catch(() => {})),
     )
     if (selecionados.length) {
-      ui.success(`${selecionados.length} equipamento(s) registrado(s) como mantido(s).`)
+      ui.success(`${selecionados.length} equipamento(s) registrado(s) como em manutencao.`)
     }
   } catch {
     /* silencioso */
@@ -1275,9 +1369,14 @@ async function salvarConclusao() {
     await Promise.all(
       encontrados.map((eq) => registrarManutencao(eq.id, texto, 'Concluído').catch(() => {})),
     )
-    const quebrados = encontrados.filter((eq) => (eq.status || '').toLowerCase() === 'quebrado')
     await Promise.all(
-      quebrados.map((eq) => atualizarEquipamento(eq.id, { status: 'Disponivel' }).catch(() => {})),
+      encontrados.map((eq) =>
+        atualizarEquipamento(eq.id, {
+          status: 'Disponível',
+          statusManutencao: 'Concluído',
+          numeroChamadoManutencao: '',
+        }).catch(() => {}),
+      ),
     )
     if (encontrados.length) {
       ui.success(encontrados.length + ' equipamento(s) atualizado(s) no inventario.')
@@ -1757,9 +1856,16 @@ useAutoRefresh(async () => {
         <option v-for="t in tecnicosFiltro" :key="t" :value="t">{{ t }}</option>
       </select>
       <button class="btn btn-primary" type="button" @click="aplicarFiltros">Filtrar</button>
-      <a class="btn btn-gold" href="/chamado/novo" target="_blank" rel="noopener">
+      <button
+        class="btn btn-gold"
+        type="button"
+        @click="abrirModalAbrirEquipamento"
+      >
         Abrir chamado
-      </a>
+      </button>
+      <button v-if="auth.user?.nivel === 'GESTOR'" class="btn btn-primary" type="button" @click="abrirModalAbrirEquipamento">
+        Abrir chamado de equipamento
+      </button>
     </div>
 
     <!-- Barra de ação em lote (só ADMIN/TECNICO) -->
@@ -2870,7 +2976,65 @@ useAutoRefresh(async () => {
            </table>
          </div>
        </div>
-     </BaseModal>
+      </BaseModal>
+
+      <BaseModal :aberto="modalAbrirEquipamento" titulo="Abrir chamado de equipamento" @fechar="modalAbrirEquipamento = false">
+        <div class="detalhe" style="display:flex;flex-direction:column;gap:12px;">
+          <input
+            v-model="buscaEquipamentoAbrir"
+            class="input"
+            placeholder="Buscar patrimonio, serie ou modelo"
+          />
+          <span style="font-size:12px;color:var(--text-muted);">
+            {{ selecionadosAbrir.size }} selecionado(s)
+          </span>
+          <div style="max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Patrimonio</th>
+                  <th>Modelo</th>
+                  <th>Status</th>
+                  <th>Defeito individual</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="e in equipamentosUnidadeAbrirFiltrados" :key="e.id">
+                  <td>
+                    <input
+                      type="checkbox"
+                      :checked="selecionadosAbrir.has(e.id)"
+                      @change="toggleSelecionadoAbrir(e.id)"
+                    />
+                  </td>
+                  <td>{{ e.patrimonio || e.numeroSerie || e.id }}</td>
+                  <td>{{ e.modelo }}</td>
+                  <td>{{ e.status }}</td>
+                  <td>
+                    <input
+                      class="input"
+                      placeholder="opcional"
+                      :value="defeitoIndividualAbrir[e.id] || ''"
+                      @input="defeitoIndividualAbrir[e.id] = ($event.target as HTMLInputElement).value"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="field">
+            <label>Defeito geral</label>
+            <textarea v-model="defeitoGeralAbrir" class="input textarea" rows="3" placeholder="Descreva o problema"></textarea>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;">
+            <button class="btn btn-outline" type="button" @click="modalAbrirEquipamento = false">Cancelar</button>
+            <button class="btn btn-primary" type="button" :disabled="enviandoAbrir" @click="enviarChamadoEquipamento">
+              {{ enviandoAbrir ? 'Enviando...' : 'Enviar chamado' }}
+            </button>
+          </div>
+        </div>
+      </BaseModal>
 
   </div>
 </template>

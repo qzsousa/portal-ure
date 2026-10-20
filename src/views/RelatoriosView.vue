@@ -21,6 +21,7 @@ import {
 import { listarChamados, rotuloStatusChamado } from '@/api/chamados'
 import { apiError } from '@/utils/apiError'
 import { formatDate } from '@/utils/format'
+import { listarRelatorioTecnicos, type RelatorioTecnico } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { STATUS_EM_ABERTO, type Chamado, type StatusChamado } from '@/types'
@@ -29,6 +30,20 @@ const auth = useAuthStore()
 const ui = useUiStore()
 
 const gerando = ref<string | null>(null)
+const tecnicos = ref<RelatorioTecnico[]>([])
+const carregandoTecnicos = ref(false)
+
+async function carregarTecnicos() {
+  carregandoTecnicos.value = true
+  try {
+    tecnicos.value = await listarRelatorioTecnicos()
+  } catch {
+    tecnicos.value = []
+  } finally {
+    carregandoTecnicos.value = false
+  }
+}
+void carregarTecnicos()
 
 /* ---------------------------------------------------------------
  * Geração de CSV no cliente (mesmo padrão de download de api/sce.ts)
@@ -283,6 +298,27 @@ async function gerar(r: Relatorio) {
           {{ gerando === r.id ? 'Gerando...' : 'Gerar' }}
         </button>
       </div>
+    </div>
+
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+      <span style="font-size:15px;font-weight:600;color:#0F172A;">Tecnicos x equipamentos arrumados</span>
+      <div v-if="carregandoTecnicos" style="font-size:13px;color:#64748B;">Carregando...</div>
+      <table v-else class="table" style="width:100%;">
+        <thead>
+          <tr>
+            <th>Tecnico</th>
+            <th>Arrumados</th>
+            <th>Ultima manutencao</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="t in tecnicos" :key="t.email">
+            <td>{{ t.nome }}</td>
+            <td>{{ t.total }}</td>
+            <td>{{ t.ultima }}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </template>

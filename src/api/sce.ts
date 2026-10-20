@@ -336,6 +336,17 @@ export interface AuditoriaItem {
   detalhes?: Record<string, unknown> | null
 }
 
+export interface RelatorioTecnico {
+  email: string
+  nome: string
+  total: number
+  ultima: string
+}
+
+export async function listarRelatorioTecnicos(): Promise<RelatorioTecnico[]> {
+  return unwrap(sceApi.get<SceResponse<RelatorioTecnico[]>>('/relatorio-tecnicos'))
+}
+
 export async function listarAuditoria(limite = 60): Promise<AuditoriaItem[]> {
   return unwrap(sceApi.get<SceResponse<AuditoriaItem[]>>('/auditoria', { params: { limite } }))
 }
