@@ -57,6 +57,13 @@ const estado = reactive({
 const atribuicoes = reactive<Record<string, Atribuicao>>({})
 
 const auth = useAuthStore()
+/**
+ * Escala do dia é decisão da matriz: só o ADMIN escolhe escola e técnico.
+ * O TÉCNICO abre a agenda para conferir onde precisa estar, mas o calendário
+ * continua navegável porque os botões de dia não são desabilitados — o nível é
+ * conferido no `abrirDia`, e desligá-los quebraria o foco do tabindex móvel.
+ */
+const podeRegistrar = computed(() => auth.user?.nivel === 'ADMIN')
 /** Remover atribuição é decisão da matriz: só o ADMIN desfaz o dia. */
 const podeRemover = computed(() => auth.user?.nivel === 'ADMIN')
 
@@ -204,6 +211,7 @@ const dataModal = computed(() => {
 })
 
 function abrirDia(c: CelulaDia) {
+  if (!podeRegistrar.value) return
   diaSel.value = c.iso
   const attr = atribuicoes[c.iso]
   escolaSel.value = attr?.escola || ''
@@ -212,6 +220,7 @@ function abrirDia(c: CelulaDia) {
 }
 
 function salvar() {
+  if (!podeRegistrar.value) return
   if (!diaSel.value || !escolaSel.value || !tecnicoSel.value) return
   const tecnico = estado.tecnicos.find((t) => t.id === tecnicoSel.value)
   atribuicoes[diaSel.value] = {
@@ -224,6 +233,7 @@ function salvar() {
 }
 
 function remover() {
+  if (!podeRemover.value) return
   delete atribuicoes[diaSel.value]
   salvarAtribuicoes()
   modalAberto.value = false
@@ -287,7 +297,13 @@ onMounted(() => {
     <header class="agenda-head">
       <div>
         <h2><CalendarDays :size="22" /> Calendário de atendimento</h2>
-        <p class="agenda-sub">Clique em um dia para atribuir a escola e o técnico que vão atendê-la.</p>
+        <p class="agenda-sub">
+          {{
+            podeRegistrar
+              ? 'Clique em um dia para atribuir a escola e o técnico que vão atendê-la.'
+              : 'Consulte a escala do mês. Somente o administrador registra e remove atribuições.'
+          }}
+        </p>
       </div>
       <div class="agenda-nav">
         <button class="btn btn-outline" type="button" @click="irParaHoje">Hoje</button>
@@ -328,8 +344,11 @@ onMounted(() => {
       </div>
 
       <p class="agenda-ajuda">
-        Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra verde já têm
-        escola e técnico atribuídos.
+        {{
+          podeRegistrar
+            ? 'Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra verde já têm escola e técnico atribuídos.'
+            : 'Navegue com as setas do teclado para percorrer o mês. Dias com a barra verde já têm escola e técnico atribuídos — quem registra é o administrador.'
+        }}
       </p>
     </div>
 

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
@@ -2242,7 +2242,7 @@ useAutoRefresh(async () => {
                 </li>
               </ul>
               <div class="field">
-                <label>Equipamentos manutenidos (patrimônio/série, opcional)</label>
+                <label>Equipamentos reparados (patrimônio/série, opcional)</label>
                 <textarea v-model="equipamentosConclusao" class="input textarea" placeholder="Um por linha" rows="2"></textarea>
               </div>
               <div class="acao-linha">

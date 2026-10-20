@@ -80,7 +80,7 @@ export interface AvaliacaoLista {
 }
 
 /**
- * Lista as avaliações COM o comentário (ADMIN/TECNICO).
+ * Lista as avaliações COM o comentário (ADMIN).
  *
  * É o que dá sentido à nota: quem avaliou, sobre qual chamado e o que
  * escreveu. `somenteComentarios` esconde as notas sem texto.

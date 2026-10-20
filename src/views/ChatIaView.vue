@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="chat-shell" :class="{ collapsed: !historyOpen }">
     <aside class="rail">
       <button class="rail-toggle" @click="historyOpen = !historyOpen" :title="historyOpen ? 'Recolher historico' : 'Expandir historico'">

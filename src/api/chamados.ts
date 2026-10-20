@@ -1,4 +1,4 @@
-﻿import { chamadosApi } from './http'
+import { chamadosApi } from './http'
 import type { Chamado, ChamadoAtividade, StatusChamado } from '@/types'
 
 /** Cliente da API de chamados (backend que também provê autenticação). */
