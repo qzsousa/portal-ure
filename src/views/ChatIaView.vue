@@ -68,7 +68,7 @@
         <Transition name="fade-slide">
           <div v-if="painelModelos" class="model-panel">
             <header>
-              <strong>Modelos disponíveis (NIM)</strong>
+              <strong>Modelos disponíveis</strong>
               <button @click="painelModelos = false">&times;</button>
             </header>
             <input
@@ -851,7 +851,7 @@ function recarregar() {
  * O Nemotron 3 Super responde a mesma tool em ~5 s. Trocar de modelo pelo
  * painel continua possível — este é só o ponto de partida.
  */
-const MODELO_PADRAO = 'nvidia/nemotron-3-super-120b-a12b'
+const MODELO_PADRAO = 'Beam-1.0-501B-A23B'
 
 const modeloIa = ref(MODELO_PADRAO)
 const modelosNvidia = ref<string[]>([])
