@@ -236,7 +236,7 @@ segunda avaliação.
 
 ## Do outro lado: a matriz lendo
 
-`GET /api/feedback/avaliacoes` (matriz: `ADMIN` e `TECNICO`)
+`GET /api/feedback/avaliacoes` (matriz: `ADMIN`)
 
 Traz a nota **com o comentário**, ligado ao contexto do chamado:
 

@@ -8,6 +8,7 @@ import UnidadeDetalheModal from '@/components/unidades/UnidadeDetalheModal.vue'
 import { listarPainelUnidades, ROTULO_INVENTARIO, type UnidadePainel } from '@/api/escolas'
 import { listarUnidadesResumo, type UnidadeResumo } from '@/api/sce'
 import { casarNomeEscola } from '@/utils/escola'
+import { useAuthStore } from '@/stores/auth'
 
 /** Mapeamento de nome da escola (formato catálogo) para código CIE. */
 const CIE_MAP: Record<string, string> = {
@@ -131,8 +132,20 @@ const sortDir = ref<'asc' | 'desc'>('desc')
 const detalheAberto = ref(false)
 const unidadeSelecionada = ref<UnidadeLinha | null>(null)
 
+const auth = useAuthStore()
+
+/**
+ * A lista de unidades é pública para a matriz (ADMIN e TÉCNICO), mas o detalhe
+ * carrega os equipamentos, os chamados e os usuários de cada prédio: é
+ * leitura de inventário nominal e fica só com o ADMIN.
+ */
+const podeVerDetalhe = computed(() => auth.isAdmin)
+
 /**
  * Abre o detalhe da unidade.
+ *
+ * DEFESA: o nível é conferido aqui e não só no template — a linha e o nome são
+ * dois gatilhos e qualquer um deles aberto burla a checagem da tela.
  *
  * DEFESA: `getSelection()` é obrigatório porque a linha é clicável INTEIRA —
  * sem isso, arrastar o mouse para seleccionar um número e soltar dentro da
@@ -140,6 +153,7 @@ const unidadeSelecionada = ref<UnidadeLinha | null>(null)
  * em `ChamadosView`.
  */
 function abrirDetalhe(u: UnidadeLinha) {
+  if (!podeVerDetalhe.value) return
   if (window.getSelection()?.toString()) return
   unidadeSelecionada.value = u
   detalheAberto.value = true
@@ -445,13 +459,15 @@ onMounted(() => {
               v-for="(u, i) in paginaAtual"
               :key="u.nome"
               class="linha"
+              :class="{ clicavel: podeVerDetalhe }"
               @click="abrirDetalhe(u)"
             >
               <td class="nowrap"><strong>{{ codigo(i) }}</strong></td>
               <td>
-                <button class="link-unidade" type="button" @click.stop="abrirDetalhe(u)">
+                <button v-if="podeVerDetalhe" class="link-unidade" type="button" @click.stop="abrirDetalhe(u)">
                   {{ u.nome }}
                 </button>
+                <span v-else class="unidade-nome">{{ u.nome }}</span>
                 <div v-if="u.irma" class="unidade-irma">divide o prédio com {{ u.irma }}</div>
               </td>
               <td class="nowrap">{{ u.cie }}</td>
@@ -593,17 +609,20 @@ th.sortable:hover {
   color: var(--text-muted);
 }
 
-.linha {
+/* Sem permissão de detalhe a linha é só leitura: sem cursor de link e sem hover. */
+.linha.clicavel {
   cursor: pointer;
 }
 
-.linha:hover {
+.linha.clicavel:hover {
   background: var(--surface-muted);
 }
 
 /* O nome é um <button> de verdade: é o caminho do teclado (Tab/Enter) para
-   abrir o detalhe sem trocar a semântica de <td> por link. */
-.link-unidade {
+   abrir o detalhe sem trocar a semântica de <td> por link. Quem não abre o
+   detalhe recebe o mesmo nome como texto puro. */
+.link-unidade,
+.unidade-nome {
   font-weight: 600;
   text-align: left;
 }

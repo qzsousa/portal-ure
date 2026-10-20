@@ -1114,15 +1114,15 @@ const textoConclusao = ref('')
 const anexosConclusao = ref<AnexoMensagemPayload[]>([])
 const equipamentosConclusao = ref('')
 
-/* ---- Equipamentos mantidos no atendimento (seleção por ação) ---- */
+/* ---- Equipamentos reparados no atendimento (seleção por ação) ---- */
 const modalEquipamentosAberto = ref(false)
 const modalEquipamentosContexto = ref<'registro' | 'conclusao' | null>(null)
 const carregandoEquipamentosUnidade = ref(false)
 const equipamentosUnidade = ref<Equipamento[]>([])
 const buscaEquipamentoUnidade = ref('')
 const selecionadosEquipamento = ref<Set<string>>(new Set())
-const equipamentosManutencaoRegistro = ref<Set<string>>(new Set())
-const equipamentosManutencaoConclusao = ref<Set<string>>(new Set())
+const equipamentosReparadosRegistro = ref<Set<string>>(new Set())
+const equipamentosReparadosConclusao = ref<Set<string>>(new Set())
 
 const equipamentosUnidadeFiltrados = computed(() => {
   const termo = buscaEquipamentoUnidade.value.trim().toLowerCase()
@@ -1142,7 +1142,7 @@ async function abrirSelecaoEquipamentos(contexto: 'registro' | 'conclusao') {
   modalEquipamentosAberto.value = true
   carregandoEquipamentosUnidade.value = true
   buscaEquipamentoUnidade.value = ''
-  const selecionadosAtuais = contexto === 'registro' ? equipamentosManutencaoRegistro.value : equipamentosManutencaoConclusao.value
+  const selecionadosAtuais = contexto === 'registro' ? equipamentosReparadosRegistro.value : equipamentosReparadosConclusao.value
   selecionadosEquipamento.value = new Set(selecionadosAtuais)
   try {
     const lista = await listarEquipamentosDaFilial()
@@ -1166,9 +1166,9 @@ function toggleSelecaoEquipamento(id: string) {
 function confirmarSelecaoEquipamentos() {
   const selecionados = new Set(selecionadosEquipamento.value)
   if (modalEquipamentosContexto.value === 'registro') {
-    equipamentosManutencaoRegistro.value = selecionados
+    equipamentosReparadosRegistro.value = selecionados
   } else if (modalEquipamentosContexto.value === 'conclusao') {
-    equipamentosManutencaoConclusao.value = selecionados
+    equipamentosReparadosConclusao.value = selecionados
   }
   modalEquipamentosAberto.value = false
   modalEquipamentosContexto.value = null
@@ -1213,7 +1213,7 @@ async function salvarRegistro() {
     ui.error('Descreva o que foi feito.')
     return
   }
-  const ids = new Set(equipamentosManutencaoRegistro.value)
+  const ids = new Set(equipamentosReparadosRegistro.value)
   acaoFluxo.value = true
   try {
     const atividade = await registrarAtividade(detalhe.value.id, { texto, anexos: anexosAtividade.value })
@@ -1224,7 +1224,7 @@ async function salvarRegistro() {
     anexosAtividade.value = []
     ui.success('Registro adicionado ao atendimento.')
     await processarEquipamentosManutencao(texto, ids)
-    equipamentosManutencaoRegistro.value = new Set()
+    equipamentosReparadosRegistro.value = new Set()
   } catch (e) {
     ui.error(apiError(e, 'Falha ao registrar o atendimento.'))
   } finally {
@@ -1248,7 +1248,7 @@ async function salvarConclusao() {
     .split(/[\n,;]+/)
     .map((s) => s.trim())
     .filter(Boolean)
-  const ids = new Set(equipamentosManutencaoConclusao.value)
+  const ids = new Set(equipamentosReparadosConclusao.value)
   acaoFluxo.value = true
   try {
     const listaEquip = await listarEquipamentosDaFilial()
@@ -1283,7 +1283,7 @@ async function salvarConclusao() {
       ui.success(encontrados.length + ' equipamento(s) atualizado(s) no inventario.')
     }
     equipamentosConclusao.value = ''
-    equipamentosManutencaoConclusao.value = new Set()
+    equipamentosReparadosConclusao.value = new Set()
     await Promise.all([carregar(), carregarStats()])
   } catch (e) {
     ui.error(apiError(e, 'Falha ao concluir o atendimento.'))
@@ -2200,7 +2200,7 @@ useAutoRefresh(async () => {
               </ul>
               <div class="acao-linha">
                 <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="abrirSelecaoEquipamentos('registro')">
-                  <Monitor :size="14" /> Selecionar equipamentos ({{ equipamentosManutencaoRegistro.size }})
+                  <Monitor :size="14" /> Selecionar equipamentos ({{ equipamentosReparadosRegistro.size }})
                 </button>
               </div>
               <div class="acao-linha">
@@ -2253,11 +2253,11 @@ useAutoRefresh(async () => {
               </ul>
               <div class="acao-linha">
                 <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="abrirSelecaoEquipamentos('conclusao')">
-                  <Monitor :size="14" /> Selecionar equipamentos mantidos ({{ equipamentosManutencaoConclusao.size }})
+                  <Monitor :size="14" /> Selecionar equipamentos reparados ({{ equipamentosReparadosConclusao.size }})
                 </button>
               </div>
               <div class="field">
-                <label>Equipamentos manutenidos (patrim�nio/s�rie, opcional)</label>
+                <label>Equipamentos manutenidos (patrimônio/série, opcional)</label>
                 <textarea v-model="equipamentosConclusao" class="input textarea" placeholder="Um por linha" rows="2"></textarea>
               </div>
               <div class="acao-linha">
@@ -2272,12 +2272,12 @@ useAutoRefresh(async () => {
           </div>
 
           <div class="acao-box">
-            <h4><Monitor :size="15" /> Equipamentos mantidos</h4>
+            <h4><Monitor :size="15" /> Equipamentos reparados</h4>
             <p class="acao-dica">
-              Selecione os equipamentos que receberam manuten��o neste atendimento.
+              Selecione os equipamentos que receberam manutenção neste atendimento.
             </p>
             <button class="btn btn-outline btn-largo" type="button" @click="abrirSelecaoEquipamentos(registroAberto ? 'registro' : conclusaoAberta ? 'conclusao' : 'registro')">
-              <Monitor :size="15" /> Selecionar equipamentos mantidos
+              <Monitor :size="15" /> Selecionar equipamentos reparados
             </button>
           </div>
 
@@ -2811,19 +2811,19 @@ useAutoRefresh(async () => {
      <!-- Modal: equipamentos da unidade do chamado -->
       <BaseModal
         :aberto="modalEquipamentosAberto"
-        titulo="Selecionar equipamentos mantidos"
+        titulo="Selecionar equipamentos reparados"
         largura="960px"
         @fechar="modalEquipamentosAberto = false"
       >
        <div v-if="detalhe" class="equip-unidade">
          <p class="acao-dica">
-           Unidade: <strong>{{ detalhe.unidade }}</strong>. Marque os equipamentos que receberam manuten��o.
+           Unidade: <strong>{{ detalhe.unidade }}</strong>. Marque os equipamentos que receberam manutenção.
          </p>
          <div class="acao-linha">
            <input
              v-model="buscaEquipamentoUnidade"
              class="input"
-             placeholder="Buscar por patrim�nio, s�rie, etiqueta ou modelo..."
+             placeholder="Buscar por patrimônio, série, etiqueta ou modelo..."
            />
            <button
              class="btn btn-primary"
@@ -2831,7 +2831,7 @@ useAutoRefresh(async () => {
              :disabled="selecionadosEquipamento.size === 0"
              @click="confirmarSelecaoEquipamentos"
            >
-             Confirmar sele��o ({{ selecionadosEquipamento.size }})
+             Confirmar seleção ({{ selecionadosEquipamento.size }})
            </button>
          </div>
 

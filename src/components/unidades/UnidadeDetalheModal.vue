@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
  * Detalhe de UMA unidade escolar (na prática, um prédio do grupo mãe/irmã).
  *
