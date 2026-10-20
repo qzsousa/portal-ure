@@ -241,7 +241,7 @@ const tecnicosOpcoes = computed(() =>
 const filtradas = computed(() => {
   const b = norm(busca.value.trim())
   const base = estado.items.filter((u) => {
-    if (b && !norm(`${u.nome} ${u.grupo} ${u.irma || ''}`).includes(b)) return false
+    if (b && !norm(`${u.nome} ${u.grupo} ${u.irma || ''} ${u.cie || ''}`).includes(b)) return false
     if (filtroEquip.value === 'com' && u.equip.total === 0) return false
     if (filtroEquip.value === 'sem' && u.equip.total > 0) return false
     if (filtroTecnico.value && u.tecnico !== filtroTecnico.value) return false
@@ -359,7 +359,7 @@ onMounted(() => {
     <div class="toolbar card">
       <div class="search-box">
         <Search :size="16" />
-        <input v-model="busca" placeholder="Buscar unidade escolar..." />
+        <input v-model="busca" placeholder="Buscar unidade escolar ou CIE..." />
       </div>
       <select v-model="filtroEquip" class="select-input filtro">
         <option value="">Equipamentos: todos</option>
