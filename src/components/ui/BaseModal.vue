@@ -56,6 +56,8 @@ const emit = defineEmits<{ (e: 'fechar'): void }>()
   box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 640px;
+  min-width: 0;
+  overflow-x: hidden;
   max-height: 86vh;
   max-height: 86dvh;
   display: flex;
@@ -90,6 +92,8 @@ const emit = defineEmits<{ (e: 'fechar'): void }>()
 .modal-body {
   padding: 20px 22px;
   overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
 }
 
 .modal-footer {

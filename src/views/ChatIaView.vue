@@ -175,9 +175,15 @@ import {
 } from '@lucide/vue'
 import { listarChamados } from '@/api/chamados'
 import { chamadosApi } from '@/api/http'
-import { listarUsuarios } from '@/api/usuarios'
-import { listarEquipamentosGlobal } from '@/api/sce'
+import { listarUsuarios, listarEscolas } from '@/api/usuarios'
+import { listarNotificacoes } from '@/api/notificacoes'
+import { buscarLinkInternetPorEscola } from '@/utils/linksInternet'
+import { LINKS_INTERNET } from '@/data/linksInternetData'
+import { listarEquipamentosGlobal, listarEmprestimosAtivos } from '@/api/sce'
+import { obterDvr } from '@/api/dvr'
+import { listarPainelUnidades } from '@/api/escolas'
 import { useAuthStore } from '@/stores/auth'
+import { ACOES_TOOLS, executarAcao, WRITE_TOOLS } from '@/ia/acoes'
 import { useContextoIA } from '@/composables/useContextoIA'
 
 interface Msg { role: 'user' | 'assistant' | 'tool'; content: string }
@@ -196,6 +202,7 @@ const sugestoes = [
   'Qual tecnico mais resolveu chamados?',
   'Escolas com mais equipamentos disponiveis',
   'Quantos chamados tem em aberto?',
+  'Agende os tecnicos da lista na agenda',
 ]
 
 interface Conv { id: string; title: string; mensagens: Msg[]; atualizado: number }
@@ -279,17 +286,18 @@ function excluirConversa(id: string) {
   salvarHistorico()
 }
 
-const tools: any[] = [
+const TOOLS_LEITURA: any[] = [
   {
     type: 'function',
     function: {
       name: 'listar_chamados',
-      description: 'Lista chamados com filtro por status e unidade (escola).',
+      description: 'Lista chamados com filtro por status, unidade (escola) e responsavel (tecnico).',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'Status do chamado (ex.: ABERTO, RESOLVIDO)' },
           unidade: { type: 'string', description: 'Nome (ou parte) da escola/unidade' },
+          responsavel: { type: 'string', description: 'Nome do tecnico responsavel (ou parte)' },
           limite: { type: 'number', description: 'Quantidade (max 100)' },
         },
         required: [],
@@ -300,13 +308,17 @@ const tools: any[] = [
     type: 'function',
     function: {
       name: 'listar_equipamentos',
-      description: 'Lista equipamentos com filtro por status e unidade (escola).',
+      description: 'Lista equipamentos com filtro por status, unidade, busca, categoria, marca e modelo.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'Status do equipamento' },
           unidade: { type: 'string', description: 'Nome (ou parte) da escola/unidade' },
-          limite: { type: 'number', description: 'Quantidade (max 100)' },
+          busca: { type: 'string', description: 'Busca livre (patrimonio, serie, modelo)' },
+          categoria: { type: 'string', description: 'Categoria do equipamento' },
+          marca: { type: 'string', description: 'Marca' },
+          modelo: { type: 'string', description: 'Modelo' },
+          limite: { type: 'number', description: 'Quantidade (max 500)' },
         },
         required: [],
       },
@@ -338,12 +350,15 @@ const tools: any[] = [
     function: {
       name: 'resumo_equipamentos',
       description:
-        'Conta equipamentos agregando por status, categoria, modelo e unidade. Filtros opcionais por status e unidade. Use para perguntas do tipo "quantos quebrados tem", "que modelo mais existe", "categoria mais comum".',
+        'Conta equipamentos agregando por status, categoria, modelo e unidade. Filtros opcionais por status, unidade, categoria, marca e modelo.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', description: 'Ex.: Disponivel, Quebrado, Em Manutencao' },
           unidade: { type: 'string', description: 'Nome (ou parte) da escola' },
+          categoria: { type: 'string', description: 'Categoria' },
+          marca: { type: 'string', description: 'Marca' },
+          modelo: { type: 'string', description: 'Modelo' },
         },
         required: [],
       },
@@ -357,8 +372,70 @@ const tools: any[] = [
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_escolas',
+      description: 'Lista escolas cadastradas (nomes).',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_notificacoes',
+      description: 'Lista notificacoes do usuario logado e quantas nao lidas.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_emprestimos_ativos',
+      description: 'Lista emprestimos ativos de equipamentos (com atraso).',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'obter_dvr',
+      description: 'Resumo do monitor de DVRs: totais, online/offline e por escola.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'buscar_link_internet',
+      description: 'Busca o link de internet de uma escola (provedor, velocidade, status).',
+      parameters: {
+        type: 'object',
+        properties: { escola: { type: 'string', description: 'Nome da escola' } },
+        required: ['escola'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_links_internet',
+      description: 'Lista os links de internet de todas as unidades.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listar_painel_unidades',
+      description: 'Painel de unidades: tecnico, inventario, chamados por predio.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
 ]
-
+ 
+const tools: any[] = [...TOOLS_LEITURA, ...ACOES_TOOLS]
+ 
 /**
  * Chave de agrupamento de pessoa: sem caixa e sem espaço sobrando.
  *
@@ -462,21 +539,42 @@ const ROTULO_TOOL: Record<string, string> = {
 
 async function executarTool(nome: string, args: any) {
   const chave = `${nome}:${JSON.stringify(args ?? {})}`
-  if (cacheTools.has(chave)) return cacheTools.get(chave)
+  const ehEscrita = WRITE_TOOLS.has(nome)
+  if (!ehEscrita && cacheTools.has(chave)) return cacheTools.get(chave)
   ferramentaAtual.value = nome
   const saida = await executarToolSemCache(nome, args)
-  cacheTools.set(chave, saida)
+  if (!ehEscrita) cacheTools.set(chave, saida)
   return saida
 }
 
 async function executarToolSemCache(nome: string, args: any) {
+  const resultadoAcao = await executarAcao(nome, args)
+  if (resultadoAcao !== null) return resultadoAcao
   if (nome === 'listar_chamados') {
-    const r: any = await listarChamados({ status: args.status, unidade: args.unidade, page: 1, limit: Math.min(args.limite || 50, 100) })
+    const r: any = await listarChamados({
+      status: args.status,
+      unidade: args.unidade,
+      responsavel: args.responsavel,
+      categoria: args.categoria,
+      categoriaChave: args.categoriaChave,
+      urgencia: args.urgencia,
+      page: args.pagina || 1,
+      limit: Math.min(args.limite || 50, 100),
+    })
     const dados = (r.data || []).map((c: any) => ({ protocolo: c.protocolo, tipo: c.tipo, status: c.status, unidade: c.unidade, urgencia: c.urgencia, responsavel: c.responsavel, abertura: c.timestamp, descricao: c.descricao?.slice(0, 200) }))
     return { total: r.meta?.total ?? r.data?.length, dados }
   }
   if (nome === 'listar_equipamentos') {
-    const r: any = await listarEquipamentosGlobal({ status: args.status, unidade: args.unidade, limite: Math.min(args.limite || 20, 20), offset: 0 })
+    const r: any = await listarEquipamentosGlobal({
+      status: args.status,
+      unidade: args.unidade,
+      busca: args.busca,
+      categoria: args.categoria,
+      marca: args.marca,
+      modelo: args.modelo,
+      limite: Math.min(args.limite || 100, 500),
+      offset: 0,
+    })
     const dadosEq = (r.data || []).map((e: any) => ({ id: e.id, categoria: e.categoria, marca: e.marca, modelo: e.modelo, status: e.status, unidade: e.unidade, patrimonio: e.patrimonio }))
     return { total: r.total, dados: dadosEq }
   }
@@ -495,6 +593,63 @@ async function executarToolSemCache(nome: string, args: any) {
       if (u.nivel === 'TECNICO') lista.push({ nome: u.nome, escolas: u.filial })
     }
     return { tecnicos: lista }
+  }
+  if (nome === 'listar_escolas') {
+    const escolas = await listarEscolas()
+    return { total: escolas.length, escolas }
+  }
+  if (nome === 'listar_notificacoes') {
+    const r: any = await listarNotificacoes()
+    return { naoLidas: r?.naoLidas ?? 0, notificacoes: r?.data ?? [] }
+  }
+  if (nome === 'listar_emprestimos_ativos') {
+    const r = await listarEmprestimosAtivos()
+    return { total: r.length, emprestimos: r }
+  }
+  if (nome === 'obter_dvr') {
+    const r = await obterDvr()
+    return {
+      total: r.total,
+      online: r.online,
+      offline: r.offline,
+      desconhecido: r.desconhecido,
+      percentualOnline: r.percentualOnline,
+      caidosAgora: r.caidosAgora,
+      porEscola: (r.porFaixa || []).map((e: any) => ({
+        escola: e.rotulo,
+        total: e.total,
+        online: e.online,
+        offline: e.offline,
+        desconhecido: e.desconhecido,
+      })),
+    }
+  }
+  if (nome === 'buscar_link_internet') {
+    const r = buscarLinkInternetPorEscola(String(args.escola || ''))
+    if (!r) return { erro: 'Link nao encontrado para esta escola' }
+    return {
+      escola: r.escola,
+      empresa: r.empresa,
+      velocidadeMbps: r.velocidadeMbps,
+      status: r.status,
+      possuiSegundoLink: r.possuiSegundoLink,
+      endereco: r.endereco,
+      observacoes: r.observacoes,
+    }
+  }
+  if (nome === 'listar_links_internet') {
+    const dados = LINKS_INTERNET.map((r: any) => ({
+      escola: r.escola,
+      empresa: r.empresa,
+      velocidadeMbps: r.velocidadeMbps,
+      status: r.status,
+      possuiSegundoLink: r.possuiSegundoLink,
+    }))
+    return { total: dados.length, links: dados }
+  }
+  if (nome === 'listar_painel_unidades') {
+    const r = await listarPainelUnidades()
+    return { total: r.length, unidades: r }
   }
   if (nome === 'resumo_chamados') {
     const porTipo: Record<string, number> = {}
@@ -533,10 +688,16 @@ async function executarToolSemCache(nome: string, args: any) {
     const porUnidade: Record<string, number> = {}
     const filtroStatus = args.status ? String(args.status).toLowerCase() : ''
     const filtroUnidade = args.unidade ? String(args.unidade).toLowerCase() : ''
+    const filtroCategoria = args.categoria ? String(args.categoria).toLowerCase() : ''
+    const filtroMarca = args.marca ? String(args.marca).toLowerCase() : ''
+    const filtroModelo = args.modelo ? String(args.modelo).toLowerCase() : ''
     let total = 0
     for (const e of await todosEquipamentos()) {
       if (filtroStatus && !String(e.status || '').toLowerCase().includes(filtroStatus)) continue
       if (filtroUnidade && !String(e.unidade || '').toLowerCase().includes(filtroUnidade)) continue
+      if (filtroCategoria && !String(e.categoria || '').toLowerCase().includes(filtroCategoria)) continue
+      if (filtroMarca && !String(e.marca || '').toLowerCase().includes(filtroMarca)) continue
+      if (filtroModelo && !String(e.modelo || '').toLowerCase().includes(filtroModelo)) continue
       total++
       const st = e.status || 'sem status'
       const cat = e.categoria || 'sem categoria'
@@ -558,6 +719,9 @@ async function executarToolSemCache(nome: string, args: any) {
 async function enviar() {
   if (enviando.value) return
   if (!entrada.value.trim()) return
+  if (!convId.value || !conversas.value.find((c) => c.id === convId.value)) {
+    novaConversa()
+  }
   const texto = entrada.value.trim()
   entrada.value = ''
   mensagens.value.push({ role: 'user', content: texto })
@@ -573,7 +737,16 @@ const msgs: any[] = [
         'Use as tools para TODO detalhe que nao esteja no resumo - elas consultam a base inteira dos dois backends. ' +
         'Para contar tipos/categorias/status use resumo_chamados e resumo_equipamentos; para ver registros use ' +
         'listar_chamados e listar_equipamentos. NUNCA diga que nao tem acesso a um dado antes de chamar a tool ' +
-        'correspondente. Resumo:\n' + resumo.value,
+        'correspondente. Ao perguntar sobre uma pessoa/tecnico, use o nome exato e chame resumo_chamados/listar_chamados ' +
+        'com responsavel; nao infira a partir de perguntas anteriores. ' +
+        'Use os filtros disponiveis nas tools (status, unidade, categoria, marca, modelo, busca, responsavel) ' +
+        'em vez de baixar tudo. ' +
+        'Voce tambem pode EXECUTAR ACOES (agendar tecnico, encaminhar/atualizar/concluir/conferir chamados, ' +
+        'gerenciar usuarios, equipamentos, regras de encaminhamento, notificacoes). Toda acao de escrita exige ' +
+        'confirmacao explicita: primeiro apresente um resumo claro do que sera feito e peca "Confirma?"; ' +
+        'so chame a tool com confirmar=true depois de um "sim" explicito. Se a tool retornar ' +
+        'confirmacao_necessaria, faca isso. Nunca execute acao destrutiva sem confirmacao. ' +
+        'Resumo:\n' + resumo.value,
     },
     ...mensagens.value.slice(-6).map((m) => ({ role: m.role, content: m.content })),
   ]
@@ -637,7 +810,13 @@ const msgs: any[] = [
   try {
     resposta = await perguntarAoBackend()
   } catch (e: any) {
-    erroFinal = String(e?.message || e)
+    const data = e?.response?.data
+    let detalhe = ''
+    if (data) {
+      if (typeof data === 'string') detalhe = data
+      else detalhe = data.message || data.error || (data.details ? JSON.stringify(data.details) : '') || JSON.stringify(data)
+    }
+    erroFinal = detalhe || String(e?.message || e)
     console.error('[CafeIA] falhou', e)
   }
   if (erroFinal) {
@@ -714,6 +893,7 @@ function escolherModelo(m: string) {
   buscaModelo.value = ''
 }
 
+carregarHistorico()
 carregar()
 void carregarModelosNvidia()
 

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
@@ -1114,14 +1114,15 @@ const textoConclusao = ref('')
 const anexosConclusao = ref<AnexoMensagemPayload[]>([])
 const equipamentosConclusao = ref('')
 
-/* ---- Equipamentos da unidade do chamado (seleção em lote) ---- */
+/* ---- Equipamentos reparados no atendimento (seleção por ação) ---- */
 const modalEquipamentosAberto = ref(false)
+const modalEquipamentosContexto = ref<'registro' | 'conclusao' | null>(null)
 const carregandoEquipamentosUnidade = ref(false)
 const equipamentosUnidade = ref<Equipamento[]>([])
 const buscaEquipamentoUnidade = ref('')
 const selecionadosEquipamento = ref<Set<string>>(new Set())
-const statusLoteEquipamento = ref('')
-const aplicandoStatusLoteEquipamento = ref(false)
+const equipamentosReparadosRegistro = ref<Set<string>>(new Set())
+const equipamentosReparadosConclusao = ref<Set<string>>(new Set())
 
 const equipamentosUnidadeFiltrados = computed(() => {
   const termo = buscaEquipamentoUnidade.value.trim().toLowerCase()
@@ -1135,19 +1136,20 @@ const equipamentosUnidadeFiltrados = computed(() => {
   })
 })
 
-async function abrirEquipamentosDaUnidade() {
+async function abrirSelecaoEquipamentos(contexto: 'registro' | 'conclusao') {
   if (!detalhe.value) return
+  modalEquipamentosContexto.value = contexto
   modalEquipamentosAberto.value = true
   carregandoEquipamentosUnidade.value = true
-  selecionadosEquipamento.value = new Set()
   buscaEquipamentoUnidade.value = ''
-  statusLoteEquipamento.value = ''
+  const selecionadosAtuais = contexto === 'registro' ? equipamentosReparadosRegistro.value : equipamentosReparadosConclusao.value
+  selecionadosEquipamento.value = new Set(selecionadosAtuais)
   try {
     const lista = await listarEquipamentosDaFilial()
     const unidade = detalhe.value.unidade
     equipamentosUnidade.value = lista.filter((e) => (e.unidade || '').toLowerCase() === unidade.toLowerCase() || (e.unidade || '').toLowerCase().includes(unidade.toLowerCase().split(' ')[0]))
   } catch (e) {
-    ui.error(apiError(e, 'Não foi possível carregar os equipamentos da unidade.'))
+    ui.error(apiError(e, 'Nao foi possivel carregar os equipamentos da unidade.'))
     equipamentosUnidade.value = []
   } finally {
     carregandoEquipamentosUnidade.value = false
@@ -1161,35 +1163,15 @@ function toggleSelecaoEquipamento(id: string) {
   selecionadosEquipamento.value = s
 }
 
-async function aplicarStatusLoteEquipamentos() {
-  const alvo = statusLoteEquipamento.value
-  const ids = [...selecionadosEquipamento.value]
-  if (!alvo || ids.length === 0) return
-  if (!window.confirm(`Alterar o status de ${ids.length} equipamento(s) para "${alvo}"?`)) return
-  aplicandoStatusLoteEquipamento.value = true
-  try {
-    const itens = equipamentosUnidade.value.filter((e) => ids.includes(e.id))
-    const resultados = await Promise.allSettled(itens.map((i) => atualizarEquipamento(i.id, { status: alvo })))
-    const ok = resultados.filter((r) => r.status === 'fulfilled').length
-    const falhas = resultados.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-    if (ok === 0) {
-      ui.error(falhas[0] ? apiError(falhas[0].reason, 'Não foi possível alterar o status.') : 'Não foi possível alterar o status.')
-    } else if (falhas.length) {
-      ui.error(`${ok} atualizado(s), ${falhas.length} falharam.`)
-    } else {
-      ui.success(`${ok} equipamento(s) atualizado(s) para "${alvo}".`)
-    }
-    // reflete localmente
-    equipamentosUnidade.value = equipamentosUnidade.value.map((e) =>
-      ids.includes(e.id) ? { ...e, status: alvo } : e,
-    )
-    selecionadosEquipamento.value = new Set()
-    statusLoteEquipamento.value = ''
-  } catch (e) {
-    ui.error(apiError(e, 'Falha ao aplicar o status em lote.'))
-  } finally {
-    aplicandoStatusLoteEquipamento.value = false
+function confirmarSelecaoEquipamentos() {
+  const selecionados = new Set(selecionadosEquipamento.value)
+  if (modalEquipamentosContexto.value === 'registro') {
+    equipamentosReparadosRegistro.value = selecionados
+  } else if (modalEquipamentosContexto.value === 'conclusao') {
+    equipamentosReparadosConclusao.value = selecionados
   }
+  modalEquipamentosAberto.value = false
+  modalEquipamentosContexto.value = null
 }
 
 /* ---- Conferência da escola ---- */
@@ -1204,6 +1186,26 @@ function abrirRegistro() {
   alternarRegistro()
 }
 
+async function processarEquipamentosManutencao(texto: string, ids: Set<string>) {
+  if (!ids.size) return
+  try {
+    const lista = await listarEquipamentosDaFilial()
+    const selecionados = lista.filter((eq) => ids.has(eq.id))
+    await Promise.all(
+      selecionados.map((eq) => registrarManutencao(eq.id, texto, 'Concluído').catch(() => {})),
+    )
+    const quebrados = selecionados.filter((eq) => (eq.status || '').toLowerCase() === 'quebrado')
+    await Promise.all(
+      quebrados.map((eq) => atualizarEquipamento(eq.id, { status: 'Disponível' }).catch(() => {})),
+    )
+    if (selecionados.length) {
+      ui.success(`${selecionados.length} equipamento(s) registrado(s) como mantido(s).`)
+    }
+  } catch {
+    /* silencioso */
+  }
+}
+
 async function salvarRegistro() {
   if (!detalhe.value || acaoFluxo.value) return
   const texto = textoAtividade.value.trim()
@@ -1211,6 +1213,7 @@ async function salvarRegistro() {
     ui.error('Descreva o que foi feito.')
     return
   }
+  const ids = new Set(equipamentosReparadosRegistro.value)
   acaoFluxo.value = true
   try {
     const atividade = await registrarAtividade(detalhe.value.id, { texto, anexos: anexosAtividade.value })
@@ -1220,6 +1223,8 @@ async function salvarRegistro() {
     textoAtividade.value = ''
     anexosAtividade.value = []
     ui.success('Registro adicionado ao atendimento.')
+    await processarEquipamentosManutencao(texto, ids)
+    equipamentosReparadosRegistro.value = new Set()
   } catch (e) {
     ui.error(apiError(e, 'Falha ao registrar o atendimento.'))
   } finally {
@@ -1236,51 +1241,49 @@ async function salvarConclusao() {
   if (!detalhe.value || acaoFluxo.value) return
   const texto = textoConclusao.value.trim()
   if (!texto) {
-    ui.error('Registre o que foi feito — é isso que a escola vai conferir.')
+    ui.error('Registre o que foi feito - e isso que a escola vai conferir.')
     return
   }
+  const manual = equipamentosConclusao.value
+    .split(/[\n,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const ids = new Set(equipamentosReparadosConclusao.value)
   acaoFluxo.value = true
   try {
+    const listaEquip = await listarEquipamentosDaFilial()
+    const selecionados = listaEquip.filter((eq) => ids.has(eq.id))
+    const patrimoniosSelecionados = selecionados.map((eq) => eq.patrimonio || eq.numeroSerie || eq.id).filter(Boolean)
+    const equipamentos = [...manual, ...patrimoniosSelecionados]
     const atualizado = await concluirChamado(detalhe.value.id, {
       texto,
       anexos: anexosConclusao.value,
-      equipamentos: equipamentosConclusao.value
-        .split(/[\n,;]+/)
-        .map((s) => s.trim())
-        .filter(Boolean),
+      equipamentos,
     })
     detalhe.value = atualizado
     novoStatus.value = atualizado.status
     conclusaoAberta.value = false
     anexosConclusao.value = []
-    ui.success('Atendimento concluído. A escola foi avisada para conferir.')
-    // Integração com SCE: registra manutenção nos equipamentos atribuídos.
-    const eqs = equipamentosConclusao.value
-      .split(/[\n,;]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-    equipamentosConclusao.value = ''
-    if (eqs.length) {
-      try {
-        const lista = await listarEquipamentosDaFilial()
-        const alvo = new Set(eqs.map((e) => e.toLowerCase()))
-        const encontrados = lista.filter((eq) => {
-          const p = (eq.patrimonio || '').toLowerCase()
-          const s = (eq.numeroSerie || '').toLowerCase()
-          return alvo.has(p) || alvo.has(s) || alvo.has(eq.id.toLowerCase())
-        })
-        await Promise.all(
-          encontrados.map((eq) =>
-            registrarManutencao(eq.id, texto, 'Concluído').catch(() => {}),
-          ),
-        )
-        if (encontrados.length) {
-          ui.success(`${encontrados.length} equipamento(s) atualizado(s) no inventário.`)
-        }
-      } catch {
-        /* silencioso */
-      }
+    ui.success('Atendimento concluido. A escola foi avisada para conferir.')
+    // Integracao com SCE: registra manutencao nos equipamentos atribuidos.
+    const alvo = new Set(equipamentos.map((e) => e.toLowerCase()))
+    const encontrados = listaEquip.filter((eq) => {
+      const p = (eq.patrimonio || '').toLowerCase()
+      const s = (eq.numeroSerie || '').toLowerCase()
+      return alvo.has(p) || alvo.has(s) || alvo.has(eq.id.toLowerCase())
+    })
+    await Promise.all(
+      encontrados.map((eq) => registrarManutencao(eq.id, texto, 'Concluído').catch(() => {})),
+    )
+    const quebrados = encontrados.filter((eq) => (eq.status || '').toLowerCase() === 'quebrado')
+    await Promise.all(
+      quebrados.map((eq) => atualizarEquipamento(eq.id, { status: 'Disponivel' }).catch(() => {})),
+    )
+    if (encontrados.length) {
+      ui.success(encontrados.length + ' equipamento(s) atualizado(s) no inventario.')
     }
+    equipamentosConclusao.value = ''
+    equipamentosReparadosConclusao.value = new Set()
     await Promise.all([carregar(), carregarStats()])
   } catch (e) {
     ui.error(apiError(e, 'Falha ao concluir o atendimento.'))
@@ -1796,6 +1799,7 @@ useAutoRefresh(async () => {
               <th>Protocolo</th>
               <th>Data</th>
               <th>Unidade Escolar</th>
+              <th>Técnico da Escola</th>
               <th>Equipamento / Tipo</th>
               <th>Descrição</th>
               <th>Status</th>
@@ -1804,10 +1808,10 @@ useAutoRefresh(async () => {
           </thead>
           <tbody>
             <tr v-if="estado.loading">
-              <td :colspan="podeLote ? 8 : 7" class="td-center">Carregando...</td>
+              <td :colspan="podeLote ? 9 : 8" class="td-center">Carregando...</td>
             </tr>
             <tr v-else-if="estado.items.length === 0">
-              <td :colspan="podeLote ? 8 : 7" class="td-center">Nenhum chamado encontrado.</td>
+              <td :colspan="podeLote ? 9 : 8" class="td-center">Nenhum chamado encontrado.</td>
             </tr>
             <tr
               v-for="c in estado.items"
@@ -1826,8 +1830,9 @@ useAutoRefresh(async () => {
                 </button>
               </td>
               <td class="nowrap">{{ formatDate(c.timestamp) }}</td>
-              <td>{{ c.unidade }}</td>
-              <td>{{ c.tipo }}</td>
+               <td>{{ c.unidade }}</td>
+               <td>{{ c.tecnicoSetor || '—' }}</td>
+               <td>{{ c.tipo }}</td>
               <td class="desc-cell" :title="c.descricao">{{ c.descricao }}</td>
               <td><StatusPill :status="rotuloStatusChamado(c.status)" /></td>
               <td class="td-acoes" @click.stop>
@@ -2194,6 +2199,11 @@ useAutoRefresh(async () => {
                 </li>
               </ul>
               <div class="acao-linha">
+                <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="abrirSelecaoEquipamentos('registro')">
+                  <Monitor :size="14" /> Selecionar equipamentos ({{ equipamentosReparadosRegistro.size }})
+                </button>
+              </div>
+              <div class="acao-linha">
                 <button class="btn btn-primary" type="button" :disabled="acaoFluxo || !textoAtividade.trim()" @click="salvarRegistro">
                   Salvar registro
                 </button>
@@ -2201,10 +2211,7 @@ useAutoRefresh(async () => {
                   Cancelar
                 </button>
               </div>
-                        <button class="btn btn-outline btn-largo" type="button" @click="abrirEquipamentosDaUnidade">
-              <Monitor :size="15" /> Ver equipamentos da unidade
-            </button>
-</template>
+            </template>
           </div>
 
           <!--
@@ -2244,8 +2251,13 @@ useAutoRefresh(async () => {
                   </button>
                 </li>
               </ul>
+              <div class="acao-linha">
+                <button class="btn btn-outline" type="button" :disabled="acaoFluxo" @click="abrirSelecaoEquipamentos('conclusao')">
+                  <Monitor :size="14" /> Selecionar equipamentos reparados ({{ equipamentosReparadosConclusao.size }})
+                </button>
+              </div>
               <div class="field">
-                <label>Equipamentos reparados (patrimônio/série, opcional)</label>
+                <label>Equipamentos manutenidos (patrimônio/série, opcional)</label>
                 <textarea v-model="equipamentosConclusao" class="input textarea" placeholder="Um por linha" rows="2"></textarea>
               </div>
               <div class="acao-linha">
@@ -2257,6 +2269,16 @@ useAutoRefresh(async () => {
                 </button>
               </div>
             </template>
+          </div>
+
+          <div class="acao-box">
+            <h4><Monitor :size="15" /> Equipamentos reparados</h4>
+            <p class="acao-dica">
+              Selecione os equipamentos que receberam manutenção neste atendimento.
+            </p>
+            <button class="btn btn-outline btn-largo" type="button" @click="abrirSelecaoEquipamentos(registroAberto ? 'registro' : conclusaoAberta ? 'conclusao' : 'registro')">
+              <Monitor :size="15" /> Selecionar equipamentos reparados
+            </button>
           </div>
 
           <p v-if="detalhe.status === 'AGUARDANDO_CONFERENCIA'" class="acao-dica">
@@ -2789,14 +2811,13 @@ useAutoRefresh(async () => {
      <!-- Modal: equipamentos da unidade do chamado -->
       <BaseModal
         :aberto="modalEquipamentosAberto"
-        titulo="Equipamentos da unidade"
+        titulo="Selecionar equipamentos reparados"
         largura="960px"
         @fechar="modalEquipamentosAberto = false"
       >
        <div v-if="detalhe" class="equip-unidade">
          <p class="acao-dica">
-           Unidade: <strong>{{ detalhe.unidade }}</strong>. Marque os equipamentos e escolha o
-           status para aplicar em lote.
+           Unidade: <strong>{{ detalhe.unidade }}</strong>. Marque os equipamentos que receberam manutenção.
          </p>
          <div class="acao-linha">
            <input
@@ -2804,19 +2825,13 @@ useAutoRefresh(async () => {
              class="input"
              placeholder="Buscar por patrimônio, série, etiqueta ou modelo..."
            />
-           <select v-model="statusLoteEquipamento" class="select-input">
-             <option value="">Status...</option>
-             <option value="Disponível">Disponível</option>
-             <option value="Manutenção">Manutenção</option>
-           </select>
            <button
              class="btn btn-primary"
              type="button"
-             :disabled="aplicandoStatusLoteEquipamento || selecionadosEquipamento.size === 0 || !statusLoteEquipamento"
-             @click="aplicarStatusLoteEquipamentos"
+             :disabled="selecionadosEquipamento.size === 0"
+             @click="confirmarSelecaoEquipamentos"
            >
-             <Loader2 v-if="aplicandoStatusLoteEquipamento" class="spin" :size="14" />
-             Aplicar ({{ selecionadosEquipamento.size }})
+             Confirmar seleção ({{ selecionadosEquipamento.size }})
            </button>
          </div>
 
@@ -4063,5 +4078,17 @@ tr.selecionado td {
     max-width: 100%;
     overflow-x: auto;
   }
+}
+
+.equip-unidade {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.equip-unidade .table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
 }
 </style>

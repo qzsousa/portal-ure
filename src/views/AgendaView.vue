@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, type ComponentPublicInstance } from 'vue'
-import { CalendarDays, ChevronLeft, ChevronRight, Info } from '@lucide/vue'
+import { CalendarDays, ChevronLeft, ChevronRight } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import { listarTecnicos, type TecnicoDestino } from '@/api/chamados'
+import { atribuirDia, listarAtribuicoes, removerAtribuicao } from '@/api/agenda'
 import { listarEscolas } from '@/api/usuarios'
 import { ordenarTecnicos } from '@/utils/tecnicos'
+import { corDoTecnico } from '@/utils/cores'
 import { useAuthStore } from '@/stores/auth'
+import type { AtribuicaoAgenda } from '@/types'
 
 /* Mesmas constantes de AppTopbar.vue, espelhadas porque o AppTopbar está fora
    do escopo desta task. Pendência: extrair para src/utils/calendario.ts quando
@@ -36,34 +39,19 @@ const MESES = [
 /** Cabeçalho das colunas, derivado dos mesmos nomes ("Domingo" → "Dom"). */
 const DIAS_SEMANA_CURTO = DIAS_SEMANA.map((d) => d.slice(0, 3))
 
-/** Atribuição de um dia: escola atendida + técnico responsável. */
-interface Atribuicao {
-  escola: string
-  tecnicoId: string
-  tecnicoNome: string
-}
-
-const STORAGE_KEY = 'agenda-atendimento-v1'
-
 /* ---------- Estado ---------- */
 const estado = reactive({
   loading: true,
   erro: '',
   escolas: [] as string[],
   tecnicos: [] as TecnicoDestino[],
+  salvando: false,
 })
 
-/** Atribuições por dia (chave = "yyyy-mm-dd"). */
-const atribuicoes = reactive<Record<string, Atribuicao>>({})
+/** Atribuições por dia (chave = "yyyy-mm-dd"). Espelha `AtribuicaoAgenda` do backend. */
+const atribuicoes = reactive<Record<string, AtribuicaoAgenda[]>>({})
 
 const auth = useAuthStore()
-/**
- * Escala do dia é decisão da matriz: só o ADMIN escolhe escola e técnico.
- * O TÉCNICO abre a agenda para conferir onde precisa estar, mas o calendário
- * continua navegável porque os botões de dia não são desabilitados — o nível é
- * conferido no `abrirDia`, e desligá-los quebraria o foco do tabindex móvel.
- */
-const podeRegistrar = computed(() => auth.user?.nivel === 'ADMIN')
 /** Remover atribuição é decisão da matriz: só o ADMIN desfaz o dia. */
 const podeRemover = computed(() => auth.user?.nivel === 'ADMIN')
 
@@ -81,6 +69,7 @@ function mesAnterior() {
     anoMes.mes--
   }
   ajustarFoco()
+  void carregarAtribuicoes()
 }
 
 function proximoMes() {
@@ -91,12 +80,14 @@ function proximoMes() {
     anoMes.mes++
   }
   ajustarFoco()
+  void carregarAtribuicoes()
 }
 
 function irParaHoje() {
   anoMes.ano = hoje.getFullYear()
   anoMes.mes = hoje.getMonth()
   ajustarFoco()
+  void carregarAtribuicoes()
 }
 
 /* ---------- Células do calendário (construído do zero, sem biblioteca) ---------- */
@@ -105,8 +96,8 @@ interface CelulaDia {
   iso: string
   mesAtual: boolean
   ehHoje: boolean
-  escola: string
-  tecnicoNome: string
+  /** Atribuições do dia (pode haver mais de um técnico). */
+  attrs: AtribuicaoAgenda[]
 }
 
 /** "yyyy-mm-dd" em horário local — evita virada de dia por fuso. */
@@ -124,6 +115,44 @@ function mesmoDia(a: Date, b: Date): boolean {
   )
 }
 
+/**
+ * Chave do dia a partir do `data` que o backend devolve (ISO, meia-noite UTC).
+ *
+ * O calendário é montado em horário local, mas o backend normaliza a data para
+ * meia-noite UTC do dia. Extrair os 10 primeiros caracteres (a parte "AAAA-MM-DD"
+ * do UTC) é o que faz a atribuição cair na célula que o usuário clicou, em
+ * qualquer fuso horário.
+ */
+function chaveDaData(isoUtc: string): string {
+  return isoUtc.slice(0, 10)
+}
+
+/**
+ * Primeiro dia do mês exibido e primeiro dia do seguinte, para o filtro de
+ * intervalo da API.
+ *
+ * O `fim` é o primeiro dia do mês seguinte (exclusivo): assim o último dia do
+ * mês entra tanto se o backend tratar `fim` como exclusivo quanto como
+ * inclusivo. Usa `new Date(ano, mes + 1, 1)` porque o mês 13 é normalizado para
+ * janeiro do ano seguinte — montar a string na mão daria "2026-13-01" em
+ * dezembro.
+ */
+function intervaloAtual(): { inicio: string; fim: string } {
+  return {
+    inicio: isoDe(new Date(anoMes.ano, anoMes.mes, 1)),
+    fim: isoDe(new Date(anoMes.ano, anoMes.mes + 1, 1)),
+  }
+}
+
+/** Iniciais do técnico (1 ou 2 letras) para o selo colorido da célula. */
+function iniciais(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean)
+  if (!partes.length) return ''
+  const primeiro = (partes[0]?.[0] ?? '').toUpperCase()
+  const ultimo = partes.length > 1 ? (partes[partes.length - 1]?.[0] ?? '').toUpperCase() : ''
+  return `${primeiro}${ultimo}`
+}
+
 const celulas = computed<CelulaDia[]>(() => {
   const primeiro = new Date(anoMes.ano, anoMes.mes, 1)
   const offset = primeiro.getDay() // 0 = Domingo
@@ -134,26 +163,25 @@ const celulas = computed<CelulaDia[]>(() => {
   // Dias do mês anterior que completam a primeira semana.
   for (let i = offset - 1; i >= 0; i--) {
     const d = new Date(anoMes.ano, anoMes.mes - 1, diasMesAnterior - i)
-    saida.push({ dia: d.getDate(), iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '' })
+    saida.push({ dia: d.getDate(), iso: isoDe(d), mesAtual: false, ehHoje: false, attrs: [] })
   }
   for (let d = 1; d <= diasNoMes; d++) {
     const data = new Date(anoMes.ano, anoMes.mes, d)
     const iso = isoDe(data)
-    const attr = atribuicoes[iso]
+    const attrs = atribuicoes[iso] || []
     saida.push({
       dia: d,
       iso,
       mesAtual: true,
       ehHoje: mesmoDia(data, hoje),
-      escola: attr?.escola || '',
-      tecnicoNome: attr?.tecnicoNome || '',
+      attrs,
     })
   }
   // Dias do próximo mês para fechar a grade em múltiplos de 7.
   let prox = 1
   while (saida.length % 7 !== 0) {
     const d = new Date(anoMes.ano, anoMes.mes + 1, prox)
-    saida.push({ dia: prox, iso: isoDe(d), mesAtual: false, ehHoje: false, escola: '', tecnicoNome: '' })
+    saida.push({ dia: prox, iso: isoDe(d), mesAtual: false, ehHoje: false, attrs: [] })
     prox++
   }
   return saida
@@ -193,8 +221,8 @@ function navegarTeclado(e: KeyboardEvent) {
 function rotuloDia(c: CelulaDia): string {
   const data = new Date(c.iso + 'T12:00:00')
   const base = data.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
-  if (!c.escola) return `${base} — sem atribuição`
-  return `${base} — ${c.escola} com ${c.tecnicoNome}`
+  if (!c.attrs.length) return `${base} — sem atribuição`
+  return `${base} — ${c.attrs.map((a) => `${a.escola} com ${a.tecnicoNome}`).join('; ')}`
 }
 
 /* ---------- Modal de atribuição ---------- */
@@ -203,7 +231,7 @@ const diaSel = ref('')
 const escolaSel = ref('')
 const tecnicoSel = ref('')
 
-const diaPreenchido = computed(() => !!atribuicoes[diaSel.value])
+const atribuicoesDoDia = computed(() => atribuicoes[diaSel.value] || [])
 
 const dataModal = computed(() => {
   if (!diaSel.value) return ''
@@ -211,60 +239,55 @@ const dataModal = computed(() => {
 })
 
 function abrirDia(c: CelulaDia) {
-  if (!podeRegistrar.value) return
   diaSel.value = c.iso
-  const attr = atribuicoes[c.iso]
-  escolaSel.value = attr?.escola || ''
-  tecnicoSel.value = attr?.tecnicoId || ''
+  escolaSel.value = ''
+  tecnicoSel.value = ''
   modalAberto.value = true
 }
 
-function salvar() {
-  if (!podeRegistrar.value) return
+async function salvar() {
   if (!diaSel.value || !escolaSel.value || !tecnicoSel.value) return
   const tecnico = estado.tecnicos.find((t) => t.id === tecnicoSel.value)
-  atribuicoes[diaSel.value] = {
-    escola: escolaSel.value,
-    tecnicoId: tecnicoSel.value,
-    tecnicoNome: tecnico?.nome || '',
-  }
-  salvarAtribuicoes()
-  modalAberto.value = false
-}
-
-function remover() {
-  if (!podeRemover.value) return
-  delete atribuicoes[diaSel.value]
-  salvarAtribuicoes()
-  modalAberto.value = false
-}
-
-/* ---------- Persistência local (ainda sem endpoint no backend) ---------- */
-function carregarAtribuicoes(): void {
+  estado.salvando = true
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
-    const dados = JSON.parse(raw) as Record<string, Atribuicao>
-    for (const [dia, attr] of Object.entries(dados)) {
-      if (
-        attr &&
-        typeof attr.escola === 'string' &&
-        typeof attr.tecnicoId === 'string' &&
-        typeof attr.tecnicoNome === 'string'
-      ) {
-        atribuicoes[dia] = attr
-      }
+    const criada = await atribuirDia({
+      escola: escolaSel.value,
+      data: diaSel.value,
+      tecnicoId: tecnicoSel.value,
+      tecnicoNome: tecnico?.nome || '',
+    })
+    const chave = chaveDaData(criada.data)
+    if (!atribuicoes[chave]) atribuicoes[chave] = []
+    atribuicoes[chave].push(criada)
+    escolaSel.value = ''
+    tecnicoSel.value = ''
+  } catch {
+    estado.erro = 'Não foi possível salvar a atribuição. Tente novamente.'
+  } finally {
+    estado.salvando = false
+  }
+}
+
+/**
+ * Remove a atribuição do dia.
+ *
+ * A permissão é revalidada AQUI, e não só no `v-if` do botão: o `v-if` é
+ * decisão de template, e a função é o que de fato fala com o backend. Se o
+ * nível do usuário não for ADMIN, a função retorna sem chamar a API — o
+ * servidor é a autoridade final, mas o portal não manda o que sabe que será
+ * recusado.
+ */
+async function removerItem(id: string) {
+  if (auth.user?.nivel !== 'ADMIN') return
+  try {
+    await removerAtribuicao(id)
+    const chave = diaSel.value
+    if (atribuicoes[chave]) {
+      atribuicoes[chave] = atribuicoes[chave].filter((a) => a.id !== id)
+      if (!atribuicoes[chave].length) delete atribuicoes[chave]
     }
   } catch {
-    /* localStorage corrompido ou indisponível: agenda começa vazia */
-  }
-}
-
-function salvarAtribuicoes(): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(atribuicoes))
-  } catch {
-    /* sem espaço ou bloqueado: a atribuição não persiste, mas a tela funciona */
+    estado.erro = 'Não foi possível remover a atribuição. Tente novamente.'
   }
 }
 
@@ -276,6 +299,7 @@ async function carregar() {
     const [escolas, tecnicos] = await Promise.all([listarEscolas(), listarTecnicos()])
     estado.escolas = escolas
     estado.tecnicos = ordenarTecnicos(tecnicos)
+    await carregarAtribuicoes()
   } catch {
     estado.tecnicos = []
     estado.erro =
@@ -285,8 +309,80 @@ async function carregar() {
   }
 }
 
+/**
+ * Carrega as atribuições do mês exibido.
+ *
+ * O filtro de intervalo vai para a API, mas o corte também é feito aqui: se o
+ * backend ignorar os parâmetros (ou os nomes das chaves mudarem), a tela
+ * continua mostrando só o mês, em vez de derrubar atribuições de outros meses
+ * na grade.
+ */
+async function carregarAtribuicoes() {
+  try {
+    const { inicio, fim } = intervaloAtual()
+    const lista = await listarAtribuicoes({ inicio, fim })
+    for (const a of lista) {
+      const chave = chaveDaData(a.data)
+      if (chave >= inicio && chave < fim) {
+        if (!atribuicoes[chave]) atribuicoes[chave] = []
+        atribuicoes[chave].push(a)
+      }
+    }
+    if (!Object.keys(atribuicoes).length) await migrarDoNavegador()
+  } catch {
+    estado.erro = 'Não foi possível carregar a agenda. Tente novamente mais tarde.'
+  }
+}
+
+/**
+ * Migração única das atribuições que estavam no localStorage.
+ *
+ * Quem usou a agenda antes do endpoint existir tinha os dias salvos só no
+ * navegador. Sem isto, essas atribuições desapareceriam em silêncio quando o
+ * endpoint entrasse. A migração lê o storage antigo e faz um POST por dia,
+ * uma única vez, e remove a chave — mesmo que algum POST falhe, para não
+ * repetir a tentativa a cada carregamento.
+ *
+ * Só roda quando o backend não devolveu atribuição nenhuma: se já há dados
+ * no servidor, os do navegador são duplicata e ficam para trás.
+ */
+async function migrarDoNavegador() {
+  const STORAGE_KEY = 'agenda-atendimento-v1'
+  let dados: Record<string, { escola: string; tecnicoId: string; tecnicoNome: string }> | null = null
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) dados = JSON.parse(raw)
+  } catch {
+    dados = null
+  }
+  if (!dados) return
+
+  const entradas = Object.entries(dados).filter(
+    ([dia, a]) =>
+      typeof dia === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(dia) &&
+      !!a &&
+      typeof a.escola === 'string' &&
+      typeof a.tecnicoId === 'string' &&
+      typeof a.tecnicoNome === 'string',
+  )
+
+  if (entradas.length) {
+    await Promise.all(
+      entradas.map(([dia, a]) =>
+        atribuirDia({
+          escola: a.escola,
+          data: dia,
+          tecnicoId: a.tecnicoId,
+          tecnicoNome: a.tecnicoNome,
+        }).catch(() => null),
+      ),
+    )
+  }
+  localStorage.removeItem(STORAGE_KEY)
+}
+
 onMounted(() => {
-  carregarAtribuicoes()
   ajustarFoco()
   void carregar()
 })
@@ -297,13 +393,7 @@ onMounted(() => {
     <header class="agenda-head">
       <div>
         <h2><CalendarDays :size="22" /> Calendário de atendimento</h2>
-        <p class="agenda-sub">
-          {{
-            podeRegistrar
-              ? 'Clique em um dia para atribuir a escola e o técnico que vão atendê-la.'
-              : 'Consulte a escala do mês. Somente o administrador registra e remove atribuições.'
-          }}
-        </p>
+        <p class="agenda-sub">Clique em um dia para atribuir a escola e o técnico que vão atendê-la.</p>
       </div>
       <div class="agenda-nav">
         <button class="btn btn-outline" type="button" @click="irParaHoje">Hoje</button>
@@ -328,40 +418,58 @@ onMounted(() => {
           :key="c.iso"
           :ref="refDia(idx)"
           class="dia"
-          :class="{ fora: !c.mesAtual, hoje: c.ehHoje, preenchida: !!c.escola }"
+          :class="{ fora: !c.mesAtual, hoje: c.ehHoje, preenchida: c.attrs.length > 0 }"
           :tabindex="idx === focoIdx ? 0 : -1"
           :aria-label="rotuloDia(c)"
-          :aria-pressed="!!c.escola"
+          :aria-pressed="c.attrs.length > 0"
+          :style="c.attrs.length ? { borderLeftColor: corDoTecnico(c.attrs[0].tecnicoId, c.attrs[0].tecnicoCor) } : undefined"
           @focus="focoIdx = idx"
           @click="abrirDia(c)"
         >
           <span class="dia-num">{{ c.dia }}</span>
-          <span v-if="c.escola" class="dia-info">
-            <span class="dia-escola">{{ c.escola }}</span>
-            <span class="dia-tecnico">{{ c.tecnicoNome }}</span>
+          <span v-if="c.attrs.length" class="dia-info">
+            <span v-for="a in c.attrs" :key="a.id" class="dia-attr">
+              <span class="dia-escola">{{ a.escola }}</span>
+              <span class="dia-tecnico">
+                <span class="dia-tecnico-iniciais" :style="{ backgroundColor: corDoTecnico(a.tecnicoId, a.tecnicoCor) }">
+                  {{ iniciais(a.tecnicoNome) }}
+                </span>
+                {{ a.tecnicoNome }}
+              </span>
+            </span>
           </span>
         </button>
       </div>
 
       <p class="agenda-ajuda">
-        {{
-          podeRegistrar
-            ? 'Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra verde já têm escola e técnico atribuídos.'
-            : 'Navegue com as setas do teclado para percorrer o mês. Dias com a barra verde já têm escola e técnico atribuídos — quem registra é o administrador.'
-        }}
-      </p>
-    </div>
-
-    <div class="aviso-local card">
-      <Info :size="18" />
-      <p>
-        As atribuições ficam salvas apenas neste navegador (localStorage). Ainda não existe endpoint no
-        backend para a agenda — a persistência em servidor depende de uma task futura.
+        Navegue com as setas do teclado e pressione Enter para abrir um dia. Dias com a barra colorida já
+        têm escola e técnico atribuídos — cada técnico tem a sua cor.
       </p>
     </div>
 
     <BaseModal :titulo="`Atendimento — ${dataModal}`" :aberto="modalAberto" @fechar="modalAberto = false">
       <div class="modal-campos">
+        <div v-if="atribuicoesDoDia.length" class="atribuicoes-lista">
+          <p class="atribuicoes-titulo">Técnicos já inseridos neste dia</p>
+          <ul class="atribuicoes-ul">
+            <li v-for="a in atribuicoesDoDia" :key="a.id" class="atribuicao-item">
+              <span
+                class="dia-tecnico-iniciais"
+                :style="{ backgroundColor: corDoTecnico(a.tecnicoId, a.tecnicoCor) }"
+              >{{ iniciais(a.tecnicoNome) }}</span>
+              <span class="atribuicao-info">
+                <strong>{{ a.tecnicoNome }}</strong>
+                <span class="atribuicao-escola">{{ a.escola }}</span>
+              </span>
+              <button
+                v-if="podeRemover"
+                class="btn btn-perigo btn-sm"
+                type="button"
+                @click="removerItem(a.id)"
+              >Remover</button>
+            </li>
+          </ul>
+        </div>
         <div class="field">
           <label for="agenda-escola">Escola</label>
           <select
@@ -400,17 +508,14 @@ onMounted(() => {
         </div>
       </div>
       <template #footer>
-        <button v-if="diaPreenchido && podeRemover" class="btn btn-perigo" type="button" @click="remover">
-          Remover atribuição
-        </button>
-        <button class="btn btn-outline" type="button" @click="modalAberto = false">Cancelar</button>
+        <button class="btn btn-outline" type="button" @click="modalAberto = false">Fechar</button>
         <button
           class="btn btn-primary"
           type="button"
-          :disabled="!escolaSel || !tecnicoSel"
+          :disabled="!escolaSel || !tecnicoSel || estado.salvando"
           @click="salvar"
         >
-          Salvar
+          {{ estado.salvando ? 'Salvando...' : 'Adicionar' }}
         </button>
       </template>
     </BaseModal>
@@ -561,6 +666,9 @@ onMounted(() => {
 }
 
 .dia-tecnico {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 10.5px;
   color: var(--text-muted);
   overflow: hidden;
@@ -568,30 +676,24 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.dia-tecnico-iniciais {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+
 .agenda-ajuda {
   margin: 12px 2px 0;
   font-size: 12px;
   color: var(--text-muted);
-}
-
-.aviso-local {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 16px;
-  border-left: 4px solid var(--yellow);
-  background: var(--yellow-soft);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.aviso-local :deep(svg) {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.aviso-local p {
-  margin: 0;
 }
 
 .erro {
@@ -604,6 +706,84 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.atribuicoes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.atribuicao-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  min-width: 0;
+}
+
+.atribuicao-item:hover {
+  border-color: var(--blue);
+}
+
+.atribuicoes-titulo {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.atribuicoes-ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.atribuicao-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.atribuicao-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.atribuicao-escola {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.dia-attr {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
 }
 
 @media (max-width: 640px) {
