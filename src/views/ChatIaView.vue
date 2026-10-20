@@ -159,7 +159,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   CheckCircle2,
   Cpu,
@@ -179,6 +179,7 @@ import { listarUsuarios } from '@/api/usuarios'
 import { listarEquipamentosGlobal } from '@/api/sce'
 import { useAuthStore } from '@/stores/auth'
 import { useContextoIA } from '@/composables/useContextoIA'
+import { atualizarConversaApi, criarConversaApi, excluirConversaApi, listarConversasApi } from '@/api/chatIa'
 
 interface Msg { role: 'user' | 'assistant' | 'tool'; content: string }
 
@@ -203,27 +204,50 @@ interface Conv { id: string; title: string; mensagens: Msg[]; atualizado: number
 const conversas = ref<Conv[]>([])
 const convId = ref<string>('')
 
-function carregarHistorico() {
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+function agendarSalvar() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    const c = conversas.value.find((x) => x.id === convId.value)
+    if (!c) return
+    void atualizarConversaApi(c.id, { title: c.title, mensagens: c.mensagens })
+  }, 800)
+}
+
+async function carregarHistorico() {
   try {
-    const raw = localStorage.getItem('chat-conversas')
-    if (raw) conversas.value = JSON.parse(raw) as Conv[]
-  } catch { conversas.value = [] }
-  if (!conversas.value.length) novaConversa()
-  else {
+    const lista = await listarConversasApi()
+    conversas.value = (lista || []).map((c) => ({
+      id: c.id,
+      title: c.title,
+      mensagens: Array.isArray(c.mensagens) ? c.mensagens : [],
+      atualizado: c.atualizado,
+    }))
+  } catch {
+    conversas.value = []
+  }
+  if (!conversas.value.length) {
+    await novaConversa()
+  } else {
     convId.value = conversas.value.slice().sort((a, b) => b.atualizado - a.atualizado)[0].id
     const c = conversas.value.find((x) => x.id === convId.value)
-    if (c) mensagens.value = Array.isArray(c.mensagens) ? c.mensagens : []
+    if (c) mensagens.value = Array.isArray(c.mensagens) ? [...c.mensagens] : []
   }
 }
-function salvarHistorico() {
-  localStorage.setItem('chat-conversas', JSON.stringify(conversas.value))
-}
-function novaConversa() {
-  const c: Conv = { id: String(Date.now()), title: 'Nova conversa', mensagens: [], atualizado: Date.now() }
-  conversas.value.unshift(c)
-  convId.value = c.id
-  mensagens.value = []
-  salvarHistorico()
+
+async function novaConversa() {
+  try {
+    const c = await criarConversaApi({ title: 'Nova conversa', mensagens: [] })
+    const conv: Conv = { id: c.id, title: c.title, mensagens: [], atualizado: c.atualizado }
+    conversas.value.unshift(conv)
+    convId.value = conv.id
+    mensagens.value = []
+  } catch {
+    const conv: Conv = { id: String(Date.now()), title: 'Nova conversa', mensagens: [], atualizado: Date.now() }
+    conversas.value.unshift(conv)
+    convId.value = conv.id
+    mensagens.value = []
+  }
 }
 function selecionarConv(id?: string) {
   if (id) convId.value = id
@@ -237,7 +261,7 @@ watch(mensagens, (v) => {
   c.mensagens = v
   c.atualizado = Date.now()
   if (c.title === 'Nova conversa' && v.length) c.title = v[0].content.slice(0, 30)
-  salvarHistorico()
+  agendarSalvar()
 }, { deep: true })
 
 function formatarTexto(txt: string) {
@@ -266,17 +290,17 @@ function perguntar(texto: string) {
   enviar()
 }
 
-function excluirConversa(id: string) {
+async function excluirConversa(id: string) {
+  try { await excluirConversaApi(id) } catch { /* ignore */ }
   const i = conversas.value.findIndex((c) => c.id === id)
   if (i === -1) return
   conversas.value.splice(i, 1)
   if (!conversas.value.length) {
-    novaConversa()
+    await novaConversa()
   } else if (convId.value === id) {
     const primeira = conversas.value.slice().sort((a, b) => b.atualizado - a.atualizado)[0]
     selecionarConv(primeira.id)
   }
-  salvarHistorico()
 }
 
 const tools: any[] = [
@@ -536,7 +560,7 @@ const { data: res } = await chamadosApi.post<any>('/ia/chat', {
 }
 
 function recarregar() {
-  carregarHistorico()
+  void carregarHistorico()
   recarregarBase()
 }
 
@@ -580,6 +604,15 @@ function escolherModelo(m: string) {
   buscaModelo.value = ''
 }
 
+onMounted(() => { void carregarHistorico() })
+onBeforeUnmount(() => {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+    const c = conversas.value.find((x) => x.id === convId.value)
+    if (c) void atualizarConversaApi(c.id, { title: c.title, mensagens: c.mensagens })
+  }
+})
 carregar()
 void carregarModelosNvidia()
 
