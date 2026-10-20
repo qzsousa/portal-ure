@@ -233,6 +233,10 @@ const tecnicoSel = ref('')
 
 const atribuicoesDoDia = computed(() => atribuicoes[diaSel.value] || [])
 
+const escolasDisponiveis = computed(() =>
+  estado.escolas.filter((e) => !atribuicoesDoDia.value.some((a) => a.escola === e)),
+)
+
 const dataModal = computed(() => {
   if (!diaSel.value) return ''
   return new Date(diaSel.value + 'T12:00:00').toLocaleDateString('pt-BR')
@@ -261,8 +265,10 @@ async function salvar() {
     atribuicoes[chave].push(criada)
     escolaSel.value = ''
     tecnicoSel.value = ''
-  } catch {
-    estado.erro = 'Não foi possível salvar a atribuição. Tente novamente.'
+  } catch (e: any) {
+    const data = e?.response?.data
+    const msg = (typeof data === 'string' ? data : data?.message) || ''
+    estado.erro = msg || 'Não foi possível salvar a atribuição. Tente novamente.'
   } finally {
     estado.salvando = false
   }
@@ -318,6 +324,8 @@ async function carregar() {
  * na grade.
  */
 async function carregarAtribuicoes() {
+  // Limpa o mês anterior para não acumular atribuições de outros meses.
+  for (const k of Object.keys(atribuicoes)) delete atribuicoes[k]
   try {
     const { inicio, fim } = intervaloAtual()
     const lista = await listarAtribuicoes({ inicio, fim })
@@ -485,7 +493,7 @@ onMounted(() => {
                   : 'Selecione a escola'
               }}
             </option>
-            <option v-for="e in estado.escolas" :key="e" :value="e">{{ e }}</option>
+            <option v-for="e in escolasDisponiveis" :key="e" :value="e">{{ e }}</option>
           </select>
         </div>
         <div class="field">

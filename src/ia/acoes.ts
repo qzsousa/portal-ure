@@ -836,13 +836,19 @@ export async function executarAcao(nome: string, args: any): Promise<any | null>
       case 'atribuir_agenda': {
         const escola = await resolverEscola(a.escola)
         const tec = await resolverTecnico(a.tecnico)
-        const criada = await atribuirDia({
-          escola,
-          data: String(a.data),
-          tecnicoId: tec.id,
-          tecnicoNome: tec.nome,
-        })
-        return { sucesso: true, atribuicao: criada }
+        try {
+          const criada = await atribuirDia({
+            escola,
+            data: String(a.data),
+            tecnicoId: tec.id,
+            tecnicoNome: tec.nome,
+          })
+          return { sucesso: true, atribuicao: criada }
+        } catch (e: any) {
+          const data = e?.response?.data
+          const msg = (typeof data === 'string' ? data : data?.message) || e?.message || 'Falha ao atribuir'
+          return { sucesso: false, erro: msg }
+        }
       }
       case 'remover_agenda': {
         await removerAtribuicao(String(a.id))
