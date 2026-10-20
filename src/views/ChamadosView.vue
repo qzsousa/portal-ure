@@ -2201,7 +2201,10 @@ useAutoRefresh(async () => {
                   Cancelar
                 </button>
               </div>
-            </template>
+                        <button class="btn btn-outline btn-largo" type="button" @click="abrirEquipamentosDaUnidade">
+              <Monitor :size="15" /> Ver equipamentos da unidade
+            </button>
+</template>
           </div>
 
           <!--
@@ -2254,17 +2257,6 @@ useAutoRefresh(async () => {
                 </button>
               </div>
             </template>
-          </div>
-
-          <div class="acao-box">
-            <h4><Monitor :size="15" /> Equipamentos da unidade</h4>
-            <p class="acao-dica">
-              Abre a tabela de equipamentos da escola deste chamado para você procurar por patrimônio,
-              série ou etiqueta e alterar o status em lote.
-            </p>
-            <button class="btn btn-outline btn-largo" type="button" @click="abrirEquipamentosDaUnidade">
-              <Monitor :size="15" /> Ver equipamentos da unidade
-            </button>
           </div>
 
           <p v-if="detalhe.status === 'AGUARDANDO_CONFERENCIA'" class="acao-dica">
