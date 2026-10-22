@@ -2377,16 +2377,6 @@ useAutoRefresh(async () => {
             </template>
           </div>
 
-          <div class="acao-box">
-            <h4><Monitor :size="15" /> Equipamentos reparados</h4>
-            <p class="acao-dica">
-              Selecione os equipamentos que receberam manutenção neste atendimento.
-            </p>
-            <button class="btn btn-outline btn-largo" type="button" @click="abrirSelecaoEquipamentos(registroAberto ? 'registro' : conclusaoAberta ? 'conclusao' : 'registro')">
-              <Monitor :size="15" /> Selecionar equipamentos reparados
-            </button>
-          </div>
-
           <p v-if="detalhe.status === 'AGUARDANDO_CONFERENCIA'" class="acao-dica">
             Aguardando a <strong>escola</strong> conferir o serviço. Ela pode confirmar ou reabrir o
             chamado.
