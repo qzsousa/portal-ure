@@ -2,8 +2,11 @@
 import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+import ChatWidget from '@/components/chat/ChatWidget.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useContextoIA } from '@/composables/useContextoIA'
 
+const auth = useAuthStore()
 const { carregar } = useContextoIA()
 
 /**
@@ -20,4 +23,5 @@ onMounted(() => {
 <template>
   <RouterView />
   <ToastContainer />
+  <ChatWidget v-if="auth.isAuthenticated" />
 </template>

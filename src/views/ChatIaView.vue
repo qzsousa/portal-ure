@@ -1,5 +1,5 @@
 ﻿<template>
-  <div class="chat-shell" :class="{ collapsed: !historyOpen }">
+  <div class="chat-shell" :class="{ collapsed: !historyOpen, compact }">
     <aside class="rail">
       <button class="rail-toggle" @click="historyOpen = !historyOpen" :title="historyOpen ? 'Recolher historico' : 'Expandir historico'">
         <component :is="historyOpen ? PanelLeftClose : PanelLeftOpen" :size="16" />
@@ -57,12 +57,11 @@
       <header class="stage-head">
         <div class="stage-title">
           <h1>Caf&eacute;IA</h1>
-          <p>Assistente de chamados e equipamentos</p>
+          <p>Assistente do portal</p>
         </div>
         <div class="stage-actions">
-          <span class="model-atual" title="Modelo em uso">{{ modeloIa }}</span>
           <button class="model-btn" @click="toggleModelos" :disabled="carregandoModelos">
-            <Cpu :size="15" /> Modelos NIM
+            <Cpu :size="15" /> Selecionar modelo
           </button>
         </div>
         <Transition name="fade-slide">
@@ -110,7 +109,7 @@
             <span class="dot-wave"><i></i><i></i><i></i></span>
           </p>
           <p v-else>Pergunte sobre chamados, equipamentos, tecnicos e escolas. Eu consulto os dois banco de dados do portal.</p>
-          <div class="chips" v-if="!carregandoDados">
+          <div class="chips" v-if="!carregandoDados && !compact">
             <button v-for="s in sugestoes" :key="s" class="chip" @click="perguntar(s)">{{ s }}</button>
           </div>
         </div>
@@ -160,6 +159,8 @@
 </template>
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+const props = defineProps<{ compact?: boolean }>()
+const compact = props.compact ?? false
 import {
   CheckCircle2,
   Cpu,
@@ -196,7 +197,7 @@ const mensagens = ref<Msg[]>([])
 const entrada = ref('')
 const enviando = ref(false)
 const chatBox = ref<HTMLElement | null>(null)
-const historyOpen = ref(true)
+const historyOpen = ref(!compact)
 const sugestoes = [
   'Quais escolas tem mais chamados abertos?',
   'Qual tecnico mais resolveu chamados?',
@@ -924,7 +925,7 @@ void carregarModelosNvidia()
   background: var(--papel);
   border: 1px solid var(--borda);
   box-shadow: 0 24px 60px -32px rgba(44, 30, 22, .45);
-  font-family: 'Segoe UI', 'Helvetica Neue', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   color: var(--tinta);
   transition: grid-template-columns .32s cubic-bezier(.4, 0, .2, 1);
 }
@@ -1150,7 +1151,7 @@ void carregarModelosNvidia()
   letter-spacing: -.01em;
   color: var(--cafe-900);
 }
-.stage-title p { margin: 2px 0 0; font-size: 12px; color: var(--tinta-suave); }
+.stage-title p { margin: 2px 0 0; font-size: 11.5px; color: var(--tinta-suave); }
 .stage-status {
   display: flex;
   align-items: center;
@@ -1158,7 +1159,7 @@ void carregarModelosNvidia()
   padding: 7px 26px;
   font-size: 11.5px;
   color: var(--tinta-suave);
-  background: var(--creme);
+  background: #e8ddd0;
   border-bottom: 1px solid var(--borda);
 }
 
@@ -1429,6 +1430,20 @@ void carregarModelosNvidia()
   .chat-shell { grid-template-columns: 52px 1fr; }
   .rail-body { display: none; }
   }
+
+/* ---------- Modo compacto (widget flutuante) ---------- */
+.chat-shell.compact {
+  height: 100%;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+.chat-shell.compact .stage-head { padding: 16px 18px; }
+.chat-shell.compact .stage-head h1 { font-size: 17px; }
+.chat-shell.compact .stage-status { padding: 7px 18px; }
+.chat-shell.compact .stream { padding: 22px 18px 8px; }
+.chat-shell.compact .composer { padding: 12px 16px 16px; }
+.chat-shell.compact .msg { max-width: 88%; }
 </style>
 
 
