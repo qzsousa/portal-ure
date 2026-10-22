@@ -1998,6 +1998,10 @@ useAutoRefresh(async () => {
       @fechar="detalheAberto = false"
     >
       <div v-if="detalhe" class="detalhe">
+        <div v-if="acaoFluxo" class="acao-loading-overlay">
+          <div class="equip-spinner"></div>
+          <p>Processando, aguarde...</p>
+        </div>
         <!--
              Cabeçalho: o que se responde com uma olhada, antes de qualquer
              clique. Protocolo e status já estão no título do modal — aqui ficam
@@ -3342,6 +3346,23 @@ tr.selecionado td {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
+}
+
+.acao-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(2px);
+  color: var(--text-muted);
+  font-size: 14px;
+  border-radius: var(--radius-sm, 8px);
 }
 
 /*
