@@ -1133,7 +1133,7 @@ async function abrirModalAbrirEquipamento() {
   defeitoIndividualAbrir.value = {}
   defeitoGeralAbrir.value = ''
   try {
-    const lista = await listarEquipamentosDaFilial()
+    const lista = await listarEquipamentosDaFilial(auth.user?.filial || undefined)
     const unidade = auth.user?.filial || ''
     equipamentosUnidadeAbrir.value = lista.filter((e) =>
       (e.unidade || '').toLowerCase() === unidade.toLowerCase() ||
@@ -1243,7 +1243,7 @@ async function abrirSelecaoEquipamentos(contexto: 'registro' | 'conclusao') {
   const selecionadosAtuais = contexto === 'registro' ? equipamentosManutencaoRegistro.value : equipamentosManutencaoConclusao.value
   selecionadosEquipamento.value = new Set(selecionadosAtuais)
   try {
-    const lista = await listarEquipamentosDaFilial()
+    const lista = await listarEquipamentosDaFilial(detalhe.value.unidade)
     const unidade = detalhe.value.unidade
     equipamentosUnidade.value = lista.filter((e) => (e.unidade || '').toLowerCase() === unidade.toLowerCase() || (e.unidade || '').toLowerCase().includes(unidade.toLowerCase().split(' ')[0]))
   } catch (e) {
@@ -2941,10 +2941,13 @@ useAutoRefresh(async () => {
            </button>
          </div>
 
-         <div v-if="carregandoEquipamentosUnidade" class="acao-dica">Carregando equipamentos...</div>
-         <div v-else-if="equipamentosUnidadeFiltrados.length === 0" class="acao-dica">
-           Nenhum equipamento encontrado para esta unidade.
-         </div>
+          <div v-if="carregandoEquipamentosUnidade" class="equip-loading">
+            <div class="equip-spinner"></div>
+            <p>Carregando equipamentos da unidade...</p>
+          </div>
+          <div v-else-if="equipamentosUnidadeFiltrados.length === 0" class="acao-dica">
+            Nenhum equipamento encontrado para esta unidade.
+          </div>
          <div v-else class="table-wrap">
            <table class="table">
              <thead>
@@ -3908,6 +3911,28 @@ tr.selecionado td {
   font-size: 12px;
   color: var(--text-muted);
   align-self: center;
+}
+
+.equip-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.equip-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border, #ddd);
+  border-top-color: var(--brand-primary, #3b82f6);
+  border-radius: 50%;
+  animation: equip-spin 0.8s linear infinite;
+}
+@keyframes equip-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Aviso do encaminhamento (sem técnico na unidade / troca de responsável) */

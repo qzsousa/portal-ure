@@ -63,8 +63,9 @@ export async function listarEquipamentosGlobal(q: EquipamentosQuery = {}): Promi
 }
 
 /** Todos os equipamentos ao alcance do usuário (filial ou lista de unidades do técnico). */
-export async function listarEquipamentosDaFilial(): Promise<Equipamento[]> {
-  return unwrap(sceApi.get<SceResponse<Equipamento[]>>('/equipamentos-da-filial'))
+export async function listarEquipamentosDaFilial(unidade?: string): Promise<Equipamento[]> {
+  const params = unidade ? { unidade } : undefined
+  return unwrap(sceApi.get<SceResponse<Equipamento[]>>('/equipamentos-da-filial', { params }))
 }
 
 export interface UnidadeResumo {
