@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { usePontoStore } from '@/stores/ponto'
 import axios from 'axios'
 import { CHAMADOS_BASE, chamadosApi, configureAuthHooks } from '@/api/http'
 import {
@@ -174,6 +175,7 @@ const senhaProvisoria = computed(() => user.value?.senhaProvisoria === true)
     user.value = null
     simulacao.value = null
     nivelOriginal.value = null
+    try { usePontoStore().invalidar() } catch { /* pinia not ready */ }
   }
 
   /**
@@ -227,6 +229,7 @@ const senhaProvisoria = computed(() => user.value?.senhaProvisoria === true)
       const { data } = await chamadosApi.post<LoginResponse>('/auth/login', credentials)
       setAccessToken(data.accessToken)
       user.value = data.user
+      try { usePontoStore().invalidar() } catch { /* pinia not ready */ }
       return data
     } finally {
       isLoading.value = false
@@ -284,6 +287,7 @@ const senhaProvisoria = computed(() => user.value?.senhaProvisoria === true)
       const data = await definirSenhaPrimeiroAcesso(payload)
       setAccessToken(data.accessToken)
       user.value = data.user
+      try { usePontoStore().invalidar() } catch { /* pinia not ready */ }
       return data
     } finally {
       isLoading.value = false

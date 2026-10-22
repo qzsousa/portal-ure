@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { usePontoStore } from '@/stores/ponto'
 import type { Nivel, RotaUsuario } from '@/types'
 
 const routes: RouteRecordRaw[] = [
@@ -73,6 +74,12 @@ const routes: RouteRecordRaw[] = [
         name: 'painel',
         component: () => import('@/views/PainelView.vue'),
         meta: { title: 'Painel', breadcrumb: 'Painel', rota: 'dashboard' },
+      },
+      {
+        path: 'ponto',
+        name: 'ponto',
+        component: () => import('@/views/PontoView.vue'),
+        meta: { title: 'Ponto', breadcrumb: 'Ponto' },
       },
       {
         path: 'equipamentos',
@@ -207,6 +214,17 @@ router.beforeEach(async (to) => {
 
   if (auth.isAuthenticated && auth.mustChangePassword && to.name !== 'trocar-senha') {
     return { name: 'trocar-senha' }
+  }
+
+  // Técnico precisa bater ponto para acessar o resto do sistema.
+  if (auth.isAuthenticated && auth.user?.nivel === 'TECNICO' && to.name !== 'ponto' && to.name !== 'trocar-senha') {
+    const ponto = usePontoStore()
+    if (!ponto.carregado) {
+      await ponto.carregar()
+    }
+    if (!ponto.liberado) {
+      return { name: 'ponto' }
+    }
   }
 
   const roles = to.meta.roles as Nivel[] | undefined

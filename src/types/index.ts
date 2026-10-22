@@ -444,3 +444,49 @@ export function rotuloPerfil(nivel: Nivel | undefined | null): string {
       return '—'
   }
 }
+
+
+/* ---------- Ponto (registro diario de presenca do tecnico) ---------- */
+
+export interface PontoRegistro {
+  id: string
+  usuarioId: string
+  usuario?: { id: string; nome: string; nivel: string; filial: string }
+  agendaId?: string | null
+  escola?: string | null
+  data: string
+  batidoEm: string
+  latitude?: number | null
+  longitude?: number | null
+  accuracy?: number | null
+  dentroDoRaio?: boolean | null
+  distanciaMetros?: number | null
+  escolasReferencia?: string[]
+  semAgenda?: boolean
+  status: 'NO_HORARIO' | 'TARDIO_PENDENTE' | 'TARDIO_AUTORIZADO' | 'TARDIO_REPROVADO'
+  autorizadoPor?: string | null
+  autorizadoEm?: string | null
+  justificativa?: string | null
+}
+
+export interface PontoEscolaRef {
+  nome: string
+  latitude: number | null
+  longitude: number | null
+}
+
+export interface PontoVisita {
+  agendaId: string | null
+  escola: string
+  latitude: number | null
+  longitude: number | null
+  ponto: PontoRegistro | null
+}
+
+export interface PontoHojeResponse {
+  status: 'NAO_BATIDO' | 'BATIDO' | 'PENDENTE' | 'REPROVADO' | 'FERIAS'
+  visitas: PontoVisita[]
+  dentroDaJanela: boolean
+  horaAtual: string
+  semAgenda: boolean
+}
