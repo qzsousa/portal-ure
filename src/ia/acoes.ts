@@ -248,8 +248,9 @@ export const ACOES_TOOLS: any[] = [
         properties: {
           escola: { type: 'string', description: 'Nome da escola' },
           data: { type: 'string', description: 'Data YYYY-MM-DD' },
-          tecnico: { type: 'string', description: 'Nome ou id do tecnico' },
-          confirmar: { type: 'boolean', description: 'true somente apos confirmacao explicita do usuario' },
+           tecnico: { type: 'string', description: 'Nome ou id do tecnico' },
+           solicitarPonto: { type: 'boolean', description: 'true se deve solicitar ponto (bater ponto) para este atendimento. Se o usuario nao informou, PERGUNTE antes de executar.' },
+           confirmar: { type: 'boolean', description: 'true somente apos confirmacao explicita do usuario' },
         },
         required: ['escola', 'data', 'tecnico'],
       },
@@ -811,6 +812,13 @@ export const ACOES_TOOLS: any[] = [
 export async function executarAcao(nome: string, args: any): Promise<any | null> {
   if (!ACOES_TOOL_NAMES.has(nome)) return null
   const a = args ?? {}
+  if (nome === 'atribuir_agenda' && a.solicitarPonto === undefined) {
+    return {
+      status: 'precisa_informacao',
+      acao: nome,
+      pergunta: 'Deseja solicitar ponto (bater ponto) para este atendimento? Responda sim ou nao.',
+    }
+  }
   try {
     if (WRITE_TOOLS.has(nome) && a.confirmar !== true) {
       return {
@@ -834,6 +842,13 @@ export async function executarAcao(nome: string, args: any): Promise<any | null>
         return { total: lista.length, atribuicoes: lista }
       }
       case 'atribuir_agenda': {
+        if (a.solicitarPonto === undefined) {
+          return {
+            status: 'precisa_informacao',
+            acao: 'atribuir_agenda',
+            pergunta: 'Deseja solicitar ponto (bater ponto) para este atendimento? Responda sim ou nao.',
+          }
+        }
         const escola = await resolverEscola(a.escola)
         const tec = await resolverTecnico(a.tecnico)
         try {
@@ -842,6 +857,7 @@ export async function executarAcao(nome: string, args: any): Promise<any | null>
             data: String(a.data),
             tecnicoId: tec.id,
             tecnicoNome: tec.nome,
+            solicitarPonto: Boolean(a.solicitarPonto),
           })
           return { sucesso: true, atribuicao: criada }
         } catch (e: any) {

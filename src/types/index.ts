@@ -319,6 +319,9 @@ export interface AtribuicaoAgenda {
    * atualizado.
    */
   tecnicoCor: string | null
+  observacao?: string | null
+  principal?: boolean
+  solicitarPonto?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -333,6 +336,8 @@ export interface AtribuicaoAgendaCreate {
   data: string
   tecnicoId: string
   tecnicoNome: string
+  observacao?: string
+  solicitarPonto?: boolean
 }
 
 /** Filtros do `GET /api/agenda` — todos opcionais. */
@@ -478,6 +483,7 @@ export interface PontoEscolaRef {
 export interface PontoVisita {
   agendaId: string | null
   escola: string
+  principal: boolean
   latitude: number | null
   longitude: number | null
   ponto: PontoRegistro | null

@@ -230,6 +230,8 @@ const modalAberto = ref(false)
 const diaSel = ref('')
 const escolaSel = ref('')
 const tecnicoSel = ref('')
+const observacaoSel = ref('')
+const solicitarPontoSel = ref(true)
 
 const atribuicoesDoDia = computed(() => atribuicoes[diaSel.value] || [])
 
@@ -246,6 +248,8 @@ function abrirDia(c: CelulaDia) {
   diaSel.value = c.iso
   escolaSel.value = ''
   tecnicoSel.value = ''
+  observacaoSel.value = ''
+  solicitarPontoSel.value = true
   modalAberto.value = true
 }
 
@@ -259,6 +263,8 @@ async function salvar() {
       data: diaSel.value,
       tecnicoId: tecnicoSel.value,
       tecnicoNome: tecnico?.nome || '',
+      observacao: observacaoSel.value.trim() || undefined,
+      solicitarPonto: solicitarPontoSel.value,
     })
     const chave = chaveDaData(criada.data)
     if (!atribuicoes[chave]) atribuicoes[chave] = []
@@ -468,6 +474,7 @@ onMounted(() => {
               <span class="atribuicao-info">
                 <strong>{{ a.tecnicoNome }}</strong>
                 <span class="atribuicao-escola">{{ a.escola }}</span>
+                <span v-if="a.observacao" class="atribuicao-obs">{{ a.observacao }}</span>
               </span>
               <button
                 v-if="podeRemover"
@@ -513,6 +520,22 @@ onMounted(() => {
             </option>
             <option v-for="t in estado.tecnicos" :key="t.id" :value="t.id">{{ t.nome }}</option>
           </select>
+        </div>
+        <div class="field">
+          <label for="agenda-obs">Observação (opcional)</label>
+          <textarea
+            id="agenda-obs"
+            v-model="observacaoSel"
+            class="select-input"
+            rows="2"
+            placeholder="Ex.: redirecionado para esta escola no mesmo dia"
+          />
+          <div class="field">
+            <label>
+              <input type="checkbox" v-model="solicitarPontoSel" />
+              Solicitar ponto para este atendimento
+            </label>
+          </div>
         </div>
       </div>
       <template #footer>
