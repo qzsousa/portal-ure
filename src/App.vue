@@ -23,5 +23,5 @@ onMounted(() => {
 <template>
   <RouterView />
   <ToastContainer />
-  <ChatWidget v-if="auth.isAuthenticated" />
+  <ChatWidget v-if="auth.isAuthenticated && auth.user?.nivel !== 'TECNICO'" />
 </template>
