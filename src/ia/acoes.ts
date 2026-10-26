@@ -250,6 +250,7 @@ export const ACOES_TOOLS: any[] = [
           data: { type: 'string', description: 'Data YYYY-MM-DD' },
            tecnico: { type: 'string', description: 'Nome ou id do tecnico' },
            solicitarPonto: { type: 'boolean', description: 'true se deve solicitar ponto (bater ponto) para este atendimento. Se o usuario nao informou, PERGUNTE antes de executar.' },
+           observacao: { type: 'string', description: 'Observacao opcional para a atribuicao' },
            confirmar: { type: 'boolean', description: 'true somente apos confirmacao explicita do usuario' },
         },
         required: ['escola', 'data', 'tecnico'],
@@ -858,6 +859,7 @@ export async function executarAcao(nome: string, args: any): Promise<any | null>
             tecnicoId: tec.id,
             tecnicoNome: tec.nome,
             solicitarPonto: Boolean(a.solicitarPonto),
+            observacao: a.observacao,
           })
           return { sucesso: true, atribuicao: criada }
         } catch (e: any) {
