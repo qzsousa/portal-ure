@@ -46,3 +46,13 @@ export async function listarPontoAdmin(params?: { data?: string; status?: string
   const { data } = await chamadosApi.get<PontoRegistro[]>('/ponto', { params })
   return data
 }
+
+export async function resumoPontoHoje(): Promise<any[]> {
+  const { data } = await chamadosApi.get<any[]>('/ponto/resumo-hoje')
+  return data
+}
+
+export async function marcarFerias(usuarioId: string, inicio: string | null, fim: string | null): Promise<any> {
+  const { data } = await chamadosApi.patch(`/usuarios/${usuarioId}/ferias`, { inicio, fim })
+  return data
+}
