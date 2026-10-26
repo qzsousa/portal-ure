@@ -129,9 +129,7 @@ async function registrar() {
     await ponto.carregar()
     historico.value = isAdmin.value ? await listarPontoAdmin({}) : await historicoPonto({})
     if (r.status === 'PENDENTE') {
-      const nome = auth.user?.nome || 'Técnico'
-      const escola = visitaAtiva.value?.escola || ''
-      const msg = encodeURIComponent(`Olá Jessica, estou fora do horário permitido para registrar o ponto. Técnico: ${nome}. Escola: ${escola}. Justificativa: `)
+      const msg = encodeURIComponent(`Olá, Jessica! O horário para realizar o registro do ponto já foi encerrado.`)
       window.location.href = `https://wa.me/5511941363521?text=${msg}`
       return
     }
