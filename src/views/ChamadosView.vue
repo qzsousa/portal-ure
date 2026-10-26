@@ -22,11 +22,13 @@ import {
   Monitor,
   MessageCircle,
   MessageSquare,
-   Paperclip,
-   RotateCcw,
+  Paperclip,
+  RefreshCcw,
+  RotateCcw,
   School,
-   Search,
-   Send,
+  Search,
+  Send,
+  Settings,
   Star,
   ThumbsDown,
   ThumbsUp,
@@ -41,14 +43,16 @@ import PaginationBar from '@/components/ui/PaginationBar.vue'
 import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import {
-   aceitarChamado,
-   atualizarChamadosEmLote,
-   conferirChamado,
+  aceitarChamado,
+  atualizarChamadosEmLote,
+  atualizarStatusChamado,
+  conferirChamado,
   concluirChamado,
   deletarChamado,
   emailDoSolicitante,
-   ehRecuperacaoDeSenha,
-   getChamado,
+  ehRecuperacaoDeSenha,
+  encaminharChamado,
+  getChamado,
   listarChamados,
   listarTecnicos,
   listarTecnicosDaUnidade,
@@ -74,7 +78,7 @@ import {
 import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
 import { formatDate, formatDateTime } from '@/utils/format'
 import { validarArquivo, MAX_ANEXOS, ACCEPT_ANEXO } from '@/utils/anexos'
-import { chaveDaCategoria } from '@/utils/tecnicos'
+import { GRUPO_UNIDADE, chaveDaCategoria, ehCategoriaComLiberacao, ordenarTecnicos } from '@/utils/tecnicos'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import {
@@ -585,10 +589,11 @@ const textoResposta = ref('')
 const chaveCategoria = computed(() => chaveDaCategoria(detalhe.value))
 
 /** Chamado de Sistemas/E-mail — a lista de destino é a de quem liberou a categoria. */
-
+const categoriaLiberada = computed(() => ehCategoriaComLiberacao(chaveCategoria.value))
 
 /* ------- Encaminhar para técnico (matriz) ------- */
 const encaminharAberto = ref(false)
+const encaminhando = ref(false)
 const carregandoTecnicos = ref(false)
 const tecnicos = ref<TecnicoDestino[]>([])
 const tecnicosDaUnidade = ref<TecnicoDestino[]>([])
@@ -596,15 +601,56 @@ const tecnicosDaUnidade = ref<TecnicoDestino[]>([])
 const encDestino = ref('UNIDADE')
 const encObservacao = ref('')
 
+/** Opções do select agrupadas: quem atende a escola e os demais técnicos. */
+const gruposTecnicos = computed(() => {
+  const atende = new Set(tecnicosDaUnidade.value.map((t) => t.id))
+  const rotulo = (t: TecnicoDestino) =>
+    t.abertos === undefined ? t.nome : `${t.nome} · ${t.abertos} aberto${t.abertos === 1 ? '' : 's'}`
 
+  // A escala ordena o select. Quem PODE receber veio filtrado do backend: nas
+  // categorias com liberação (Sistemas/E-mail), só quem tem a categoria marcada
+  // no perfil chega até aqui.
+  const ordenados = ordenarTecnicos(tecnicos.value, { categoriaChave: chaveCategoria.value })
+
+  const daUnidade = ordenados.filter((t) => atende.has(t.id))
+  const outros = ordenados.filter((t) => !atende.has(t.id))
+
+  const grupos: Array<{ nome: string; opcoes: Array<{ valor: string; rotulo: string }> }> = []
+  if (daUnidade.length) {
+    grupos.push({ nome: GRUPO_UNIDADE, opcoes: daUnidade.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })) })
+  }
+  if (outros.length) {
+    grupos.push({
+      nome: categoriaLiberada.value ? 'Liberados para este assunto' : 'Outros técnicos',
+      opcoes: outros.map((t) => ({ valor: `TEC:${t.id}`, rotulo: rotulo(t) })),
+    })
+  }
+  return grupos
+})
 
 /** true quando quem atende a unidade entrou no select (não entrou em Sistemas/E-mail). */
+const unidadeNaLista = computed(() => gruposTecnicos.value[0]?.nome === GRUPO_UNIDADE)
 
+/** Rótulo da opção "Técnico da unidade" (o sucessor é a sugestão do backend). */
+const rotuloTecnicoDaUnidade = computed(() => {
+  if (carregandoTecnicos.value) return 'Carregando técnicos...'
+  const sugerido = tecnicosDaUnidade.value[0]
+  if (!sugerido) return 'Técnico da unidade — nenhum técnico cadastrado'
+  // Em Sistemas/E-mail o técnico da unidade pode não atender esse tipo de
+  // chamado: não nomeia ninguém que ficou fora da lista.
+  if (!unidadeNaLista.value) return 'Técnico da unidade'
+  return `Técnico da unidade — ${sugerido.nome} (sugerido)`
+})
+
+const podeEncaminhar = computed(
+  () => !encaminhando.value && (encDestino.value === 'UNIDADE' || encDestino.value.startsWith('TEC:')),
+)
 
 /** Abre o modal de detalhes (se preciso) e já abre a caixa de encaminhamento. */
 async function abrirEncaminhar(c: Chamado) {
   if (detalhe.value?.id !== c.id) await abrirDetalhe(c)
   if (detalhe.value?.id !== c.id) return
+  secaoAberta.value = 'matriz'
   encaminharAberto.value = true
   encDestino.value = 'UNIDADE'
   encObservacao.value = ''
@@ -626,6 +672,33 @@ async function abrirEncaminhar(c: Chamado) {
     ui.error(apiError(e, 'Não foi possível carregar os técnicos.'))
   } finally {
     carregandoTecnicos.value = false
+  }
+}
+
+async function confirmarEncaminhar() {
+  if (!detalhe.value || !podeEncaminhar.value) return
+  const alvo = detalhe.value
+  const anterior = alvo.responsavel
+  if (anterior && !window.confirm(
+    `O chamado já tem ${anterior} como responsável. Reencaminhar para outro técnico?`,
+  )) return
+
+  encaminhando.value = true
+  try {
+    const ehUnidade = encDestino.value === 'UNIDADE'
+    const res = await encaminharChamado(alvo.id, {
+      modo: ehUnidade ? 'UNIDADE' : 'TECNICO',
+      tecnicoId: ehUnidade ? undefined : encDestino.value.slice(4),
+      observacao: encObservacao.value.trim() || undefined,
+    })
+    detalhe.value = res.chamado
+    encaminharAberto.value = false
+    ui.success(`Chamado encaminhado para ${res.tecnico.nome}.`)
+    await carregar(true)
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao encaminhar o chamado.'))
+  } finally {
+    encaminhando.value = false
   }
 }
 
@@ -1513,6 +1586,50 @@ const TOM_ATIVIDADE: Record<TipoAtividade, TomTimeline> = {
   APROVACAO: 'green',
 }
 
+async function salvarStatus() {
+  if (!detalhe.value) return
+  // Matriz: ao colocar em "Aguardando resposta", a pergunta é obrigatória
+  if (ehMatriz.value && novoStatus.value === 'COMUNICADO' && detalhe.value.status !== 'COMUNICADO' && !perguntaEscola.value.trim()) {
+    ui.error('Escreva a pergunta/solicitação para o solicitante antes de salvar.')
+    return
+  }
+  salvando.value = true
+  try {
+    const atualizado = await atualizarStatusChamado(detalhe.value.id, {
+      status: novoStatus.value,
+      descricaoResolucao: descricaoResolucao.value || undefined,
+      ...(novoStatus.value === 'COMUNICADO' && perguntaEscola.value.trim()
+        ? { pergunta: perguntaEscola.value.trim(), perguntaAnexos: anexosPergunta.value }
+        : {}),
+    })
+    detalhe.value = atualizado
+    novoStatus.value = atualizado.status
+    perguntaEscola.value = ''
+    anexosPergunta.value = []
+    ui.success(`Chamado ${atualizado.protocolo} atualizado para "${rotuloStatusChamado(atualizado.status)}".`)
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao atualizar o status.'))
+  } finally {
+    salvando.value = false
+  }
+}
+
+async function enviarResposta() {
+  if (!detalhe.value || !textoResposta.value.trim()) return
+  salvando.value = true
+  try {
+    const atualizado = await responderChamado(detalhe.value.id, { texto: textoResposta.value.trim() })
+    detalhe.value = atualizado
+textoResposta.value = ''
+    ui.success('Comentário registrado no histórico.')
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao registrar resposta.'))
+  } finally {
+    salvando.value = false
+  }
+}
+
 /* ------- Recuperação de senha (gestor pediu → ADMIN responde com o código) ------- */
 
 /**
@@ -2349,7 +2466,177 @@ useAutoRefresh(async () => {
           </BaseAccordion>
 
         <!--
-              Ações da ESCOLA (GESTOR/VISUALIZADOR) que não são a conferência: o
+             Ações em exceção da matriz (ADMIN/TECNICO): encaminhar, corrigir
+             status, comentar. Fora da seção "Atendimento" de propósito — quem
+             trabalha no chamado não deveria ter que rolar até aqui para registrar
+             o serviço.
+        -->
+        <BaseAccordion
+          v-if="ehAdmin"
+          class="secao"
+          titulo="Ações da matriz"
+          tom="yellow"
+          :aberto="secaoAberta === 'matriz'"
+          @alternar="alternarSecao('matriz')"
+        >
+          <template #icone><Settings :size="16" /></template>
+
+          <template v-if="ehAdmin">
+            <!-- Encaminhar para técnico: categoria errada na abertura, equipamento,
+                 ou qualquer chamado que precise chegar a um técnico específico. -->
+            <div class="acao-box acao-encaminhar">
+            <h4><Wrench :size="15" /> Encaminhar para técnico</h4>
+            <div v-if="!encaminharAberto" class="acao-linha">
+              <p class="acao-dica">
+                <template v-if="detalhe.responsavel">
+                  Este chamado está com <strong>{{ detalhe.responsavel }}</strong> como responsável.
+                </template>
+                <template v-else>Ainda sem responsável técnico.</template>
+              </p>
+              <button class="btn btn-outline" type="button" @click="abrirEncaminhar(detalhe)">
+                <UserPlus :size="15" />
+                {{ detalhe.responsavel ? 'Reencaminhar' : 'Encaminhar' }}
+              </button>
+            </div>
+
+            <template v-else>
+              <div class="acao-linha">
+                <select v-model="encDestino" class="select-input" :disabled="carregandoTecnicos">
+                  <option value="UNIDADE">{{ rotuloTecnicoDaUnidade }}</option>
+                  <optgroup v-for="grupo in gruposTecnicos" :key="grupo.nome" :label="grupo.nome">
+                    <option v-for="o in grupo.opcoes" :key="o.valor" :value="o.valor">{{ o.rotulo }}</option>
+                  </optgroup>
+                </select>
+                <button
+                  class="btn btn-primary"
+                  type="button"
+                  :disabled="!podeEncaminhar"
+                  @click="confirmarEncaminhar"
+                >
+                  <UserPlus :size="15" />
+                  Encaminhar
+                </button>
+                <button
+                  class="btn btn-outline"
+                  type="button"
+                  :disabled="encaminhando"
+                  @click="encaminharAberto = false"
+                >
+                  Cancelar
+                </button>
+              </div>
+              <input
+                v-model="encObservacao"
+                class="input"
+                maxlength="500"
+                placeholder="Observação (opcional) — fica registrada no histórico"
+              />
+              <p v-if="carregandoTecnicos" class="acao-dica">Carregando técnicos...</p>
+              <p v-else-if="categoriaLiberada && !tecnicosDaUnidade.length" class="acao-dica enc-aviso">
+                Nenhum técnico está liberado para este assunto no perfil. Em
+                <strong>Configurações → Encaminhamento</strong> ou em
+                <strong>Usuários → Escopo de tipos</strong> você marca quem atende
+                esta categoria.
+              </p>
+              <p v-else-if="!tecnicosDaUnidade.length" class="acao-dica enc-aviso">
+                Nenhum técnico ativo atendendo {{ detalhe.unidade }} está cadastrado — escolha um técnico na lista.
+              </p>
+              <p v-else-if="!unidadeNaLista && categoriaLiberada" class="acao-dica enc-aviso">
+                Este chamado não é atendido pelo técnico de {{ detalhe.unidade }}: em
+                Sistemas e E-mail só entra quem tem a categoria liberada no perfil.
+              </p>
+              <p v-else-if="detalhe.responsavel" class="acao-dica enc-aviso">
+                Ao encaminhar, <strong>{{ detalhe.responsavel }}</strong> deixa de ser o responsável.
+              </p>
+            </template>
+          </div>
+
+
+          <div class="acao-box">
+            <h4><RefreshCcw :size="15" /> Alterar status</h4>
+            <div class="acao-linha">
+              <select v-model="novoStatus" class="select-input">
+                <option v-for="s in STATUS_FLUXO" :key="s" :value="s">{{ rotuloStatusChamado(s) }}</option>
+              </select>
+              <button class="btn btn-primary" type="button" :disabled="salvando" @click="salvarStatus">
+                Salvar
+              </button>
+            </div>
+            <p class="acao-dica">
+              Correção para casos fora do fluxo (erro de encaminhamento, chamado encerrado por
+              decisão da matriz). O caminho normal é o botão da barra de ação acima.
+            </p>
+
+            <!-- Ao pedir retorno da escola, a pergunta (e os anexos) vão junto -->
+            <template v-if="novoStatus === 'COMUNICADO'">
+              <textarea
+                v-model="perguntaEscola"
+                class="input textarea"
+                placeholder="O que você precisa que a escola informe ou faça?"
+              />
+              <label class="anexo-label">
+                <Paperclip :size="14" /> Anexar arquivos (opcional — ficam disponíveis por 7 dias)
+                <input
+                  type="file"
+                  multiple
+                  :accept="ACCEPT_ANEXO"
+                  class="anexo-input"
+                  @change="(e) => onAnexosChange(e, anexosPergunta)"
+                />
+              </label>
+              <ul v-if="anexosPergunta.length" class="anexo-lista">
+                <li v-for="(a, i) in anexosPergunta" :key="i">
+                  <Paperclip :size="13" /> {{ a.nome }}
+                  <button type="button" class="anexo-remover" title="Remover anexo" @click="anexosPergunta.splice(i, 1)">
+                    <X :size="13" />
+                  </button>
+                </li>
+              </ul>
+            </template>
+
+            <textarea
+              v-if="novoStatus === 'AGUARDANDO_CONFERENCIA'"
+              v-model="descricaoResolucao"
+              class="input textarea"
+              placeholder="Descreva a conclusão (obrigatório informar o que foi feito)"
+            />
+          </div>
+
+          <div v-if="podeResponderComCodigo" class="acao-box acao-senha">
+            <h4><KeyRound :size="15" /> Pedido de senha da unidade</h4>
+            <p class="senha-aviso">
+              A Matriz não define a senha de ninguém. O que responde este chamado é um
+              <strong>código de primeiro acesso</strong>, que a pessoa usa na tela de acesso
+              do portal para criar a senha dela.
+            </p>
+            <div class="acao-linha">
+              <span class="senha-email">{{ emailDaUnidade }}</span>
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="emitindoCodigo"
+                @click="responderComCodigo"
+              >
+                <Loader2 v-if="emitindoCodigo" :size="14" />
+                {{ emitindoCodigo ? 'Gerando...' : 'Responder com código de acesso' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="acao-box">
+            <h4><Send :size="15" /> Adicionar comentário ao histórico</h4>
+            <div class="acao-linha">
+              <input v-model="textoResposta" class="input" placeholder="Escreva uma atualização..." />
+              <button class="btn btn-outline" type="button" :disabled="salvando || !textoResposta.trim()" @click="enviarResposta">
+                Registrar
+              </button>
+            </div>
+          </div>
+          </template>
+        </BaseAccordion>
+
+        <!--
+             Ações da ESCOLA (GESTOR/VISUALIZADOR) que não são a conferência: o
              aviso de que a equipe está com o chamado e o formulário de resposta
              à pergunta da matriz. A conferência em si mora na seção
              "Atendimento", porque a escola precisa ler os registros antes de
