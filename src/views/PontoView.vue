@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import BaseModal from '@/components/ui/BaseModal.vue'
 import { usePontoStore } from '@/stores/ponto'
 import {
   baterPonto,
@@ -9,6 +10,8 @@ import {
   reprovarPonto,
   historicoPonto,
   listarPontoAdmin,
+  resumoPontoHoje,
+  marcarFerias,
 } from '@/api/ponto'
 import type { PontoRegistro, PontoVisita } from '@/types'
 import {
@@ -27,11 +30,18 @@ const auth = useAuthStore()
 const ponto = usePontoStore()
 
 const isAdmin = computed(() => auth.user?.nivel === 'ADMIN')
+const tecnicosAlvo = ['HEBERT', 'JOSEMIR', 'VALDEIR', 'CHARLES', 'JOAO', 'CAROL', 'GUILHERME']
+const resumoFiltrado = computed(() => resumo.value.filter((r) => tecnicosAlvo.some((n) => (r.usuario?.nome || '').toUpperCase().includes(n))))
 const carregando = ref(false)
 const erro = ref('')
 const sucesso = ref('')
 const solicitacoes = ref<PontoRegistro[]>([])
 const historico = ref<PontoRegistro[]>([])
+const resumo = ref<any[]>([])
+const feriasModal = ref(false)
+const feriasUsuario = ref<any>(null)
+const feriasInicio = ref('')
+const feriasFim = ref('')
 const posicao = ref<{ lat: number; lng: number; accuracy: number } | null>(null)
 const geoErro = ref('')
 const obtendoGeo = ref(false)
@@ -72,6 +82,7 @@ async function carregar() {
     if (isAdmin.value) {
       solicitacoes.value = await listarSolicitacoesPonto({ status: 'TARDIO_PENDENTE' })
       historico.value = await listarPontoAdmin({})
+      resumo.value = await resumoPontoHoje()
     } else {
       historico.value = await historicoPonto({})
     }
@@ -144,7 +155,49 @@ async function reprovar(id: string) {
   historico.value = await listarPontoAdmin({})
 }
 
-const horaFormatada = (r: PontoRegistro) => r.batidoEm ? new Date(r.batidoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''
+function abrirFerias(u: any) {
+  feriasUsuario.value = u
+  feriasInicio.value = u.feriasInicio ? new Date(u.feriasInicio).toISOString().slice(0, 10) : ''
+  feriasFim.value = u.feriasFim ? new Date(u.feriasFim).toISOString().slice(0, 10) : ''
+  feriasModal.value = true
+}
+
+async function salvarFerias() {
+  if (!feriasUsuario.value) return
+  carregando.value = true
+  try {
+    await marcarFerias(feriasUsuario.value.id, feriasInicio.value || null, feriasFim.value || null)
+    feriasModal.value = false
+    resumo.value = await resumoPontoHoje()
+  } catch (e: any) {
+    erro.value = e?.response?.data?.message || 'Erro ao marcar férias'
+  } finally {
+    carregando.value = false
+  }
+}
+
+const horaFormatada = (r: PontoRegistro) => r.batidoEm ? new Date(r.batidoEm).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) : ''
+
+const dataFormatada = (r: PontoRegistro) => {
+  if (r.data) return new Date(r.data).toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' })
+  if (r.batidoEm) return new Date(r.batidoEm).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit' })
+  return ''
+}
+
+const statusLabel = (status: string | null | undefined) => {
+  switch (status) {
+    case 'NO_HORARIO': return 'No horário'
+    case 'TARDIO_AUTORIZADO': return 'Atraso autorizado'
+    case 'TARDIO_PENDENTE': return 'Aguardando aprovação'
+    case 'TARDIO_REPROVADO': return 'Atraso reprovado'
+    case 'BATIDO': return 'Ponto batido'
+    case 'PENDENTE': return 'Pendente'
+    case 'REPROVADO': return 'Reprovado'
+    case 'FERIAS': return 'Férias'
+    case 'NAO_BATIDO': return 'Não batido'
+    default: return status || '—'
+  }
+}
 
 const horaAgora = ref('')
 function atualizarHora() {
@@ -226,12 +279,16 @@ onMounted(() => {
 
       <!-- Formulário multi-visita -->
       <section v-else class="form-card">
-        <div class="window-banner" :class="ponto.hoje?.dentroDaJanela ? 'window-open' : 'window-closed'">
+        <div v-if="visitaAtiva?.principal" class="window-banner" :class="ponto.hoje?.dentroDaJanela ? 'window-open' : 'window-closed'">
           <Clock :size="16" />
           <span>
             Janela de ponto: <strong>08:00 às 08:30</strong>
           </span>
           <span class="window-tag">{{ ponto.hoje?.dentroDaJanela ? 'Aberta' : 'Fechada' }}</span>
+        </div>
+        <div v-else class="window-banner window-open">
+          <Clock :size="16" />
+          <span>Sem restrição de horário para esta visita.</span>
         </div>
 
         <div v-if="ponto.hoje?.semAgenda" class="inline-warn">
@@ -280,7 +337,7 @@ onMounted(() => {
           <p v-else-if="!coordsVisita" class="hint muted">Escola sem coordenadas cadastradas.</p>
         </div>
 
-        <div v-if="posicao && !ponto.hoje?.dentroDaJanela" class="alert alert-error">
+        <div v-if="posicao && visitaAtiva?.principal && !ponto.hoje?.dentroDaJanela" class="alert alert-error">
           <AlertTriangle :size="18" /> Você está fora do horario permitido para registrar o ponto. Entre contato com a Jessica via Whatsapp e justifique o atraso.
         </div>
 
@@ -288,7 +345,7 @@ onMounted(() => {
           <Loader2 v-if="carregando" class="spin" :size="18" />
           <template v-else>
             <CheckCircle2 :size="18" />
-            {{ ponto.hoje?.dentroDaJanela ? 'Bater ponto' : 'Solicitar autorização' }} — {{ visitaAtiva?.escola }}
+            {{ (visitaAtiva?.principal && !ponto.hoje?.dentroDaJanela) ? 'Solicitar autorização' : 'Bater ponto' }} — {{ visitaAtiva?.escola }}
           </template>
         </button>
 
@@ -304,10 +361,12 @@ onMounted(() => {
         <div v-for="r in historico" :key="r.id" class="hist-card">
           <div class="hist-main">
             <strong>{{ r.escola || '—' }}</strong>
-            <span class="muted">{{ new Date(r.data).toLocaleDateString('pt-BR') }} · {{ horaFormatada(r) }}</span>
+            <span class="hist-datetime">
+              <Clock :size="12" /> {{ dataFormatada(r) }} às {{ horaFormatada(r) }}
+            </span>
           </div>
           <div class="hist-meta">
-            <span class="chip chip-neutral">{{ r.status }}</span>
+            <span class="chip chip-neutral">{{ statusLabel(r.status) }}</span>
             <span v-if="r.distanciaMetros != null" class="chip" :class="r.dentroDoRaio === false ? 'chip-warn' : 'chip-ok'">
               {{ r.distanciaMetros }}m
             </span>
@@ -323,6 +382,38 @@ onMounted(() => {
     <!-- Admin -->
     <template v-else>
       <section class="admin-section">
+        <h2>Técnicos e ponto de hoje</h2>
+        <p class="muted">Status do ponto dos técnicos selecionados hoje.</p>
+        <div v-if="!resumoFiltrado.length" class="empty-state">Nenhum técnico encontrado.</div>
+        <div v-for="r in resumoFiltrado" :key="r.usuario.id" class="sol-card">
+          <div class="sol-info">
+            <strong>{{ r.usuario.nome }}</strong>
+            <span class="muted">{{ r.usuario.filial }}</span>
+            <div class="sol-meta">
+              <span class="chip" :class="r.status === 'BATIDO' ? 'chip-ok' : r.status === 'FERIAS' ? 'chip-neutral' : 'chip-warn'">{{ statusLabel(r.status) }}</span>
+            </div>
+            <div v-for="v in r.visitas" :key="v.escola" class="visita-resumo">
+              <span class="visita-escola">{{ v.escola }}</span>
+              <span class="chip chip-neutral">{{ statusLabel(v.status) }}</span>
+              <span v-if="v.batidoEm" class="visita-hora">
+                <Clock :size="12" /> {{ new Date(v.batidoEm).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }) }}
+              </span>
+              <span v-if="v.distanciaMetros != null" class="chip" :class="v.dentroDoRaio === false ? 'chip-warn' : 'chip-ok'">
+                {{ v.distanciaMetros }}m
+              </span>
+              <span v-if="String(v.status).startsWith('TARDIO')" class="chip chip-warn">Atrasado</span>
+              <span v-if="v.semAgenda" class="chip chip-warn">sem agenda</span>
+            </div>
+          </div>
+          <div class="sol-actions">
+            <button class="btn btn-outline" @click="abrirFerias(r.usuario)">
+              <Clock :size="16" /> Férias
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="admin-section">
         <h2>Solicitações de ponto tardio</h2>
         <p class="muted">Aprove ou reprove as solicitações dos técnicos.</p>
 
@@ -334,7 +425,10 @@ onMounted(() => {
         <div v-for="s in solicitacoes" :key="s.id" class="sol-card">
           <div class="sol-info">
             <strong>{{ s.usuario?.nome || s.usuarioId }}</strong>
-            <span class="muted">{{ s.escola }} — {{ new Date(s.batidoEm).toLocaleString('pt-BR') }}</span>
+            <span class="sol-escola">{{ s.escola }}</span>
+            <span class="sol-datetime">
+              <Clock :size="12" /> {{ new Date(s.batidoEm).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', day: '2-digit', month: '2-digit' }) }} às {{ horaFormatada(s) }}
+            </span>
             <div class="sol-meta">
               <span class="chip chip-neutral">dist: {{ s.distanciaMetros ?? '—' }}m</span>
               <span v-if="s.semAgenda" class="chip chip-warn">sem agenda</span>
@@ -358,10 +452,13 @@ onMounted(() => {
         <div v-for="r in historico" :key="r.id" class="hist-card">
           <div class="hist-main">
             <strong>{{ r.usuario?.nome || r.usuarioId }}</strong>
-            <span class="muted">{{ r.escola }} — {{ new Date(r.data).toLocaleDateString('pt-BR') }} · {{ horaFormatada(r) }}</span>
+            <span class="hist-escola">{{ r.escola }}</span>
+            <span class="hist-datetime">
+              <Clock :size="12" /> {{ dataFormatada(r) }} às {{ horaFormatada(r) }}
+            </span>
           </div>
           <div class="hist-meta">
-            <span class="chip chip-neutral">{{ r.status }}</span>
+            <span class="chip chip-neutral">{{ statusLabel(r.status) }}</span>
             <span v-if="r.distanciaMetros != null" class="chip" :class="r.dentroDoRaio === false ? 'chip-warn' : 'chip-ok'">
               {{ r.distanciaMetros }}m
             </span>
@@ -372,6 +469,25 @@ onMounted(() => {
         </div>
       </section>
     </template>
+
+    <BaseModal :aberto="feriasModal" titulo="Marcar férias" @fechar="feriasModal = false">
+      <div class="modal-campos">
+        <p class="muted">{{ feriasUsuario?.nome }}</p>
+        <div class="field">
+          <label>Início</label>
+          <input type="date" v-model="feriasInicio" class="select-input" />
+        </div>
+        <div class="field">
+          <label>Fim</label>
+          <input type="date" v-model="feriasFim" class="select-input" />
+        </div>
+      </div>
+      <template #footer>
+        <button class="btn btn-outline" @click="feriasModal = false">Cancelar</button>
+        <button class="btn btn-primary" @click="salvarFerias">Salvar</button>
+        <button class="btn btn-danger" @click="feriasInicio = ''; feriasFim = ''; salvarFerias()">Remover férias</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -437,7 +553,13 @@ onMounted(() => {
 .history-section h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 0.75rem; }
 .hist-card { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.85rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); margin-top: 0.5rem; box-shadow: var(--shadow-sm); }
 .hist-main { display: flex; flex-direction: column; gap: 2px; }
-.hist-meta { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.hist-escola { font-size: 0.85rem; color: var(--text-secondary); }
+.hist-datetime { display: inline-flex; align-items: center; gap: 4px; font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-top: 2px; }
+.sol-escola { font-size: 0.85rem; color: var(--text-secondary); }
+.sol-datetime { display: inline-flex; align-items: center; gap: 4px; font-size: 0.95rem; font-weight: 700; color: var(--text-primary); margin-top: 2px; }
+.visita-resumo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; padding: 6px 8px; background: var(--surface-muted); border-radius: var(--radius-sm); }
+.visita-escola { font-weight: 600; font-size: 0.85rem; }
+.visita-hora { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 640px) {
