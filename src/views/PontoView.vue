@@ -199,6 +199,18 @@ const statusLabel = (status: string | null | undefined) => {
   }
 }
 
+const dataCurta = (d: any) => d ? new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+
+const diasParaVoltar = (fim: any) => {
+  if (!fim) return null
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const f = new Date(fim)
+  f.setHours(0, 0, 0, 0)
+  const diff = Math.ceil((f.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24))
+  return diff
+}
+
 const horaAgora = ref('')
 function atualizarHora() {
   horaAgora.value = new Intl.DateTimeFormat('pt-BR', {
@@ -392,6 +404,12 @@ onMounted(() => {
             <div class="sol-meta">
               <span class="chip" :class="r.status === 'BATIDO' ? 'chip-ok' : r.status === 'FERIAS' ? 'chip-neutral' : 'chip-warn'">{{ statusLabel(r.status) }}</span>
             </div>
+            <div v-if="r.status === 'FERIAS'" class="ferias-info">
+              <span class="ferias-datas">Férias: {{ dataCurta(r.usuario.feriasInicio) }} a {{ dataCurta(r.usuario.feriasFim) }}</span>
+              <span v-if="diasParaVoltar(r.usuario.feriasFim) != null" class="ferias-volta">
+                {{ diasParaVoltar(r.usuario.feriasFim)! > 0 ? `Volta em ${diasParaVoltar(r.usuario.feriasFim)} dia(s)` : (diasParaVoltar(r.usuario.feriasFim) === 0 ? 'Volta hoje' : 'Já retornou') }}
+              </span>
+            </div>
             <div v-for="v in r.visitas" :key="v.escola" class="visita-resumo">
               <span class="visita-escola">{{ v.escola }}</span>
               <span class="chip chip-neutral">{{ statusLabel(v.status) }}</span>
@@ -560,6 +578,9 @@ onMounted(() => {
 .visita-resumo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; padding: 6px 8px; background: var(--surface-muted); border-radius: var(--radius-sm); }
 .visita-escola { font-weight: 600; font-size: 0.85rem; }
 .visita-hora { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); }
+.ferias-info { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 6px 8px; background: var(--slate-soft); border-radius: var(--radius-sm); }
+.ferias-datas { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); }
+.ferias-volta { font-size: 0.8rem; color: var(--text-secondary); }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 640px) {
