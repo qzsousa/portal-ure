@@ -30,8 +30,9 @@ const auth = useAuthStore()
 const ponto = usePontoStore()
 
 const isAdmin = computed(() => auth.user?.nivel === 'ADMIN')
+const normNome = (s: any) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
 const tecnicosAlvo = ['HEBERT', 'JOSEMIR', 'VALDEIR', 'CHARLES', 'JOAO', 'CAROL', 'GUILHERME']
-const resumoFiltrado = computed(() => resumo.value.filter((r) => tecnicosAlvo.some((n) => (r.usuario?.nome || '').toUpperCase().includes(n))))
+const resumoFiltrado = computed(() => resumo.value.filter((r) => tecnicosAlvo.some((n) => normNome(r.usuario?.nome).includes(n))))
 const carregando = ref(false)
 const erro = ref('')
 const sucesso = ref('')
@@ -398,7 +399,6 @@ onMounted(() => {
         <div v-for="r in resumoFiltrado" :key="r.usuario.id" class="sol-card">
           <div class="sol-info">
             <strong>{{ r.usuario.nome }}</strong>
-            <span class="muted">{{ r.usuario.filial }}</span>
             <div class="sol-meta">
               <span class="chip" :class="r.status === 'BATIDO' ? 'chip-ok' : r.status === 'FERIAS' ? 'chip-neutral' : 'chip-warn'">{{ statusLabel(r.status) }}</span>
             </div>
