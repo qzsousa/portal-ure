@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 import ChatWidget from '@/components/chat/ChatWidget.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useContextoIA } from '@/composables/useContextoIA'
 
 const auth = useAuthStore()
+const router = useRouter()
 const { carregar } = useContextoIA()
 
 /**
@@ -17,6 +18,19 @@ const { carregar } = useContextoIA()
  */
 onMounted(() => {
   if (localStorage.getItem('portal_token') || document.cookie.includes('refresh')) void carregar()
+
+  const agora = new Date()
+  const inicio = new Date(agora)
+  inicio.setHours(17, 0, 0, 0)
+  const fim = new Date(agora)
+  fim.setHours(20, 0, 0, 0)
+  const ms = inicio.getTime() - agora.getTime()
+  if (ms > 0) {
+    setTimeout(() => {
+      const n = new Date()
+      if (n >= inicio && n <= fim) router.push({ name: 'manutencao-sistema' })
+    }, ms)
+  }
 })
 </script>
 
