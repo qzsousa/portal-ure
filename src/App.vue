@@ -21,7 +21,23 @@ onMounted(() => {
 </script>
 
 <template>
+  <div class="maintenance-banner">AVISO: o portal estará em manutenção das 17:00 às 20:00.</div>
   <RouterView />
   <ToastContainer />
   <ChatWidget v-if="auth.isAuthenticated && auth.user?.nivel !== 'TECNICO'" />
 </template>
+
+<style>
+.maintenance-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: #d32f2f;
+  color: #fff;
+  padding: 14px 16px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  border-bottom: 2px solid #b71c1c;
+}
+</style>

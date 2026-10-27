@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { usePontoStore } from '@/stores/ponto'
 import type { Nivel, RotaUsuario } from '@/types'
 
 const routes: RouteRecordRaw[] = [
@@ -56,13 +55,19 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/publico/DashboardDirigenteView.vue'),
     meta: { public: true, title: 'Painel do Setor' },
   },
+  {
+    path: '/manutencao-sistema',
+    name: 'manutencao-sistema',
+    component: () => import('@/views/ManutencaoSistemaView.vue'),
+    meta: { public: true, title: 'Manutenção' },
+  },
 
   // ---- Área autenticada (shell com sidebar/topbar) ----
   {
     path: '/',
     component: () => import('@/components/layout/AppShell.vue'),
     children: [
-      { path: '', redirect: { name: 'painel' } },
+      { path: '', redirect: () => ({ name: useAuthStore().rotaInicial }) },
       {
         path: 'chat',
         name: 'chat',
@@ -196,7 +201,20 @@ export const router = createRouter({
   routes,
 })
 
+function emManutencaoSistema() {
+  const agora = new Date();
+  const inicio = new Date(agora);
+  inicio.setHours(17, 0, 0, 0);
+  const fim = new Date(agora);
+  fim.setHours(20, 0, 0, 0);
+  return agora >= inicio && agora <= fim;
+}
+
 router.beforeEach(async (to) => {
+  if (emManutencaoSistema() && to.name !== 'manutencao-sistema') {
+    return { name: 'manutencao-sistema' };
+  }
+
   const auth = useAuthStore()
   if (!auth.isInitialized) {
     await auth.initialize()
@@ -209,23 +227,18 @@ router.beforeEach(async (to) => {
   }
 
   if (isPublic && auth.isAuthenticated && to.name === 'login') {
-    return { name: 'painel' }
+    return { name: auth.rotaInicial }
   }
 
   if (auth.isAuthenticated && auth.mustChangePassword && to.name !== 'trocar-senha') {
     return { name: 'trocar-senha' }
   }
 
-  // Técnico precisa bater ponto para acessar o resto do sistema.
-  if (auth.isAuthenticated && auth.user?.nivel === 'TECNICO' && to.name !== 'ponto' && to.name !== 'trocar-senha') {
-    const ponto = usePontoStore()
-    if (!ponto.carregado) {
-      await ponto.carregar()
-    }
-    if (!ponto.liberado) {
-      return { name: 'ponto' }
-    }
+  if (auth.isAuthenticated && auth.user?.nivel === 'TECNICO' && to.name === 'painel') {
+    return { name: 'ponto' }
   }
+
+
 
   const roles = to.meta.roles as Nivel[] | undefined
   if (roles && auth.user && !roles.includes(auth.user.nivel)) {
