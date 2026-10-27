@@ -201,20 +201,7 @@ export const router = createRouter({
   routes,
 })
 
-function emManutencaoSistema() {
-  const agora = new Date();
-  const inicio = new Date(agora);
-  inicio.setHours(17, 0, 0, 0);
-  const fim = new Date(agora);
-  fim.setHours(20, 0, 0, 0);
-  return agora >= inicio && agora <= fim;
-}
-
 router.beforeEach(async (to) => {
-  if (emManutencaoSistema() && to.name !== 'manutencao-sistema') {
-    return { name: 'manutencao-sistema' };
-  }
-
   const auth = useAuthStore()
   if (!auth.isInitialized) {
     await auth.initialize()
