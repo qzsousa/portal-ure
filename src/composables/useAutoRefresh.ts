@@ -3,9 +3,9 @@ import { onMounted, onUnmounted } from 'vue'
 /** Intervalos de atualização automática usados no portal. */
 export const AUTO_REFRESH_MS = {
   /** Telas operacionais sensíveis (chamados, equipamentos, painel público). */
-  rapido: 30_000,
+  rapido: 2 * 60 * 1000,
   /** Telas analíticas/secundárias (painel, manutenção, feedback, dirigente). */
-  normal: 60_000,
+  normal: 5 * 60 * 1000,
   /**
    * Monitoramento das câmeras DVR.
    *
