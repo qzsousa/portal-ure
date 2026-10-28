@@ -15,7 +15,7 @@ import type { EmprestimoAtivo, Equipamento } from '@/types'
  * Validade da lista completa em cache. Só é usada no caminho de compatibilidade
  * (SCE sem `porModelo`), que baixa a lista inteira para contar.
  */
-const TTL_CACHE_MS = 2 * 60 * 1000
+const TTL_CACHE_MS = 5 * 60 * 1000
 
 export interface EquipFiltros {
   busca: string

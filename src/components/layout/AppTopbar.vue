@@ -35,7 +35,7 @@ function trocarSenha() {
 }
 
 /* ---------- Notificações ---------- */
-const NOTIF_POLL_MS = 30_000
+const NOTIF_POLL_MS = 2 * 60 * 1000
 
 const notifAberto = ref(false)
 const notificacoes = ref<Notificacao[]>([])
@@ -178,14 +178,22 @@ function iniciarRelogio() {
 
 onMounted(() => {
   void buscarNotificacoes()
-  poller = setInterval(() => void buscarNotificacoes(), NOTIF_POLL_MS)
+  poller = setInterval(() => {
+    if (!document.hidden) void buscarNotificacoes()
+  }, NOTIF_POLL_MS)
+  document.addEventListener('visibilitychange', aoVoltarNotif)
   document.addEventListener('click', fecharMenu)
   iniciarRelogio()
 })
 
+function aoVoltarNotif() {
+  if (!document.hidden) void buscarNotificacoes()
+}
+
 onUnmounted(() => {
   if (poller) clearInterval(poller)
   if (relogio) clearTimeout(relogio)
+  document.removeEventListener('visibilitychange', aoVoltarNotif)
   document.removeEventListener('click', fecharMenu)
 })
 </script>

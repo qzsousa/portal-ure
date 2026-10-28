@@ -8,7 +8,7 @@ import StatCard from '@/components/ui/StatCard.vue'
 import StatusPill from '@/components/ui/StatusPill.vue'
 import { getDashboardMatriz, type DashboardMatriz } from '@/api/publico'
 import { rotuloStatusChamado } from '@/api/chamados'
-import { AUTO_REFRESH_MS, useAutoRefresh } from '@/composables/useAutoRefresh'
+
 
 /* Espelha o conteúdo do "Painel do Setor" (DashboardDirigenteView) do sistema antigo,
  * agora como página pública do portal, lendo GET /dashboard/matriz. */
@@ -159,8 +159,7 @@ async function carregar(silencioso = false) {
 
 onMounted(() => void carregar())
 
-/* Atualização automática (pausada com a aba oculta, recarrega ao voltar). */
-useAutoRefresh(() => carregar(true), AUTO_REFRESH_MS.normal)
+/* Sem atualização automática: payload pesado; use o botão "Atualizar". */
 </script>
 
 <template>
