@@ -24,6 +24,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true, title: 'Novo chamado' },
   },
   {
+    path: '/assistente',
+    name: 'assistente',
+    component: () => import('@/views/publico/ChatChamadoView.vue'),
+    meta: { public: true, title: 'Assistente CaféIA' },
+  },
+  {
     path: '/consulta',
     name: 'consulta',
     component: () => import('@/views/publico/ConsultaProtocoloView.vue'),

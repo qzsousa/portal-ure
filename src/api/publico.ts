@@ -344,3 +344,38 @@ export async function getFormularioPublico(): Promise<FormularioCategoria[]> {
   const { data } = await publicoHttp.get<{ data: FormularioCategoria[] }>('/formulario/publico')
   return data.data
 }
+
+/* ---------- IA publica (assistente Beam) ---------- */
+
+export interface IAPublicoMensagem {
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string | null
+  name?: string
+  tool_call_id?: string
+  tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>
+}
+
+export interface IAPublicoTool {
+  type: 'function'
+  function: { name: string; description?: string; parameters?: Record<string, unknown> }
+}
+
+export interface IAPublicoPayload {
+  messages: IAPublicoMensagem[]
+  tools?: IAPublicoTool[]
+  tool_choice?: 'auto' | 'none' | 'required'
+  temperature?: number
+  max_tokens?: number
+  provedores?: string[]
+  modelo?: string
+}
+
+export async function chamarIAPublico(payload: IAPublicoPayload): Promise<{ provedor: string; choices?: any[] }> {
+  const { data } = await publicoHttp.post('/ia/publico/chat', payload)
+  return data
+}
+
+export async function listarModelosIAPublico(): Promise<string[]> {
+  const { data } = await publicoHttp.get('/ia/publico/modelos')
+  return Array.isArray(data?.modelos) ? data.modelos : []
+}

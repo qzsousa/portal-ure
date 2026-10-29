@@ -747,6 +747,15 @@ onMounted(async () => {
           </button>
         </div>
 
+        <!-- Assistente Beam -->
+        <section class="card beam-card">
+          <div class="beam-info">
+            <strong>Prefere conversar?</strong>
+            <p>O assistente Beam te guia passo a passo para abrir o chamado.</p>
+          </div>
+          <RouterLink to="/assistente" class="btn btn-primary">Falar com a CaféIA</RouterLink>
+        </section>
+
         <!-- Cartão de contato -->
         <section class="card contato">
           <div class="contato-info">
