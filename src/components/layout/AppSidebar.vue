@@ -18,6 +18,7 @@ import {
   Star,
   Users,
   Wrench,
+  Wifi,
 } from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
@@ -32,6 +33,10 @@ interface MenuItem {
   gestorTambem?: boolean
   /** Visível apenas para a matriz (ADMIN/TECNICO) */
   matrizOnly?: boolean
+  /** Visível apenas para técnico */
+  tecnicoOnly?: boolean
+  /** Item visível mas bloqueado (não clicável) */
+  disabled?: boolean
   /**
    * Esconde para usuário com ESCOPO DE TIPOS — a conta criada para atender só
    * alguns tipos de chamado, que não tem inventário nem manutenção sob
@@ -65,6 +70,7 @@ const items: MenuItem[] = [
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3, grupo: 'Atendimento', semEscopoTipos: true, rota: 'chamados' },
   { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, grupo: 'Equipamentos', semEscopoTipos: true, rota: 'equipamentos' },
   { to: '/manutencao', label: 'Manutenção', icon: Wrench, grupo: 'Equipamentos', semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/wifi', label: "Levantamento AP's", icon: Wifi, grupo: 'Equipamentos', tecnicoOnly: true, semEscopoTipos: true, rota: 'wifi', disabled: true },
   { to: '/unidades', label: 'Unidades Escolares', icon: School, grupo: 'Escolas', matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
   { to: '/agenda', label: 'Agenda', icon: CalendarDays, grupo: 'Escolas', matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
   { to: '/links-internet', label: 'Links de Internet', icon: Globe, grupo: 'Escolas', adminOnly: true },
@@ -72,6 +78,7 @@ const items: MenuItem[] = [
   { to: '/ponto', label: 'Ponto', icon: Clock, grupo: 'Administração', matrizOnly: true },
   { to: '/usuarios', label: 'Usuários', icon: Users, grupo: 'Administração', gestorTambem: true, rota: 'usuarios' },
   { to: '/configuracoes', label: 'Configurações', icon: Settings, grupo: 'Administração', adminOnly: true, rota: 'formulario' },
+  { to: '/wifi-dashboard', label: "Painel AP's", icon: Wifi, grupo: 'Escolas', adminOnly: true, rota: 'wifi' },
 ]
 
 const visibleItems = computed(() =>
@@ -84,6 +91,7 @@ const visibleItems = computed(() =>
     if (i.adminOnly) return auth.user?.nivel === 'ADMIN'
     if (i.gestorTambem) return ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || '')
     if (i.matrizOnly) return ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || '')
+    if (i.tecnicoOnly) return auth.user?.nivel === 'TECNICO'
     return true
   }),
 )
@@ -162,16 +170,25 @@ function alternarGrupo(label: string) {
           />
         </button>
         <div v-show="!!abertos[grupo.label]" class="menu-group-items">
-          <RouterLink
-            v-for="item in grupo.items"
-            :key="item.to"
-            :to="item.to"
-            class="menu-item"
-            :class="{ active: route.path.startsWith(item.to) }"
-          >
-            <component :is="item.icon" :size="18" :stroke-width="2" />
-            <span>{{ item.label }}</span>
-          </RouterLink>
+          <template v-for="item in grupo.items" :key="item.to">
+            <RouterLink
+              v-if="!item.disabled"
+              :to="item.to"
+              class="menu-item"
+              :class="{ active: route.path.startsWith(item.to) }"
+            >
+              <component :is="item.icon" :size="18" :stroke-width="2" />
+              <span>{{ item.label }}</span>
+            </RouterLink>
+            <div
+              v-else
+              class="menu-item disabled"
+              aria-disabled="true"
+            >
+              <component :is="item.icon" :size="18" :stroke-width="2" />
+              <span>{{ item.label }}</span>
+            </div>
+          </template>
         </div>
       </section>
     </nav>
@@ -311,6 +328,12 @@ function alternarGrupo(label: string) {
   background: var(--brand-gold);
   color: var(--sidebar-text-active);
   font-weight: 700;
+}
+
+.menu-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .sidebar-footer {

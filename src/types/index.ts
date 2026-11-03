@@ -74,6 +74,7 @@ export const ROTAS_USUARIO = [
   'usuarios',
   'escolas',
   'inventario',
+  'wifi',
   'tutoriais',
   'encaminhamentos',
   'notificacoes',
