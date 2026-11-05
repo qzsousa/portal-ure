@@ -80,6 +80,7 @@ async function carregar() {
   erro.value = ''
   try {
     await ponto.carregar()
+    selecionarMaisProxima()
     if (isAdmin.value) {
       solicitacoes.value = await listarSolicitacoesPonto({ status: 'TARDIO_PENDENTE' })
       historico.value = await listarPontoAdmin({})
@@ -94,6 +95,19 @@ async function carregar() {
   }
 }
 
+function selecionarMaisProxima() {
+  if (!ponto.hoje?.semAgenda || !posicao.value) return
+  const vs = ponto.hoje?.visitas ?? []
+  let best: any = null
+  let bestDist = Infinity
+  for (const v of vs) {
+    if (v.latitude == null || v.longitude == null) continue
+    const d = haversine(posicao.value.lat, posicao.value.lng, v.latitude, v.longitude)
+    if (d < bestDist) { bestDist = d; best = v }
+  }
+  if (best) visitaSelecionada.value = best.agendaId ?? best.escola
+}
+
 function obterLocalizacao() {
   if (!navigator.geolocation) {
     geoErro.value = 'Geolocalização não suportada neste navegador'
@@ -105,6 +119,7 @@ function obterLocalizacao() {
     (p) => {
       posicao.value = { lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }
       obtendoGeo.value = false
+      selecionarMaisProxima()
     },
     (e) => {
       geoErro.value = e.message || 'Não foi possível obter a localização'
@@ -304,11 +319,11 @@ onMounted(() => {
 
         <div v-if="ponto.hoje?.semAgenda" class="inline-warn">
           <AlertTriangle :size="16" />
-          <span>Você não tem agenda de atendimento para hoje. O ponto usará sua unidade como referência.</span>
+          <span>Você não tem agenda de atendimento para hoje. Obtenha sua localização para selecionar a escola mais próxima.</span>
         </div>
 
-        <!-- Lista de visitas do dia -->
-        <div class="block">
+        <!-- Lista de visitas do dia (apenas quando há agenda) -->
+        <div v-if="!ponto.hoje?.semAgenda" class="block">
           <h3>Visitas de hoje</h3>
           <ul class="visit-list">
             <li v-for="v in ponto.hoje?.visitas" :key="v.agendaId ?? v.escola" :class="{ active: (v.agendaId ?? v.escola) === (visitaAtiva?.agendaId ?? visitaAtiva?.escola) }" @click="visitaSelecionada = (v.agendaId ?? v.escola)">

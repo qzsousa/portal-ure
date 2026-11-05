@@ -233,14 +233,12 @@ import { chamadosApi } from '@/api/http'
 import { LINKS_INTERNET } from '@/data/linksInternetData'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
-import { usePontoStore } from '@/stores/ponto'
 import { listarEscolas } from '@/api/usuarios'
 import { listarUltimasVisitasWifi, salvarLevantamento } from '@/api/wifi'
 import { listarUsuarios } from '@/api/usuarios'
 
 const auth = useAuthStore()
 const ui = useUiStore()
-const ponto = usePontoStore()
 
 const FALTAS = ['Cabo de rede', 'Canaleta / eletroduto', 'Ponto elétrico', 'Porta no switch / rack', 'Ponto de rede (tomada)', 'Suporte / fixação']
 const tiposAmbiente = ['Sala de aula', 'Sala de informática', 'Biblioteca / sala de leitura', 'Laboratório', 'Secretaria', 'Direção', 'Sala dos professores', 'Coordenação', 'Refeitório', 'Quadra / pátio', 'Corredor', 'Auditório', 'Sala de recursos', 'Outro']
@@ -531,17 +529,6 @@ onMounted(async () => {
     escolasCompletas.value = []
   }
 
-  // Puxa a escola em que o técnico está (ponto/agenda) para preencher automaticamente
-  try {
-    if (!ponto.carregado) await ponto.carregar()
-    const visitas = ponto.hoje?.visitas || []
-    const escolaAtual = visitas.length ? visitas[0].escola : (auth.user?.filial || '')
-    if (escolaAtual && !visita.value.escola) {
-      visita.value.escola = escolaAtual
-    }
-  } catch {
-    if (auth.user?.filial && !visita.value.escola) visita.value.escola = auth.user.filial
-  }
   if (auth.user?.nome && !visita.value.tecnico) visita.value.tecnico = auth.user.nome
   try {
     const res = await listarUsuarios({ nivel: 'TECNICO', limit: 100 })

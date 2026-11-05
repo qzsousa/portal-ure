@@ -70,7 +70,7 @@ const items: MenuItem[] = [
   { to: '/relatorios', label: 'Relatórios', icon: BarChart3, grupo: 'Atendimento', semEscopoTipos: true, rota: 'chamados' },
   { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, grupo: 'Equipamentos', semEscopoTipos: true, rota: 'equipamentos' },
   { to: '/manutencao', label: 'Manutenção', icon: Wrench, grupo: 'Equipamentos', semEscopoTipos: true, rota: 'equipamentos' },
-  { to: '/wifi', label: "Levantamento AP's", icon: Wifi, grupo: 'Equipamentos', tecnicoOnly: true, semEscopoTipos: true, rota: 'wifi', disabled: true },
+  { to: '/wifi', label: "Levantamento AP's", icon: Wifi, grupo: 'Equipamentos', tecnicoOnly: true, semEscopoTipos: true, rota: 'wifi' },
   { to: '/unidades', label: 'Unidades Escolares', icon: School, grupo: 'Escolas', matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
   { to: '/agenda', label: 'Agenda', icon: CalendarDays, grupo: 'Escolas', matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
   { to: '/links-internet', label: 'Links de Internet', icon: Globe, grupo: 'Escolas', adminOnly: true },
