@@ -126,6 +126,8 @@
             <span>Observações</span>
             <p>{{ visitaModal.obs }}</p>
           </div>
+
+          <button class="btn btn-perigo" type="button" @click="removerVisita(visitaModal.id)">Remover visita</button>
         </div>
       </BaseModal>
     </div>
@@ -138,7 +140,9 @@ import { useRouter } from 'vue-router'
 import { Wifi } from '@lucide/vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 
-import { listarVisitasWifi } from '@/api/wifi'
+import { listarVisitasWifi, removerVisitaWifi } from '@/api/wifi'
+import { useUiStore } from '@/stores/ui'
+import { apiError } from '@/utils/apiError'
 import { listarEscolas } from '@/api/usuarios'
 
 
@@ -147,6 +151,7 @@ const TOTAL = 72
 const total = TOTAL
 
 const router = useRouter()
+const ui = useUiStore()
 const carregando = ref(true)
 const visitas = ref<any[]>([])
 const escolasLista = ref<string[]>([])
@@ -275,6 +280,18 @@ function abrirDetalhe(e: any) {
     obs: v.obs,
   }
   modalAberto.value = true
+}
+
+async function removerVisita(id: string) {
+  if (!window.confirm('Remover esta visita? Esta ação não pode ser desfeita.')) return
+  try {
+    await removerVisitaWifi(id)
+    ui.success('Visita removida.')
+    modalAberto.value = false
+    visitas.value = await listarVisitasWifi()
+  } catch (e) {
+    ui.error(apiError(e, 'Não foi possível remover a visita.'))
+  }
 }
 
 function statusBadge(s: string) {

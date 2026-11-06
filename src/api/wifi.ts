@@ -56,3 +56,7 @@ export async function listarUltimasVisitasWifi(): Promise<{ id: string; data: st
   const { data } = await chamadosApi.get('/wifi/ultimas')
   return data
 }
+
+export async function removerVisitaWifi(id: string): Promise<void> {
+  await chamadosApi.delete(`/wifi/${id}`)
+}
