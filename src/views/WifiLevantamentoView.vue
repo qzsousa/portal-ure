@@ -437,14 +437,16 @@ function novo() {
 
 // rascunho
 let tSave: any
+function salvarRascunhoAgora() {
+  try {
+    const p = collect()
+    if (p.visita.escola || p.aps.length || p.semAp.length) localStorage.setItem(KEY, JSON.stringify(p))
+  } catch {}
+}
+
 function agendaRascunho() {
   clearTimeout(tSave)
-  tSave = setTimeout(() => {
-    try {
-      const p = collect()
-      if (p.visita.escola || p.aps.length || p.semAp.length) localStorage.setItem(KEY, JSON.stringify(p))
-    } catch {}
-  }, 800)
+  tSave = setTimeout(salvarRascunhoAgora, 400)
 }
 
 function restaurarRascunho() {
@@ -539,6 +541,13 @@ onMounted(async () => {
   if (!tecnicos.value.includes(visita.value.tecnico) && visita.value.tecnico) tecnicos.value.unshift(visita.value.tecnico)
   checaRascunho()
   await carregarHist()
+
+  window.addEventListener('beforeunload', salvarRascunhoAgora)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') salvarRascunhoAgora()
+  })
+  document.addEventListener('input', agendaRascunho)
+  document.addEventListener('change', agendaRascunho)
 })
 </script>
 
