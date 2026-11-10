@@ -187,12 +187,12 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Painel - Access Points',
           breadcrumb: 'Painel - Access Points',
-          roles: ['ADMIN'] as Nivel[],
-          rota: 'wifi',
-        },
-      },
-      {
-        path: 'links-internet',
+           roles: ['ADMIN', 'TECNICO'] as Nivel[],
+           rota: 'wifi',
+         },
+       },
+       {
+         path: 'links-internet',
         name: 'links-internet',
         component: () => import('@/views/LinksInternetView.vue'),
         meta: {

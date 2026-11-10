@@ -3,8 +3,8 @@
     <div class="page-head">
       <div class="page-head-icon"><Wifi :size="22" /></div>
       <div>
-        <h1>Levantamento de Access Points</h1>
-        <p>Preencha durante a visita. Ao salvar, tudo vai direto para o banco.</p>
+      <h1>{{ modoEdicao ? 'Editar levantamento' : 'Levantamento de Access Points' }}</h1>
+      <p>{{ modoEdicao ? 'Altere os dados e salve para atualizar o levantamento.' : 'Preencha durante a visita. Ao salvar, tudo vai direto para o banco.' }}</p>
       </div>
     </div>
 
@@ -228,17 +228,22 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Wifi } from '@lucide/vue'
 import { chamadosApi } from '@/api/http'
 import { LINKS_INTERNET } from '@/data/linksInternetData'
 import { useAuthStore } from '@/stores/auth'
 import { useUiStore } from '@/stores/ui'
 import { listarEscolas } from '@/api/usuarios'
-import { listarUltimasVisitasWifi, salvarLevantamento } from '@/api/wifi'
+import { listarUltimasVisitasWifi, salvarLevantamento, obterVisitaWifi, atualizarLevantamento } from '@/api/wifi'
 import { listarUsuarios } from '@/api/usuarios'
 
 const auth = useAuthStore()
 const ui = useUiStore()
+const route = useRoute()
+const router = useRouter()
+const editId = ref<string | null>(route.query.id ? String(route.query.id) : null)
+const modoEdicao = ref(!!editId.value)
 
 const FALTAS = ['Cabo de rede', 'Canaleta / eletroduto', 'Ponto elétrico', 'Porta no switch / rack', 'Ponto de rede (tomada)', 'Suporte / fixação']
 const tiposAmbiente = ['Sala de aula', 'Sala de informática', 'Biblioteca / sala de leitura', 'Laboratório', 'Secretaria', 'Direção', 'Sala dos professores', 'Coordenação', 'Refeitório', 'Quadra / pátio', 'Corredor', 'Auditório', 'Sala de recursos', 'Outro']
@@ -415,11 +420,16 @@ async function salvar() {
   }
   salvando.value = true
   try {
-    const r = await salvarLevantamento(p)
-    try { localStorage.removeItem(KEY) } catch {}
-    ui.success(`Levantamento salvo — ${r.escola} (protocolo ${r.id})`)
-    // reset
-    novo()
+    if (modoEdicao.value && editId.value) {
+      const r = await atualizarLevantamento(editId.value, p)
+      ui.success(`Levantamento atualizado — ${r.escola}`)
+      router.push('/wifi-dashboard')
+    } else {
+      const r = await salvarLevantamento(p)
+      try { localStorage.removeItem(KEY) } catch {}
+      ui.success(`Levantamento salvo — ${r.escola} (protocolo ${r.id})`)
+      novo()
+    }
   } catch (e: any) {
     ui.error(e?.response?.data?.message || e?.message || 'Não foi possível salvar.')
   } finally {
@@ -445,6 +455,7 @@ function salvarRascunhoAgora() {
 }
 
 function agendaRascunho() {
+  if (modoEdicao.value) return
   clearTimeout(tSave)
   tSave = setTimeout(salvarRascunhoAgora, 400)
 }
@@ -470,6 +481,7 @@ function descartarRascunho() {
 }
 
 function checaRascunho() {
+  if (modoEdicao.value) return
   let raw: string | null = null
   try { raw = localStorage.getItem(KEY) } catch {}
   if (!raw) return
@@ -539,7 +551,34 @@ onMounted(async () => {
     tecnicos.value = []
   }
   if (!tecnicos.value.includes(visita.value.tecnico) && visita.value.tecnico) tecnicos.value.unshift(visita.value.tecnico)
-  checaRascunho()
+
+  if (modoEdicao.value && editId.value) {
+    try {
+      const v = await obterVisitaWifi(editId.value)
+      visita.value = {
+        escola: v.escola || '',
+        tecnico: v.tecnico || auth.user?.nome || '',
+        data: v.dataVisita ? String(v.dataVisita).slice(0, 10) : hoje(),
+        cie: v.cie || '',
+        salasTotal: v.salasTotal ?? '',
+        rackCond: v.rackCond || '',
+        obs: v.obs || '',
+        lat: v.latitude != null ? Number(v.latitude).toFixed(6) : '',
+        lng: v.longitude != null ? Number(v.longitude).toFixed(6) : '',
+      }
+      aps.value = []
+      sem.value = []
+      ;(v.aps || []).forEach((a: any) => addAp(a))
+      ;(v.salasSem || []).forEach((s: any) => addSem(s))
+      aplicarDadosEscola(visita.value.escola)
+    } catch (e: any) {
+      ui.error(e?.response?.data?.message || e?.message || 'Não foi possível carregar o levantamento.')
+      modoEdicao.value = false
+      editId.value = null
+    }
+  } else {
+    checaRascunho()
+  }
   await carregarHist()
 
   window.addEventListener('beforeunload', salvarRascunhoAgora)

@@ -78,7 +78,7 @@ const items: MenuItem[] = [
   { to: '/ponto', label: 'Ponto', icon: Clock, grupo: 'Administração', matrizOnly: true },
   { to: '/usuarios', label: 'Usuários', icon: Users, grupo: 'Administração', gestorTambem: true, rota: 'usuarios' },
   { to: '/configuracoes', label: 'Configurações', icon: Settings, grupo: 'Administração', adminOnly: true, rota: 'formulario' },
-  { to: '/wifi-dashboard', label: "Painel AP's", icon: Wifi, grupo: 'Escolas', adminOnly: true, rota: 'wifi' },
+  { to: '/wifi-dashboard', label: "Painel AP's", icon: Wifi, grupo: 'Escolas', matrizOnly: true, rota: 'wifi' },
 ]
 
 const visibleItems = computed(() =>
