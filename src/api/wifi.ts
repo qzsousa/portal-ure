@@ -57,6 +57,28 @@ export async function listarUltimasVisitasWifi(): Promise<{ id: string; data: st
   return data
 }
 
+export async function obterVisitaWifi(id: string): Promise<VisitaWifiApi> {
+  const { data } = await chamadosApi.get<VisitaWifiApi>(`/wifi/${id}`)
+  return data
+}
+
+export async function atualizarLevantamento(id: string, payload: SalvarLevantamentoPayload): Promise<{
+  ok: boolean
+  id: string
+  escola: string
+  totalAps: number
+  on: number
+  off: number
+  down: number
+  semAp: number
+  comInfra: number
+  parcial: number
+  semInfra: number
+}> {
+  const { data } = await chamadosApi.put(`/wifi/${id}`, payload)
+  return data
+}
+
 export async function removerVisitaWifi(id: string): Promise<void> {
   await chamadosApi.delete(`/wifi/${id}`)
 }
