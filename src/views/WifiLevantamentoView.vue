@@ -1,5 +1,6 @@
 <template>
-  <div class="wifi-levantamento">
+  <div class="wifi-levantamento" :class="{ 'is-loading': carregandoEdicao }">
+  <div v-if="carregandoEdicao" class="loading-edicao">Carregando levantamento…</div>
     <div class="page-head">
       <div class="page-head-icon"><Wifi :size="22" /></div>
       <div>
@@ -244,6 +245,7 @@ const route = useRoute()
 const router = useRouter()
 const editId = ref<string | null>(route.query.id ? String(route.query.id) : null)
 const modoEdicao = ref(!!editId.value)
+const carregandoEdicao = ref(modoEdicao.value)
 
 const FALTAS = ['Cabo de rede', 'Canaleta / eletroduto', 'Ponto elétrico', 'Porta no switch / rack', 'Ponto de rede (tomada)', 'Suporte / fixação']
 const tiposAmbiente = ['Sala de aula', 'Sala de informática', 'Biblioteca / sala de leitura', 'Laboratório', 'Secretaria', 'Direção', 'Sala dos professores', 'Coordenação', 'Refeitório', 'Quadra / pátio', 'Corredor', 'Auditório', 'Sala de recursos', 'Outro']
@@ -571,10 +573,12 @@ onMounted(async () => {
       ;(v.aps || []).forEach((a: any) => addAp(a))
       ;(v.salasSem || []).forEach((s: any) => addSem(s))
       aplicarDadosEscola(visita.value.escola)
+      carregandoEdicao.value = false
     } catch (e: any) {
       ui.error(e?.response?.data?.message || e?.message || 'Não foi possível carregar o levantamento.')
       modoEdicao.value = false
       editId.value = null
+      carregandoEdicao.value = false
     }
   } else {
     checaRascunho()
@@ -592,6 +596,8 @@ onMounted(async () => {
 
 <style scoped>
 .wifi-levantamento { max-width: 920px; margin: 0 auto; padding: 0 0 140px; }
+.wifi-levantamento.is-loading > :not(.loading-edicao) { display: none; }
+.loading-edicao { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 1rem; }
 @media (max-width: 640px) {
   .wifi-levantamento { padding: 0 0 160px; }
   .grid { grid-template-columns: 1fr; }
