@@ -127,7 +127,10 @@
             <p>{{ visitaModal.obs }}</p>
           </div>
 
-          <button class="btn btn-perigo" type="button" @click="removerVisita(visitaModal.id)">Remover visita</button>
+          <div class="modal-actions">
+            <button class="btn btn-primary" type="button" @click="editar(visitaModal.id)">Editar levantamento</button>
+            <button class="btn btn-perigo" type="button" @click="removerVisita(visitaModal.id)">Remover visita</button>
+          </div>
         </div>
       </BaseModal>
     </div>
@@ -282,6 +285,11 @@ function abrirDetalhe(e: any) {
   modalAberto.value = true
 }
 
+function editar(id: string) {
+  modalAberto.value = false
+  router.push({ name: 'wifi-levantamento', query: { id } })
+}
+
 async function removerVisita(id: string) {
   if (!window.confirm('Remover esta visita? Esta ação não pode ser desfeita.')) return
   try {
@@ -368,6 +376,7 @@ function rotuloInfra(i: string) {
 .empty-cell { text-align: center; color: var(--text-muted); padding: 30px; }
 .row-click { cursor: pointer; }
 .detalhe-ap { display: flex; flex-direction: column; gap: 16px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .det-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .det-grid div { background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
 .det-grid span { font-size: .72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
