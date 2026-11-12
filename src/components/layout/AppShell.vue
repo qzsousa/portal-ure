@@ -45,6 +45,10 @@ onUnmounted(liberarScroll)
       <main class="page">
         <RouterView />
       </main>
+      <footer class="app-foot">
+        Desenvolvido por
+        <a href="https://github.com/qzsousa" target="_blank" rel="noopener">Pablo Nascimento</a>
+      </footer>
     </div>
   </div>
 </template>
@@ -101,6 +105,18 @@ onUnmounted(liberarScroll)
 .page {
   flex: 1;
   padding: 24px 28px 40px;
+}
+
+.app-foot {
+  padding: 8px 28px 12px;
+  font-size: 11px;
+  color: var(--text-muted, #8a8a8a);
+  text-align: center;
+}
+
+.app-foot a {
+  color: inherit;
+  text-decoration: underline;
 }
 
 @media (max-width: 640px) {

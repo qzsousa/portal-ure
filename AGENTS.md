@@ -46,3 +46,8 @@ Use sempre `dev-restart -Port <PORTA> -Dir <DIR_DO_PROJETO>` para subir/reinicia
 - Variáveis `VITE_*` são embutidas no bundle em build e ficam públicas no navegador: nunca segredo.
 - Antes de editar, leia a view/componente existente e siga o padrão; não crie arquivos novos sem necessidade.
 - Não adicionar comentários, nem README/docs, salvo pedido explícito.
+
+
+## Autoria
+
+Desenvolvido por **Pablo Nascimento** — [GitHub](https://github.com/qzsousa) · [LinkedIn](https://www.linkedin.com/in/pablo-nascimento-3bb92234a/)

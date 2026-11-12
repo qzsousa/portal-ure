@@ -1,4 +1,4 @@
-# 14 · Aceite e conclusão pelo técnico
+# 16 · Aceite e conclusão pelo técnico
 
 > **⚠️ Documento superado em parte.** O **aceite** descrito aqui continua
 > exatamente como está — é o mesmo `POST /chamados/:id/aceitar` e o mesmo
@@ -11,7 +11,7 @@
 > `PATCH /status` continuam existindo, mas o caminho normal é outro.
 >
 > O fluxo completo está em
-> **[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)**;
+> **[14 · Fluxo de atendimento do chamado](./15-fluxo-atendimento-chamado.md)**;
 > os prints abaixo mostram o aceite, que não mudou.
 
 Como um chamado encaminhado vira de fato um atendimento: o técnico **aceita**
@@ -93,7 +93,7 @@ linha do tempo:
 
 > O modal mudou depois deste documento: a ação do momento virou uma barra
 > única no topo e o resto virou seções que abrem e fecham. Ver
-> **[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)**,
+> **[14 · Fluxo de atendimento do chamado](./15-fluxo-atendimento-chamado.md)**,
 > que é o capítulo atual do fluxo. As prints acima foram regravadas com a tela
 > nova.
 

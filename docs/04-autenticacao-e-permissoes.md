@@ -442,7 +442,7 @@ recusado antes do handler e as duas pessoas acima ficavam trancadas numa tela
 que as mandava trocar a senha. A folga não vira brecha: quem tem senha
 definitiva e manda vazio ou errado recebe 401.
 
-Ver [o fluxo completo em `15-primeiro-acesso-codigo.md`](./15-primeiro-acesso-codigo.md).
+Ver [o fluxo completo em `15-primeiro-acesso-codigo.md`](./17-primeiro-acesso-codigo.md).
 
 ## Guarda de rota
 

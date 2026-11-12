@@ -11,5 +11,6 @@
     "start": "node server.mjs",
     "test": "node --test \"testes/*.test.mjs\"",
     "parse-dvr": "node scripts/parse-dvr.mjs"
-  }
+  },
+  "author": "Pablo Nascimento <https://github.com/qzsousa>"
 }

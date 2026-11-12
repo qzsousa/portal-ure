@@ -789,7 +789,7 @@ Sempre comece por aqui, **na ordem**:
     → Application → Cookies: o refreshToken está presente?
 
 4.  Configurações → Integrações → "Testar agora"
-    → Diz exatamente qual dos dois backends falhou.
+    → Diz exatamente qual dos três backends falhou.
 
 5.  Configurações → Logs do sistema
     → A mensagem completa do erro está aqui (clique para expandir).

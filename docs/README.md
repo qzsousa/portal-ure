@@ -29,12 +29,16 @@ reúne **chamados de suporte técnico** e **inventário de equipamentos** em uma
 | **Entender a avaliação de atendimento** (do fechamento à nota) | **[13 · Avaliação de atendimento](./13-avaliacao-de-atendimento.md)** |
 
 | **Saber se as câmeras DVR estão ligadas** | **[14 · Monitor de câmeras DVR](./14-monitor-de-cameras-dvr.md)** |
-| **Entender o aceite e a conclusão pelo técnico** (carimbos de horário) | **[14 · Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md)** |
-| **Ver o fluxo do chamado inteiro** (da abertura até a conferência da escola) | **[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)** |
-| **Por que a senha não se digita no lugar do código** (primeiro acesso) | **[15 · Primeiro acesso: código no lugar da senha](./15-primeiro-acesso-codigo.md)** |
-| **O que fazer quando alguém esqueceu a senha** (senha provisória) | **[15 · Primeiro acesso: código no lugar da senha](./15-primeiro-acesso-codigo.md)** |
+| **Entender o aceite e a conclusão pelo técnico** (carimbos de horário) | **[16 · Aceite e conclusão pelo técnico](./16-aceite-e-conclusao-pelo-tecnico.md)** |
+| **Ver o fluxo do chamado inteiro** (da abertura até a conferência da escola) | **[15 · Fluxo de atendimento do chamado](./15-fluxo-atendimento-chamado.md)** |
+| **Por que a senha não se digita no lugar do código** (primeiro acesso) | **[17 · Primeiro acesso: código no lugar da senha](./17-primeiro-acesso-codigo.md)** |
+| **O que fazer quando alguém esqueceu a senha** (senha provisória) | **[17 · Primeiro acesso: código no lugar da senha](./17-primeiro-acesso-codigo.md)** |
+| **Conversar com a IA, pedir ponto e consultar agenda** | **[19 · Chat IA](./19-chat-ia.md)** |
+| **Registrar ponto com geolocalização** | **[20 · Ponto](./20-ponto.md)** |
+| **Agenda de atribuições por dia** | **[21 · Agenda](./21-agenda.md)** |
+| **Links de internet das unidades** | **[22 · Links de internet](./22-links-internet.md)** |
 | **Por que um técnico não entra em Inventário** (rota permitida, 403) | [04 · Autenticação e permissões](./04-autenticacao-e-permissoes.md) |
-| **Esquema de comentários e curtidas nos tutoriais** | [16 · Tutoriais — comentários e curtidas](./16-tutoriais-comentarios-e-curtidas.md) |
+| **Esquema de comentários e curtidas nos tutoriais** | [18 · Tutoriais — comentários e curtidas](./18-tutoriais-comentarios-e-curtidas.md) |
 
 ---
 
@@ -129,7 +133,7 @@ sistema rodando com dados reais.
 
 > **Sobre os prints 38 a 41.** Capturados com o usuário de teste
 > `teste.tecnico@local.com` (perfil TÉCNICO) e chamados sintéticos `CH-TESTE-*`
-> encaminhados para ele — ver [Aceite e conclusão pelo técnico](./14-aceite-e-conclusao-pelo-tecnico.md).
+> encaminhados para ele — ver [Aceite e conclusão pelo técnico](./16-aceite-e-conclusao-pelo-tecnico.md).
 
 > **Sobre os prints 35 e 36.** Capturados com o portal local e **dois usuários
 > de teste do mesmo grupo de escolas irmãs** (`E.E. CESAR DONATO CALABREZ /
@@ -184,7 +188,7 @@ sistema rodando com dados reais.
 ### Fluxo de atendimento do chamado (63 a 87)
 
 O caminho completo de um chamado, do formulário público até a conferência da
-escola. Ver **[14 — Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)**.
+escola. Ver **[15 — Fluxo de atendimento do chamado](./15-fluxo-atendimento-chamado.md)**.
 
 | # | Tela | Arquivo |
 |---|---|---|
@@ -231,15 +235,18 @@ escola. Ver **[14 — Fluxo de atendimento do chamado](./14-fluxo-atendimento-ch
 ## Resumo em 30 segundos
 
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia + Vue Router + Chart.js + axios.
-- **Dois backends:**
+- **Três backends:**
   - **Chamados** (porta `10000`) — é quem emite o **JWT** e cuida de identidade,
     usuários, chamados, escolas, notificações, tutoriais, formulário de abertura,
     encaminhamento e avaliações.
   - **SCE** (porta `3000`) — inventário de equipamentos, manutenção, empréstimos,
     catálogo e auditoria. **Aceita o mesmo JWT** do backend de chamados por SSO.
+  - **Monitor de câmeras DVR** (porta `4000`, pasta `monitor/`) — ping dos DVRs das
+    escolas, status online/offline e importação de lista. **Aceita o mesmo JWT**
+    por SSO. URL em `VITE_API_MONITOR_URL`.
 - **Identidade:** um único login. O `accessToken` fica **só em memória** e o
   `refreshToken` viaja num cookie `httpOnly` — nada de credencial fica legível
-  por script da página. O mesmo token é aceito pelos dois backends.
+  por script da página. O mesmo token é aceito pelos três backends.
 - **Papéis:** `ADMIN`, `TECNICO`, `GESTOR`, `VISUALIZADOR` — mais o papel de
   unidade `MAE`/`FILHA` (escolas que dividem o mesmo prédio).
 - **Público:** qualquer pessoa da rede pode abrir chamado, consultar por

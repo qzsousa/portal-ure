@@ -1,5 +1,9 @@
 # Monitor de DVRs
 
+[![Node](https://img.shields.io/badge/Node-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![License](https://img.shields.io/badge/license-internal-lightgrey)](#)
+
+
 Serviço que verifica se os **gravadores de vídeo (DVRs) das câmeras de
 segurança** das escolas estão ligados, e publica o resultado como API para a
 aba *Câmeras DVR* do [Portal URE Leste 3](../README.md).
@@ -200,3 +204,16 @@ arquivo em `%USERPROFILE%\monitor-dvr.log`.
 Ver também: [Portal URE Leste 3](../README.md) ·
 [capítulo 14 da documentação](../docs/14-monitor-de-cameras-dvr.md) ·
 [Tratamento de erros](../docs/09-tratamento-de-erros.md)
+
+## Documentação
+
+Documentação completa em [docs/](./docs/README.md) — 7 capítulos.
+
+
+---
+
+## Desenvolvido por
+
+**Pablo Nascimento**
+
+[![GitHub](https://img.shields.io/badge/GitHub-qzsousa-181717?logo=github&logoColor=white)](https://github.com/qzsousa) [![LinkedIn](https://img.shields.io/badge/LinkedIn-Pablo%20Nascimento-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/pablo-nascimento-3bb92234a/)

@@ -141,7 +141,7 @@ Excel em pt-BR).
 
 ## O que o portal **não** faz (limites conhecidos)
 
-- **Não é fonte de verdade de nada.** Toda persistência é dos dois backends. Se
+- **Não é fonte de verdade de nada.** Toda persistência é dos três backends. Se
   um deles cai, os módulos dele ficam indisponíveis — o portal não tem cache
   próprio nem banco.
 - **Não tem e-mail próprio.** Quem envia notificações é o backend de chamados.

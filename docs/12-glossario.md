@@ -12,7 +12,7 @@ Siglas e termos próprios do sistema.
 | **URE** | Unidade Regional de Ensino. |
 | **URE Leste 3** | A região atendida por este portal (municípios do leste da Capital). |
 | **SCE** | Sistema de Controle de Equipamentos. O segundo sistema, mais antigo, que o portal passou a integrar. |
-| **SSO** | *Single Sign-On*. Login único: o mesmo token JWT é aceito pelos dois backends. |
+| **SSO** | *Single Sign-On*. Login único: o mesmo token JWT é aceito pelos três backends. |
 | **JWT** | *JSON Web Token*. Token de autenticação assinado. |
 | **AOE** | *Agente de Organização Escolar*. Cargo escolar. |
 | **HMR** | *Hot Module Replacement*. Recarga instantânea do Vite. |

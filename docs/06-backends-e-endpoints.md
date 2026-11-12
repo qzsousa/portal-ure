@@ -1,6 +1,6 @@
 # 06 · Backends e endpoints
 
-Este capítulo documenta **do ponto de vista do frontend** os dois backends e
+Este capítulo documenta **do ponto de vista do frontend** os três backends e
 todos os endpoints consumidos. Para o detalhe interno dos backends (schema,
 middleware, deploy), veja os repositórios `chamados/` e `sce/`.
 
@@ -12,6 +12,7 @@ middleware, deploy), veja os repositórios `chamados/` e `sce/`.
 # .env  (use .env.example como modelo)
 VITE_API_CHAMADOS_URL=http://localhost:10000/api
 VITE_API_SCE_URL=http://localhost:3000/api
+VITE_API_MONITOR_URL=http://localhost:4000
 ```
 
 Cada variável tem um fallback embutido em `api/http.ts`, então o `.env` só é
@@ -20,6 +21,7 @@ obrigatório para apontar para outros ambientes:
 ```ts
 export const CHAMADOS_BASE = import.meta.env.VITE_API_CHAMADOS_URL || 'http://localhost:10000/api'
 export const SCE_BASE       = import.meta.env.VITE_API_SCE_URL       || 'http://localhost:3000/api'
+export const MONITOR_BASE   = import.meta.env.VITE_API_MONITOR_URL   || 'http://localhost:4000'
 ```
 
 > ⚠️ **Variáveis do Vite só são lidas no build.** Mudar o `.env` exige reiniciar
@@ -161,7 +163,7 @@ Duas consequências que afetam o tratamento de erro:
 >
 > A resposta traz `senha`, `nome` e `trocaObrigatoria`. A coluna
 > `senhaProvisoria` fica ligada e o portal manda trocar a senha na entrada.
-> Detalhes em [Primeiro acesso](./15-primeiro-acesso-codigo.md).
+> Detalhes em [Primeiro acesso](./17-primeiro-acesso-codigo.md).
 
 #### Primeiro acesso (código gerado pela Matriz)
 
@@ -221,7 +223,7 @@ certo, `conferir` exige texto na contestação (é ele que diz o que faltou) e
 > "ok" (ou reabre se não). Esse `PATCH` continua existindo para a matriz corrigir
 > status fora do fluxo, e o `/batch` também carimba `aceitoEm`/`concluidoEm` nas
 > transições válidas. Ver
-> [14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md).
+> [14 · Fluxo de atendimento do chamado](./15-fluxo-atendimento-chamado.md).
 
 > `/chamados` aceita `page`, `limit`, `unidade`, `categoria`, `categoriaChave`,
 > `status`, `urgencia` e `responsavel`. **Filtros vazios são removidos antes do
@@ -354,6 +356,22 @@ que criou a tela.
 
 > As três são `requireRole('ADMIN')`. O Técnico saiu junto com a tela; a escola
 > (GESTOR/VISUALIZADOR) nunca entrou.
+
+---
+
+#### Monitor de câmeras DVR (ADMIN) — via `chamadosApi`
+
+O monitor roda na porta `4000` (pasta `monitor/`) e aceita o mesmo JWT (SSO). O
+frontend consome os endpoints abaixo através do backend de chamados, que faz proxy
+para o monitor:
+
+| Método | Rota | Quem chama |
+|---|---|---|
+| GET | `/dvr` | `MonitorDvrsView` — snapshot completo (hosts, status, KPIs) |
+| GET | `/dvr/importacoes` | `MonitorDvrsView` — histórico de importações |
+| POST | `/dvr/importacoes` | `MonitorDvrsView` — importar lista de DVRs (base64) |
+
+Detalhes: [14 · Monitor de câmeras DVR](./14-monitor-de-cameras-dvr.md).
 
 ---
 

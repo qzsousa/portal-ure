@@ -1,4 +1,4 @@
-# 14 ‚Äî Fluxo de atendimento do chamado
+# 15 ‚Äî Fluxo de atendimento do chamado
 
 Este documento acompanha **um chamado do in√≠cio ao fim**, passando por quem age em
 cada etapa e o que cada perfil v√™ na tela. √â o mapa do processo: o cap√≠tulo
@@ -404,16 +404,16 @@ Vale saber disso antes de procurar bug em outro lugar.
 
 ---
 
-## VinculaÁ„o de equipamentos (fluxo novo)
+## Vincula√ß√£o de equipamentos (fluxo novo)
 
-A abertura em \/chamado/novo\ permite informar, de forma opcional, os
-patrimÙnios/sÈries dos equipamentos quebrados. O tÈcnico, ao concluir, atribui
-os equipamentos em que realizou manutenÁ„o, atualizando o invent·rio (SCE).
+A abertura em /chamado/novo permite informar, de forma opcional, os
+patrim√¥nios/s√©ries dos equipamentos quebrados. O t√©cnico, ao concluir, atribui
+os equipamentos em que realizou manuten√ß√£o, atualizando o invent√°rio (SCE).
 
-![Abertura de chamado](screenshots/fluxo-equip-01-novo-chamado.png)
-![Abertura com equipamentos](screenshots/fluxo-equip-02-novo-chamado-equipamento.png)
-![Lista de chamados](screenshots/fluxo-equip-03-chamados-lista.png)
-![Detalhe do chamado](screenshots/fluxo-equip-04-chamado-detalhe.png)
-![Conclus„o com equipamentos](screenshots/fluxo-equip-05-conclusao-equipamentos.png)
-![Invent·rio de equipamentos](screenshots/fluxo-equip-06-equipamentos.png)
-![ManutenÁ„o](screenshots/fluxo-equip-07-manutencao.png)
+![Abertura de chamado](screenshots/01-chamado-novo-home.png)
+![Abertura com equipamento](screenshots/64-fluxo-02-abrir-chamado-equipamento.png)
+![Lista de chamados](screenshots/75-fluxo-13-chamados-matriz.png)
+![Detalhe do chamado](screenshots/77-fluxo-15-detalhe-encaminhado-aceitar.png)
+![Conclus√£o com equipamentos](screenshots/80-fluxo-18-detalhe-conclusao.png)
+![Invent√°rio de equipamentos](screenshots/18-equipamentos.png)
+![Manuten√ß√£o](screenshots/19-manutencao.png)

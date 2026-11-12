@@ -41,18 +41,22 @@ VITE_API_CHAMADOS_URL=http://localhost:10000/api
 
 # API do SCE (equipamentos / manutenção / empréstimos)
 VITE_API_SCE_URL=http://localhost:3000/api
+
+# Monitor de câmeras DVR (ping dos DVRs das escolas)
+VITE_API_MONITOR_URL=http://localhost:4000
 ```
 
 ```bash
 cp .env.example .env     # no Windows: Copy-Item .env.example .env
 ```
 
-Os dois valores **têm fallback** em `api/http.ts`, então o `.env` só é
+Os três valores **têm fallback** em `api/http.ts`, então o `.env` só é
 obrigatório para apontar para outros ambientes:
 
 ```ts
 import.meta.env.VITE_API_CHAMADOS_URL || 'http://localhost:10000/api'
 import.meta.env.VITE_API_SCE_URL       || 'http://localhost:3000/api'
+import.meta.env.VITE_API_MONITOR_URL   || 'http://localhost:4000'
 ```
 
 ### ⚠️ Regras do Vite que causam confusão

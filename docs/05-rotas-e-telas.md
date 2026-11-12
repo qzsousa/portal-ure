@@ -182,7 +182,7 @@ Tela de sucesso com o protocolo em destaque, botão "Copiar" e duas ações:
   "funcao":         "Coordenador",
   "tipo":           "Rede - Queda de Wi-Fi em salas ou locais específicos",  // máx 100 chars
   "categoriaChave": "rede",        // ← chave que dispara o encaminhamento automático
-  "descricao":      "[Qual é o problema de rede?] Queda de Wi-Fi em salas…\n[Quais salas…] Sala 5 e Sala 7…\nAlunos ficam sem acesso…",
+  "descricao":      "[Qual é o problema de rede?] Queda de Wi-Fi em salas…n[Quais salas…] Sala 5 e Sala 7…nAlunos ficam sem acesso…",
   "urgencia":       "Média",
   "email":          "paula.ribeiro@educacao.sp.gov.br",
   "anexoBase64":    "…",           // sem o prefixo data:…;base64,
@@ -336,7 +336,7 @@ removida ou renomeada, a tela abre a categoria e a pessoa escolhe: não quebra.
 
 Nenhum campo do pedido pede a senha antiga — quem esqueceu não a tem. A
 emissão da senha provisória é da Matriz; o chamado é o registro do pedido.
-Ver [Primeiro acesso](./15-primeiro-acesso-codigo.md).
+Ver [Primeiro acesso](./17-primeiro-acesso-codigo.md).
 
 ### Senha provisória na entrada
 
@@ -500,7 +500,7 @@ ABERTO ──▶ ENCAMINHADO ──▶ ANDAMENTO ──▶ AGUARDANDO_CONFERENCI
 | **Excluir** | Só ADMIN (restrição do backend) |
 
 **Ações rápidas do técnico** (só para o TÉCNICO responsável pelo chamado — ver
-[14 · Fluxo de atendimento do chamado](./14-fluxo-atendimento-chamado.md)):
+[14 · Fluxo de atendimento do chamado](./15-fluxo-atendimento-chamado.md)):
 
 | Ação | Onde | Quando |
 |---|---|---|
@@ -886,6 +886,40 @@ interface muda.
 > nada.
 
 ![Testes de acesso](screenshots/26-config-acesso.png)
+
+---
+
+## /chat — Chat IA *(ADMIN)*
+
+Página de chat com assistente IA (Café IA). Contexto do usuário injetado via
+composables/useContextoIA.ts. Permite consultar agenda, solicitar ponto e executar
+ações (ver [19 · Chat IA](./19-chat-ia.md)). Rota meta.roles: [ADMIN].
+
+## /ponto — Ponto *(todos autenticados)*
+
+Registro de ponto com geolocalização, resumo do dia, férias e envio de WhatsApp.
+Redirecionamento automático do /painel para /ponto às 17h para técnicos.
+Ver [20 · Ponto](./20-ponto.md).
+
+## /agenda — Agenda *(ADMIN, TÉCNICO)*
+
+Atribuições por dia, cores por técnico (	ecnicoCor/hash de cor), integração com
+chat. Ver [21 · Agenda](./21-agenda.md).
+
+## /cameras-dvr — Monitor de câmeras DVR *(ADMIN)*
+
+Lista de DVRs das escolas com status online/offline (ping), importação de lista e
+health-check do monitor :4000. Ver [14 · Monitor de câmeras DVR](./14-monitor-de-cameras-dvr.md).
+
+## /links-internet — Links de internet *(ADMIN)*
+
+Cadastro e consulta de links de internet por unidade, com relatório consolidado.
+Ver [22 · Links de internet](./22-links-internet.md).
+
+## /manutencao-sistema — Manutenção do sistema *(pública)*
+
+Página pública exibida quando o portal está em manutenção. Permite checagem de
+status dos backends.
 
 ---
 

@@ -1,4 +1,4 @@
-# 16 · Tutoriais — comentários e curtidas
+# 18 · Tutoriais — comentários e curtidas
 
 Área de **comentários e curtidas (likes)** nas páginas de tutorial, assim como
 em redes sociais: quem lê pode curtir, comentar e responder outros comentários.
