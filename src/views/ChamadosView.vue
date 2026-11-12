@@ -46,6 +46,7 @@ import {
   aceitarChamado,
   atualizarChamadosEmLote,
   atualizarStatusChamado,
+  atualizarCategoriaChamado,
   conferirChamado,
   concluirChamado,
   deletarChamado,
@@ -581,12 +582,93 @@ function aplicarCategoria(chave: string) {
 const detalheAberto = ref(false)
 const detalhe = ref<Chamado | null>(null)
 const salvando = ref(false)
+const salvandoCategoria = ref(false)
+const novaCategoriaChave = ref('')
+const subcategoriaSelecionada = ref('')
+const categoriaOriginalAdmin = ref('')
+const subcategoriaOriginalAdmin = ref('')
 const novoStatus = ref<StatusChamado>('ANDAMENTO')
 const descricaoResolucao = ref('')
 const textoResposta = ref('')
 
 /** Categoria do chamado, com fallback no texto de tipo dos chamados antigos. */
 const chaveCategoria = computed(() => chaveDaCategoria(detalhe.value))
+
+function chaveCategoriaDoChamado(c: Chamado | null): string {
+  const raw = (c?.categoriaChave || '').trim()
+  if (raw) return raw
+  // Chamados antigos (sem categoriaChave): tenta casar a categoria pelo
+  // início do `tipo` ("Rede - Pontos de Rede" -> "Rede"), para não abrir
+  // a reclassificação com a categoria em branco.
+  const tipoUp = (c?.tipo || '').trim().toUpperCase()
+  if (tipoUp) {
+    for (const cat of categorias.value) {
+      const nomeUp = (cat.nome || '').trim().toUpperCase()
+      const chaveUp = (cat.chave || '').trim().toUpperCase()
+      if (
+        (nomeUp && (tipoUp === nomeUp || tipoUp.startsWith(nomeUp + ' ') || tipoUp.startsWith(nomeUp + '-') || tipoUp.startsWith(nomeUp + '–'))) ||
+        (chaveUp && tipoUp.startsWith(chaveUp))
+      ) {
+        return cat.chave
+      }
+    }
+  }
+  const norm = chaveDaCategoria(c).toLowerCase()
+  return categorias.value.find((x) => x.chave.toLowerCase() === norm)?.chave || ''
+}
+
+/** Categoria selecionada no formulário de reclassificação. */
+const categoriaSelecionadaAdmin = computed(() =>
+  categorias.value.find((c) => c.chave === novaCategoriaChave.value) || null,
+)
+
+/** Primeira pergunta de opções da categoria — é ela que define a "subcategoria" (tipo). */
+const perguntaSubcategoriaAdmin = computed(() => {
+  const cat = categoriaSelecionadaAdmin.value
+  if (!cat?.perguntas?.length) return null
+  return (
+    cat.perguntas.find((p) => p.ativa && p.tipo === 'OPCOES' && p.opcoes?.length) || null
+  )
+})
+
+/** Opções de subcategoria para o select, conforme a categoria escolhida. */
+const opcoesSubcategoriaAdmin = computed(() =>
+  (perguntaSubcategoriaAdmin.value?.opcoes || []).map((o) => o.rotulo),
+)
+
+/** Opções do select incluindo a subcategoria atual do chamado, para ela não sumir. */
+const opcoesSubcategoriaComAtualAdmin = computed(() => {
+  const base = [...opcoesSubcategoriaAdmin.value]
+  const atual = subcategoriaSelecionada.value
+  if (atual && !base.includes(atual)) base.unshift(atual)
+  return base
+})
+
+/** Extrai a subcategoria (parte após " - ") de um `tipo` de chamado. */
+function extrairSubcategoria(tipo?: string | null): string {
+  const t = (tipo || '').trim()
+  const idx = t.indexOf(' - ')
+  if (idx < 0) return ''
+  return t.slice(idx + 3).trim()
+}
+
+watch(opcoesSubcategoriaAdmin, (opcoes) => {
+  // Mantém a subcategoria atual do chamado; só preenche com a primeira opção
+  // quando ainda não há nada selecionado (ex.: chamado sem subcategoria).
+  if (opcoes.length && !subcategoriaSelecionada.value) {
+    subcategoriaSelecionada.value = opcoes[0]
+  }
+})
+
+// Ao mudar a categoria em relação à original, descarta a subcategoria incompatível.
+watch(novaCategoriaChave, (nova) => {
+  if (nova === categoriaOriginalAdmin.value) {
+    subcategoriaSelecionada.value = subcategoriaOriginalAdmin.value
+    return
+  }
+  const opcoes = opcoesSubcategoriaAdmin.value
+  subcategoriaSelecionada.value = opcoes.length ? opcoes[0] : ''
+})
 
 /** Chamado de Sistemas/E-mail — a lista de destino é a de quem liberou a categoria. */
 const categoriaLiberada = computed(() => ehCategoriaComLiberacao(chaveCategoria.value))
@@ -833,6 +915,10 @@ async function enviarAvaliacao() {
 async function abrirDetalhe(c: Chamado, opcoes: { abrirConclusao?: boolean } = {}) {
   detalhe.value = c
   novoStatus.value = c.status
+  novaCategoriaChave.value = chaveCategoriaDoChamado(c)
+  subcategoriaSelecionada.value = extrairSubcategoria(c.tipo)
+  categoriaOriginalAdmin.value = novaCategoriaChave.value
+  subcategoriaOriginalAdmin.value = subcategoriaSelecionada.value
   descricaoResolucao.value = c.descricaoResolucao || ''
   textoResposta.value = ''
   // Código de acesso de outro chamado não pode vazar para o que está aberto.
@@ -872,8 +958,14 @@ async function abrirDetalhe(c: Chamado, opcoes: { abrirConclusao?: boolean } = {
   detalheAberto.value = true
   // A listagem não traz a conversa — busca o chamado completo (perguntas, respostas e anexos)
   try {
-    const completo = await getChamado(c.id)
-    if (detalhe.value?.id === completo.id) detalhe.value = completo
+     const completo = await getChamado(c.id)
+     if (detalhe.value?.id === completo.id) {
+       detalhe.value = completo
+       novaCategoriaChave.value = chaveCategoriaDoChamado(completo)
+       subcategoriaSelecionada.value = extrairSubcategoria(completo.tipo)
+       categoriaOriginalAdmin.value = novaCategoriaChave.value
+       subcategoriaOriginalAdmin.value = subcategoriaSelecionada.value
+     }
   } catch {
     /* mantém os dados da listagem */
   }
@@ -1612,6 +1704,45 @@ async function salvarStatus() {
     ui.error(apiError(e, 'Falha ao atualizar o status.'))
   } finally {
     salvando.value = false
+  }
+}
+
+function restaurarCategoriaOriginal() {
+  novaCategoriaChave.value = categoriaOriginalAdmin.value
+  subcategoriaSelecionada.value = subcategoriaOriginalAdmin.value
+  ui.success('Categoria/subcategoria restaurada para a original do chamado.')
+}
+
+async function salvarCategoriaChamado() {
+  if (!detalhe.value || salvandoCategoria.value) return
+  const payload: { categoriaChave?: string; tipo?: string } = {}
+  if (novaCategoriaChave.value && novaCategoriaChave.value !== (detalhe.value.categoriaChave || '')) {
+    payload.categoriaChave = novaCategoriaChave.value
+  }
+  const cat = categorias.value.find((c) => c.chave === novaCategoriaChave.value)
+  const nomeCategoria = cat?.nome || detalhe.value.tipo?.split(' - ')[0]?.trim() || ''
+  const tipoNovo = subcategoriaSelecionada.value
+    ? `${nomeCategoria} - ${subcategoriaSelecionada.value}`
+    : nomeCategoria
+  if (tipoNovo && tipoNovo !== (detalhe.value.tipo || '')) {
+    payload.tipo = tipoNovo
+  }
+  if (!Object.keys(payload).length) {
+    ui.error('Nada para alterar.')
+    return
+  }
+  salvandoCategoria.value = true
+  try {
+    const atualizado = await atualizarCategoriaChamado(detalhe.value.id, payload)
+    detalhe.value = atualizado
+    novaCategoriaChave.value = chaveCategoriaDoChamado(atualizado)
+    subcategoriaSelecionada.value = extrairSubcategoria(atualizado.tipo)
+    ui.success(`Categoria/subcategoria do chamado ${atualizado.protocolo} atualizada.`)
+    await Promise.all([carregar(), carregarStats()])
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao alterar a categoria/subcategoria.'))
+  } finally {
+    salvandoCategoria.value = false
   }
 }
 
@@ -2600,6 +2731,60 @@ useAutoRefresh(async () => {
               class="input textarea"
               placeholder="Descreva a conclusão (obrigatório informar o que foi feito)"
             />
+          </div>
+
+          <div class="acao-box">
+            <h4><Layers :size="15" /> Alterar categoria e subcategoria</h4>
+            <div class="field">
+              <label>Categoria</label>
+              <select v-model="novaCategoriaChave" class="select-input" style="max-width:none;width:100%;">
+                <option value="" disabled>Selecione a categoria...</option>
+                <option v-for="c in categorias.filter((cat) => cat.ativa)" :key="c.id" :value="c.chave">
+                  {{ c.nome }}
+                </option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Subcategoria (tipo)</label>
+              <select
+                v-if="opcoesSubcategoriaComAtualAdmin.length"
+                v-model="subcategoriaSelecionada"
+                class="select-input"
+                style="max-width:none;width:100%;"
+              >
+                <option v-for="op in opcoesSubcategoriaComAtualAdmin" :key="op" :value="op">{{ op }}</option>
+              </select>
+              <input
+                v-else
+                v-model="subcategoriaSelecionada"
+                class="input"
+                placeholder="Subcategoria livre (sem opções cadastradas)"
+              />
+            </div>
+            <div class="acao-linha">
+              <button
+                class="btn btn-primary"
+                type="button"
+                :disabled="salvandoCategoria"
+                @click="salvarCategoriaChamado"
+              >
+                <Loader2 v-if="salvandoCategoria" class="spin" :size="14" />
+                {{ salvandoCategoria ? 'Salvando...' : 'Salvar' }}
+              </button>
+              <button
+                class="btn btn-outline"
+                type="button"
+                title="Voltar à categoria/subcategoria original do chamado"
+                :disabled="salvandoCategoria"
+                @click="restaurarCategoriaOriginal"
+              >
+                <RefreshCcw :size="14" />
+                Restaurar
+              </button>
+            </div>
+            <p class="acao-dica">
+              Reclassifica apenas a categoria e a subcategoria. Não altera status, responsável, atendimento nem histórico do chamado.
+            </p>
           </div>
 
           <div v-if="podeResponderComCodigo" class="acao-box acao-senha">

@@ -71,6 +71,15 @@ export async function atualizarStatusChamado(id: string, payload: AtualizarStatu
   return data
 }
 
+/** Altera a categoria e/ou o tipo (subcategoria) do chamado (somente ADMIN no backend). */
+export async function atualizarCategoriaChamado(
+  id: string,
+  payload: { categoriaChave?: string; tipo?: string },
+): Promise<Chamado> {
+  const { data } = await chamadosApi.patch<Chamado>(`/chamados/${id}/categoria`, payload)
+  return data
+}
+
 /**
  * O técnico aceita um chamado encaminhado para ele (botão "Aceitar chamado").
  * O backend carimba `aceitoEm` e tira o chamado de "Aberto". Idempotente.
