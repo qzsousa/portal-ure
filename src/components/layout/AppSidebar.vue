@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BarChart3,
@@ -8,6 +8,7 @@ import {
   BookOpen,
   CalendarDays,
   Camera,
+  ChevronDown,
   Clock,
   Headset,
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
   Star,
   Users,
   Wrench,
+  Wifi,
 } from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
@@ -26,10 +28,15 @@ interface MenuItem {
   to: string
   label: string
   icon: unknown
+  grupo: string
   adminOnly?: boolean
   gestorTambem?: boolean
   /** Visível apenas para a matriz (ADMIN/TECNICO) */
   matrizOnly?: boolean
+  /** Visível apenas para técnico */
+  tecnicoOnly?: boolean
+  /** Item visível mas bloqueado (não clicável) */
+  disabled?: boolean
   /**
    * Esconde para usuário com ESCOPO DE TIPOS — a conta criada para atender só
    * alguns tipos de chamado, que não tem inventário nem manutenção sob
@@ -52,22 +59,26 @@ const route = useRoute()
 const auth = useAuthStore()
 const { menuAberto, fechar } = useSidebar()
 
+const gruposOrdem = ['Início', 'Atendimento', 'Equipamentos', 'Escolas', 'Administração']
+
 const items: MenuItem[] = [
-  { to: '/painel', label: 'Painel', icon: LayoutDashboard, rota: 'dashboard' },
-  { to: '/chat', label: 'Chat IA', icon: Bot, adminOnly: true, rota: 'dashboard' },
-  { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, semEscopoTipos: true, rota: 'equipamentos' },
-  { to: '/manutencao', label: 'Manutenção', icon: Wrench, semEscopoTipos: true, rota: 'equipamentos' },
-  { to: '/chamados', label: 'Chamados', icon: Headset, rota: 'chamados' },
-  { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen, semEscopoTipos: true, rota: 'tutoriais' },
-  { to: '/unidades', label: 'Unidades Escolares', icon: School, matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
-  { to: '/agenda', label: 'Agenda', icon: CalendarDays, matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
-  { to: '/ponto', label: 'Ponto', icon: Clock, matrizOnly: true },
-  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, adminOnly: true, semEscopoTipos: true, rota: 'equipamentos' },
-  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, adminOnly: true, semEscopoTipos: true, rota: 'feedback' },
-  { to: '/relatorios', label: 'Relatórios', icon: BarChart3, semEscopoTipos: true, rota: 'chamados' },
-  { to: '/usuarios', label: 'Usuários', icon: Users, gestorTambem: true, rota: 'usuarios' },
-  { to: '/links-internet', label: 'Links de Internet', icon: Globe, adminOnly: true },
-  { to: '/configuracoes', label: 'Configurações', icon: Settings, adminOnly: true, rota: 'formulario' },
+  { to: '/painel', label: 'Painel', icon: LayoutDashboard, grupo: 'Início', rota: 'dashboard' },
+  { to: '/chat', label: 'Chat IA', icon: Bot, grupo: 'Início', adminOnly: true, rota: 'dashboard' },
+  { to: '/chamados', label: 'Chamados', icon: Headset, grupo: 'Atendimento', rota: 'chamados' },
+  { to: '/tutoriais', label: 'Tutoriais', icon: BookOpen, grupo: 'Atendimento', semEscopoTipos: true, rota: 'tutoriais' },
+  { to: '/feedback', label: 'Elogios e Avaliações', icon: Star, grupo: 'Atendimento', adminOnly: true, semEscopoTipos: true, rota: 'feedback' },
+  { to: '/relatorios', label: 'Relatórios', icon: BarChart3, grupo: 'Atendimento', semEscopoTipos: true, rota: 'chamados' },
+  { to: '/equipamentos', label: 'Equipamentos', icon: Monitor, grupo: 'Equipamentos', semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/manutencao', label: 'Manutenção', icon: Wrench, grupo: 'Equipamentos', semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/wifi', label: "Levantamento AP's", icon: Wifi, grupo: 'Equipamentos', tecnicoOnly: true, semEscopoTipos: true, rota: 'wifi' },
+  { to: '/unidades', label: 'Unidades Escolares', icon: School, grupo: 'Escolas', matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
+  { to: '/agenda', label: 'Agenda', icon: CalendarDays, grupo: 'Escolas', matrizOnly: true, semEscopoTipos: true, rota: 'escolas' },
+  { to: '/links-internet', label: 'Links de Internet', icon: Globe, grupo: 'Escolas', adminOnly: true },
+  { to: '/cameras-dvr', label: 'Câmeras DVR', icon: Camera, grupo: 'Escolas', adminOnly: true, semEscopoTipos: true, rota: 'equipamentos' },
+  { to: '/ponto', label: 'Ponto', icon: Clock, grupo: 'Administração', matrizOnly: true },
+  { to: '/usuarios', label: 'Usuários', icon: Users, grupo: 'Administração', gestorTambem: true, rota: 'usuarios' },
+  { to: '/configuracoes', label: 'Configurações', icon: Settings, grupo: 'Administração', adminOnly: true, rota: 'formulario' },
+  { to: '/wifi-dashboard', label: "Painel AP's", icon: Wifi, grupo: 'Escolas', matrizOnly: true, rota: 'wifi' },
 ]
 
 const visibleItems = computed(() =>
@@ -80,9 +91,52 @@ const visibleItems = computed(() =>
     if (i.adminOnly) return auth.user?.nivel === 'ADMIN'
     if (i.gestorTambem) return ['ADMIN', 'GESTOR'].includes(auth.user?.nivel || '')
     if (i.matrizOnly) return ['ADMIN', 'TECNICO'].includes(auth.user?.nivel || '')
+    if (i.tecnicoOnly) return auth.user?.nivel === 'TECNICO'
     return true
   }),
 )
+
+interface MenuGroup {
+  label: string
+  items: MenuItem[]
+}
+
+const visibleGroups = computed<MenuGroup[]>(() =>
+  gruposOrdem
+    .map((label) => ({ label, items: visibleItems.value.filter((i) => i.grupo === label) }))
+    .filter((g) => g.items.length > 0),
+)
+
+const abertos = ref<Record<string, boolean>>({})
+
+function grupoDoCaminho(caminho: string): string | null {
+  const grupo = visibleGroups.value.find((g) => g.items.some((i) => caminho.startsWith(i.to)))
+  return grupo?.label ?? null
+}
+
+watch(
+  visibleGroups,
+  (groups) => {
+  for (const g of groups) {
+    if (abertos.value[g.label] === undefined) {
+      abertos.value[g.label] = true
+    }
+  }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => route.path,
+  (caminho) => {
+    const label = grupoDoCaminho(caminho)
+    if (label) abertos.value[label] = true
+  },
+)
+
+function alternarGrupo(label: string) {
+  abertos.value[label] = !abertos.value[label]
+}
 </script>
 
 <template>
@@ -100,16 +154,43 @@ const visibleItems = computed(() =>
     </div>
 
     <nav class="menu">
-      <RouterLink
-        v-for="item in visibleItems"
-        :key="item.to"
-        :to="item.to"
-        class="menu-item"
-        :class="{ active: route.path.startsWith(item.to) }"
-      >
-        <component :is="item.icon" :size="18" :stroke-width="2" />
-        <span>{{ item.label }}</span>
-      </RouterLink>
+      <section v-for="grupo in visibleGroups" :key="grupo.label" class="menu-group">
+        <button
+          type="button"
+          class="menu-group-header"
+          :aria-expanded="!!abertos[grupo.label]"
+          @click="alternarGrupo(grupo.label)"
+        >
+          <span class="menu-group-title">{{ grupo.label }}</span>
+          <ChevronDown
+            class="menu-group-chevron"
+            :class="{ virada: !!abertos[grupo.label] }"
+            :size="14"
+            :stroke-width="2.5"
+          />
+        </button>
+        <div v-show="!!abertos[grupo.label]" class="menu-group-items">
+          <template v-for="item in grupo.items" :key="item.to">
+            <RouterLink
+              v-if="!item.disabled"
+              :to="item.to"
+              class="menu-item"
+              :class="{ active: route.path.startsWith(item.to) }"
+            >
+              <component :is="item.icon" :size="18" :stroke-width="2" />
+              <span>{{ item.label }}</span>
+            </RouterLink>
+            <div
+              v-else
+              class="menu-item disabled"
+              aria-disabled="true"
+            >
+              <component :is="item.icon" :size="18" :stroke-width="2" />
+              <span>{{ item.label }}</span>
+            </div>
+          </template>
+        </div>
+      </section>
     </nav>
 
     <div class="sidebar-footer">
@@ -172,6 +253,58 @@ const visibleItems = computed(() =>
   overflow-y: auto;
 }
 
+.menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.menu-group + .menu-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.menu-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 14px;
+  border: 0;
+  background: transparent;
+  color: rgb(255 255 255 / 0.42);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.menu-group-header:hover {
+  background: rgb(255 255 255 / 0.05);
+  color: rgb(255 255 255 / 0.62);
+}
+
+.menu-group-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu-group-chevron {
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+
+.menu-group-chevron.virada {
+  transform: rotate(180deg);
+}
+
+.menu-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .menu-item {
   display: flex;
   align-items: center;
@@ -195,6 +328,12 @@ const visibleItems = computed(() =>
   background: var(--brand-gold);
   color: var(--sidebar-text-active);
   font-weight: 700;
+}
+
+.menu-item.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .sidebar-footer {

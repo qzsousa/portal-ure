@@ -170,7 +170,29 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        path: 'links-internet',
+        path: 'wifi',
+        name: 'wifi-levantamento',
+        component: () => import('@/views/WifiLevantamentoView.vue'),
+        meta: {
+          title: 'Levantamento Access Points',
+          breadcrumb: 'Levantamento Access Points',
+          roles: ['ADMIN', 'TECNICO'] as Nivel[],
+          rota: 'wifi',
+        },
+      },
+      {
+        path: 'wifi-dashboard',
+        name: 'wifi-dashboard',
+        component: () => import('@/views/WifiDashboardView.vue'),
+        meta: {
+          title: 'Painel - Access Points',
+          breadcrumb: 'Painel - Access Points',
+           roles: ['ADMIN', 'TECNICO'] as Nivel[],
+           rota: 'wifi',
+         },
+       },
+       {
+         path: 'links-internet',
         name: 'links-internet',
         component: () => import('@/views/LinksInternetView.vue'),
         meta: {
