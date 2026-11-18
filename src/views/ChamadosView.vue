@@ -12,6 +12,7 @@ import {
   ClipboardPen,
   Clock,
   Copy,
+  Download,
   FileText,
   Heart,
   History,
@@ -326,6 +327,8 @@ const estado = reactive({
   total: 0,
   page: 1,
 })
+const gerandoRelatorio = ref(false)
+
 const PAGE_SIZE = 10
 
 const filtros = reactive<FiltrosChamado>({
@@ -487,6 +490,60 @@ async function carregarStats() {
     stats.value = data
   } catch {
     stats.value = null
+  }
+}
+
+async function gerarRelatorioPorTecnico() {
+  gerandoRelatorio.value = true
+  try {
+    const todos: Chamado[] = []
+    let page = 1
+    const limit = 100
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const res = await listarChamados({ page, limit })
+      todos.push(...res.data)
+      if (todos.length >= res.meta.total || res.data.length === 0) break
+      page++
+    }
+    const grupos = new Map<string, { nome: string; total: number; porStatus: Record<string, number> }>()
+    for (const c of todos) {
+      const chave = (c.responsavel || 'Sem responsável').trim().toLowerCase() || 'sem responsável'
+      const rotulo = (c.responsavel || 'Sem responsável').trim() || 'Sem responsável'
+      if (!grupos.has(chave)) grupos.set(chave, { nome: rotulo, total: 0, porStatus: {} })
+      const g = grupos.get(chave)!
+      g.total++
+      g.porStatus[c.status] = (g.porStatus[c.status] || 0) + 1
+      if (rotulo.length > g.nome.length) g.nome = rotulo
+    }
+    const cabecalho = ['Técnico', 'Total', 'Aberto', 'Encaminhado', 'Em atendimento', 'Aguardando resposta', 'Aguardando conferência', 'Concluído']
+    const linhas = [...grupos.values()]
+      .sort((a, b) => b.total - a.total)
+      .map((g) => [
+        g.nome,
+        g.total,
+        g.porStatus['ABERTO'] || 0,
+        g.porStatus['ENCAMINHADO'] || 0,
+        g.porStatus['ANDAMENTO'] || 0,
+        g.porStatus['COMUNICADO'] || 0,
+        g.porStatus['AGUARDANDO_CONFERENCIA'] || 0,
+        g.porStatus['RESOLVIDO'] || 0,
+      ])
+    linhas.push(['TOTAL', todos.length, ...['ABERTO', 'ENCAMINHADO', 'ANDAMENTO', 'COMUNICADO', 'AGUARDANDO_CONFERENCIA', 'RESOLVIDO'].map((s) => todos.filter((c) => c.status === s).length)])
+    const csv = [cabecalho, ...linhas]
+      .map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';'))
+      .join('\r\n')
+    const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `chamados-por-tecnico-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    ui.success(`Relatório gerado com ${grupos.size} técnico(s).`)
+  } catch (e) {
+    ui.error(apiError(e, 'Falha ao gerar o relatório.'))
+  } finally {
+    gerandoRelatorio.value = false
   }
 }
 
@@ -1991,6 +2048,10 @@ useAutoRefresh(async () => {
       <a class="btn btn-gold" href="/chamado/novo" target="_blank" rel="noopener">
         Abrir chamado
       </a>
+      <button v-if="ehMatriz" class="btn btn-outline" type="button" :disabled="gerandoRelatorio" @click="gerarRelatorioPorTecnico">
+        <Download :size="15" />
+        {{ gerandoRelatorio ? 'Gerando...' : 'Relatório por técnico' }}
+      </button>
       <button v-if="auth.user?.nivel === 'GESTOR'" class="btn btn-primary" type="button" @click="abrirModalAbrirEquipamento">
         Abrir chamado de equipamento
       </button>

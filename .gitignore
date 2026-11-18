@@ -40,3 +40,6 @@ monitor/*.err
 /playwright/.auth/
 
 ping_*.txt
+
+# Relatórios gerados (CSV de justificativa/resumo por técnico)
+relatorios/

@@ -90,11 +90,25 @@ async function listarTodosChamados(statuses: StatusChamado[]): Promise<Chamado[]
   return todos.filter((c) => statuses.includes(c.status))
 }
 
+/** Busca TODOS os chamados (sem filtro de status), paginando 100 por vez. */
+async function listarTodosChamadosGeral(): Promise<Chamado[]> {
+  const limit = 100
+  let page = 1
+  let total = Infinity
+  const todos: Chamado[] = []
+  while (todos.length < total) {
+    const res = await listarChamados({ page, limit })
+    todos.push(...res.data)
+    total = res.meta.total
+    if (res.data.length === 0) break
+    page++
+  }
+  return todos
+}
 function csvDeChamados(chamados: Chamado[]): string {
   return montarCsv(
     ['protocolo', 'data', 'unidade', 'tipo', 'descricao', 'urgencia', 'status', 'responsavel'],
     chamados.map((c) => [
-      c.protocolo,
       formatDate(c.timestamp),
       c.unidade,
       c.tipo,
@@ -119,6 +133,49 @@ async function gerarChamadosAbertos() {
 async function gerarChamadosConcluidos() {
   const chamados = await listarTodosChamados(['RESOLVIDO'])
   baixarCsv(`chamados-concluidos-${Date.now()}.csv`, csvDeChamados(chamados))
+}
+
+const TECNICOS_RELATORIO: string[] = [
+  'JESSICA', 'MATHEUS', 'PABLO', 'FABIO', 'FERNANDA', 'GUILHERME',
+  'JOAO', 'CHARLES', 'HEBERT', 'JOSEMIR', 'VALDEIR', 'CAROL',
+  'ANA - ASURE', 'ANDREW ISAC',
+]
+
+async function gerarChamadosResolvidosPorTecnico() {
+  const todos = await listarTodosChamadosGeral()
+  const normalizar = (s: string | null | undefined) => (s || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const permitidos = new Set(TECNICOS_RELATORIO.map((n) => normalizar(n)))
+  const porTecnico = new Map<string, { total: number; resolvidos: number; abertos: number; andamento: number; conferencia: number; comunicado: number }>()
+  for (const nome of TECNICOS_RELATORIO) {
+    porTecnico.set(nome, { total: 0, resolvidos: 0, abertos: 0, andamento: 0, conferencia: 0, comunicado: 0 })
+  }
+  for (const c of todos) {
+    const chave = normalizar(c.responsavel)
+    if (!permitidos.has(chave)) continue
+    const nome = TECNICOS_RELATORIO.find((n) => normalizar(n) === chave)!
+    const g = porTecnico.get(nome)!
+    g.total++
+    if (c.status === 'RESOLVIDO') g.resolvidos++
+    else if (c.status === 'ABERTO') g.abertos++
+    else if (c.status === 'ANDAMENTO') g.andamento++
+    else if (c.status === 'AGUARDANDO_CONFERENCIA') g.conferencia++
+    else if (c.status === 'COMUNICADO') g.comunicado++
+  }
+  const linhas = TECNICOS_RELATORIO.map((nome) => {
+    const g = porTecnico.get(nome)!
+    const taxa = g.total > 0 ? Math.round((g.resolvidos / g.total) * 100) : 0
+    return [nome, g.total, g.resolvidos, g.abertos, g.andamento, g.conferencia, g.comunicado, `${taxa}%`]
+  })
+  const totalGeral = linhas.reduce((acc, l) => acc + (l[1] as number), 0)
+  const resolvidosGeral = linhas.reduce((acc, l) => acc + (l[2] as number), 0)
+  linhas.push(['TOTAL', totalGeral, resolvidosGeral, '', '', '', '', totalGeral > 0 ? `${Math.round((resolvidosGeral / totalGeral) * 100)}%` : '0%'])
+  baixarCsv(
+    `chamados-resolvidos-por-tecnico-${Date.now()}.csv`,
+    montarCsv(
+      ['Tecnico', 'Total chamados', 'Resolvidos', 'Abertos', 'Em andamento', 'Aguardando conferencia', 'Aguardando resposta', 'Taxa de conclusao'],
+      linhas,
+    ),
+  )
 }
 
 async function gerarInventarioPorUnidade() {
@@ -210,7 +267,7 @@ const relatorios: Relatorio[] = [
     icone: ClipboardList,
     executar: gerarChamadosAbertos,
   },
-  {
+{
     id: 'chamados-concluidos',
     titulo: 'Chamados Concluídos',
     descricao: 'Listagem de todos os chamados já concluídos, com data e responsável.',
@@ -218,6 +275,15 @@ const relatorios: Relatorio[] = [
     tone: 'green',
     icone: CheckCircle2,
     executar: gerarChamadosConcluidos,
+  },
+  {
+    id: 'chamados-resolvidos-tecnico',
+    titulo: 'Chamados Resolvidos por Técnico',
+    descricao: 'Resumo por técnico (JESSICA, MATHEUS, PABLO, FABIO, FERNANDA, GUILHERME, JOAO, CHARLES, HEBERT, JOSEMIR, VALDEIR, CAROL): total, resolvidos, abertos, em andamento, aguardando conferência e taxa de conclusão.',
+    formato: 'CSV',
+    tone: 'green',
+    icone: CheckCircle2,
+    executar: gerarChamadosResolvidosPorTecnico,
   },
   {
     id: 'inventario-unidade',
