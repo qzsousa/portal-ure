@@ -19,6 +19,7 @@ import {
   listarUnidadesResumo,
 } from '@/api/sce'
 import { listarChamados, rotuloStatusChamado } from '@/api/chamados'
+import { listarCategoriasFormulario } from '@/api/formulario'
 import { apiError } from '@/utils/apiError'
 import { formatDate } from '@/utils/format'
 import { listarRelatorioTecnicos, type RelatorioTecnico } from '@/api/sce'
@@ -225,6 +226,79 @@ async function gerarManutencoes() {
   )
 }
 
+async function gerarJustificativaResponsaveis() {
+  const [todos, categorias] = await Promise.all([listarTodosChamadosGeral(), listarCategoriasFormulario()])
+  const catMap = new Map(categorias.map((c) => [c.chave, c.nome]))
+  const derivarCategoria = (c: Chamado) => {
+    const chave = (c.categoriaChave || '').trim()
+    if (chave && catMap.has(chave)) return catMap.get(chave) as string
+    const tipo = (c.tipo || '').trim()
+    const idx = tipo.indexOf(' - ')
+    return idx < 0 ? tipo : tipo.slice(0, idx).trim()
+  }
+  const derivarSubcategoria = (c: Chamado) => {
+    const tipo = (c.tipo || '').trim()
+    const idx = tipo.indexOf(' - ')
+    return idx < 0 ? '' : tipo.slice(idx + 3).trim()
+  }
+  const linhas = todos
+    .slice()
+    .sort((a, b) => (a.protocolo || '').localeCompare(b.protocolo || ''))
+    .map((c) => {
+      const historico = c.historico || ''
+      const matches = historico.match(/por ([A-Za-zÀ-ÿ \-]+?)(?:\n|\(|$)/g) || []
+      const last = matches.length ? matches[matches.length - 1].replace(/^por /, '').trim() : ''
+      const lastNorm = last.toLowerCase()
+      let proposto = ''
+      let criterio = ''
+      let justificativa = ''
+      if (lastNorm === 'jessica' || lastNorm === 'ana - asure' || lastNorm === 'matheus') {
+        proposto = lastNorm === 'jessica' ? 'Jessica' : lastNorm === 'ana - asure' ? 'Ana - ASURE' : 'Matheus'
+        criterio = 'HISTORICO'
+        justificativa = `Responsável pelo histórico: ${proposto}`
+      } else if (lastNorm === 'seintec' || lastNorm === 'setec') {
+        proposto = 'SEINTEC'
+        criterio = 'LEGADO'
+        justificativa = 'Chamado legado/importado: fechado por SEINTEC/SETEC'
+      } else if (c.tecnicoResolucao) {
+        proposto = c.tecnicoResolucao
+        criterio = 'TECNICO_RESOLUCAO'
+        justificativa = `Técnico ${proposto} registrou a resolução`
+      } else if (c.responsavel) {
+        proposto = c.responsavel
+        criterio = 'RESPONSAVEL_ATUAL'
+        justificativa = `Responsável atual: ${proposto}`
+      } else {
+        proposto = ''
+        criterio = 'SEM_RESPONSAVEL'
+        justificativa = 'Sem responsável (não encaminhado)'
+      }
+      const atual = c.responsavel || ''
+      const divergente = atual.trim().toLowerCase() === proposto.trim().toLowerCase() ? 'NAO' : 'SIM'
+      return [
+        c.protocolo,
+        c.unidade,
+        c.tipo,
+        derivarCategoria(c),
+        derivarSubcategoria(c),
+        rotuloStatusChamado(c.status),
+        formatDate(c.timestamp),
+        atual,
+        proposto,
+        criterio,
+        justificativa,
+        divergente,
+      ]
+    })
+  baixarCsv(
+    `justificativa-chamados-${Date.now()}.csv`,
+    montarCsv(
+      ['protocolo', 'unidade', 'tipo', 'categoria', 'subcategoria', 'status', 'data', 'responsavel_atual', 'responsavel_proposto', 'criterio', 'justificativa', 'divergente'],
+      linhas,
+    ),
+  )
+}
+
 /* ---------------------------------------------------------------
  * Catálogo de relatórios
  * --------------------------------------------------------------- */
@@ -275,6 +349,15 @@ const relatorios: Relatorio[] = [
     tone: 'green',
     icone: CheckCircle2,
     executar: gerarChamadosConcluidos,
+  },
+  {
+    id: 'justificativa-responsaveis',
+    titulo: 'Justificativa de Responsáveis',
+    descricao: 'Lista todos os chamados com responsável atual, proposto, critério e justificativa (histórico, resolução, encaminhamento). Inclui tipo, categoria e subcategoria.',
+    formato: 'CSV',
+    tone: 'blue',
+    icone: ClipboardList,
+    executar: gerarJustificativaResponsaveis,
   },
   {
     id: 'chamados-resolvidos-tecnico',
