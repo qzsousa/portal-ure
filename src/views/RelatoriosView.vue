@@ -178,6 +178,39 @@ async function gerarChamadosResolvidosPorTecnico() {
   )
 }
 
+async function gerarRankingResolvidos() {
+  const todos = await listarTodosChamadosGeral()
+  const grupos = new Map<string, { nome: string; resolvidos: number; total: number }>()
+  for (const c of todos) {
+    const chave = (c.responsavel || '').trim()
+    if (!chave) continue
+    const key = chave.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    if (!grupos.has(key)) grupos.set(key, { nome: chave, resolvidos: 0, total: 0 })
+    const g = grupos.get(key)!
+    g.total++
+    if (c.status === 'RESOLVIDO') g.resolvidos++
+    if (chave.length > g.nome.length) g.nome = chave
+  }
+  const ordenados = [...grupos.values()].sort((a, b) => b.resolvidos - a.resolvidos || b.total - a.total)
+  const resolvidosGeral = ordenados.reduce((acc, g) => acc + g.resolvidos, 0)
+  const linhas = ordenados.map((g, i) => [
+    i + 1,
+    g.nome,
+    g.resolvidos,
+    g.total,
+    resolvidosGeral > 0 ? `${Math.round((g.resolvidos / resolvidosGeral) * 100)}%` : '0%',
+    g.total > 0 ? `${Math.round((g.resolvidos / g.total) * 100)}%` : '0%',
+  ])
+  linhas.push(['', 'TOTAL', resolvidosGeral, todos.length, '100%', todos.length > 0 ? `${Math.round((resolvidosGeral / todos.length) * 100)}%` : '0%'])
+  baixarCsv(
+    `ranking-resolvidos-${Date.now()}.csv`,
+    montarCsv(
+      ['Posicao', 'Tecnico', 'Chamados resolvidos', 'Total chamados', '% do total resolvidos', 'Taxa de conclusao'],
+      linhas,
+    ),
+  )
+}
+
 async function gerarInventarioPorUnidade() {
   const unidades = await listarUnidadesResumo()
   baixarCsv(
@@ -286,6 +319,15 @@ const relatorios: Relatorio[] = [
     tone: 'green',
     icone: CheckCircle2,
     executar: gerarChamadosResolvidosPorTecnico,
+  },
+  {
+    id: 'ranking-resolvidos',
+    titulo: 'Ranking de Resolvidos',
+    descricao: 'Ranking de todos os responsáveis por número de chamados resolvidos, com total, percentual do total e taxa de conclusão.',
+    formato: 'CSV',
+    tone: 'purple',
+    icone: PieChart,
+    executar: gerarRankingResolvidos,
   },
   {
     id: 'inventario-unidade',
