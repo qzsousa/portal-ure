@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   BarChart3,
   Bot,
@@ -22,6 +22,7 @@ import {
 } from '@lucide/vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSidebar } from '@/composables/useSidebar'
+import { aquecerDados } from '@/composables/usePrefetch'
 import type { RotaUsuario } from '@/types'
 
 interface MenuItem {
@@ -56,8 +57,16 @@ interface MenuItem {
 }
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const { menuAberto, fechar } = useSidebar()
+
+function prefetchRota(to: string) {
+  const resolvida = router.resolve(to)
+  const comp = resolvida.matched[resolvida.matched.length - 1]?.components?.default
+  if (typeof comp === 'function') (comp as () => unknown)()
+  if (to === '/agenda') void aquecerDados()
+}
 
 const gruposOrdem = ['Início', 'Atendimento', 'Equipamentos', 'Escolas', 'Administração']
 
@@ -176,6 +185,9 @@ function alternarGrupo(label: string) {
               :to="item.to"
               class="menu-item"
               :class="{ active: route.path.startsWith(item.to) }"
+              @mouseenter="prefetchRota(item.to)"
+              @focus="prefetchRota(item.to)"
+              @touchstart="prefetchRota(item.to)"
             >
               <component :is="item.icon" :size="18" :stroke-width="2" />
               <span>{{ item.label }}</span>

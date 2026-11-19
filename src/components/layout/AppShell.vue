@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Eye, X } from '@lucide/vue'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
 import { useSidebar } from '@/composables/useSidebar'
 import { useAuthStore } from '@/stores/auth'
+import { aquecerDados } from '@/composables/usePrefetch'
 import { rotuloPerfil } from '@/types'
 
 const route = useRoute()
@@ -22,6 +23,11 @@ watch(
   () => route.fullPath,
   () => fechar(),
 )
+
+onMounted(() => {
+  const auth = useAuthStore()
+  if (auth.isAuthenticated) void aquecerDados()
+})
 
 onUnmounted(liberarScroll)
 </script>
@@ -43,7 +49,11 @@ onUnmounted(liberarScroll)
       </div>
       <AppTopbar />
       <main class="page">
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <Transition name="page" mode="out-in">
+            <component :is="Component" />
+          </Transition>
+        </RouterView>
       </main>
       <footer class="app-foot">
         Desenvolvido por
@@ -105,6 +115,21 @@ onUnmounted(liberarScroll)
 .page {
   flex: 1;
   padding: 24px 28px 40px;
+}
+
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .app-foot {

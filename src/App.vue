@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { RouterView } from 'vue-router'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+import LoadingOverlay from '@/components/ui/LoadingOverlay.vue'
 import ChatWidget from '@/components/chat/ChatWidget.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useContextoIA } from '@/composables/useContextoIA'
@@ -21,9 +22,31 @@ onMounted(() => {
 </script>
 
 <template>
-  <RouterView />
+  <RouterView v-slot="{ Component }">
+    <Transition name="page" mode="out-in">
+      <component :is="Component" />
+    </Transition>
+  </RouterView>
+  <LoadingOverlay />
   <ToastContainer />
   <ChatWidget v-if="auth.isAuthenticated && auth.user?.nivel !== 'TECNICO'" />
 </template>
+
+<style>
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+</style>
 
 

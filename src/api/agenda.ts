@@ -1,6 +1,13 @@
 import { chamadosApi } from './http'
 import type { AtribuicaoAgenda, AtribuicaoAgendaCreate, FiltrosAtribuicaoAgenda } from '@/types'
 
+/** Cache em memória das atribuições por intervalo (TTL 30s). */
+const cacheAtribuicoes = new Map<string, { valor: AtribuicaoAgenda[]; expira: number }>()
+
+export function invalidarCacheAtribuicoes() {
+  cacheAtribuicoes.clear()
+}
+
 /**
  * Cliente da API de agenda de atendimento.
  *
@@ -22,22 +29,29 @@ export type IntervaloAgenda = FiltrosAtribuicaoAgenda
 export async function listarAtribuicoes(
   intervalo: IntervaloAgenda = {},
 ): Promise<AtribuicaoAgenda[]> {
+  const chave = JSON.stringify(intervalo)
+  const cache = cacheAtribuicoes.get(chave)
+  if (cache && cache.expira > Date.now()) return cache.valor
+
   const params: Record<string, string> = {}
   if (intervalo.inicio?.trim()) params.de = intervalo.inicio.trim()
   if (intervalo.fim?.trim()) params.ate = intervalo.fim.trim()
   if (intervalo.tecnicoId?.trim()) params.tecnicoId = intervalo.tecnicoId.trim()
   if (intervalo.escola?.trim()) params.escola = intervalo.escola.trim()
   const { data } = await chamadosApi.get<AtribuicaoAgenda[]>('/agenda', { params })
+  cacheAtribuicoes.set(chave, { valor: data, expira: Date.now() + 30 * 1000 })
   return data
 }
 
 /** Atribui um dia a um técnico (modal de atribuição). */
 export async function atribuirDia(payload: AtribuicaoAgendaCreate): Promise<AtribuicaoAgenda> {
   const { data } = await chamadosApi.post<AtribuicaoAgenda>('/agenda', payload)
+  invalidarCacheAtribuicoes()
   return data
 }
 
 /** Remove uma atribuição. As permissões são revalidadas no backend. */
 export async function removerAtribuicao(id: string): Promise<void> {
   await chamadosApi.delete(`/agenda/${id}`)
+  invalidarCacheAtribuicoes()
 }

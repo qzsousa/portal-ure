@@ -308,10 +308,23 @@ async function carregar() {
   estado.loading = true
   estado.erro = ''
   try {
-    const [escolas, tecnicos] = await Promise.all([listarEscolas(), listarTecnicos()])
+    const { inicio, fim } = intervaloAtual()
+    const [escolas, tecnicos, lista] = await Promise.all([
+      listarEscolas(),
+      listarTecnicos(),
+      listarAtribuicoes({ inicio, fim }),
+    ])
     estado.escolas = escolas
     estado.tecnicos = ordenarTecnicos(tecnicos)
-    await carregarAtribuicoes()
+    for (const k of Object.keys(atribuicoes)) delete atribuicoes[k]
+    for (const a of lista) {
+      const chave = chaveDaData(a.data)
+      if (chave >= inicio && chave < fim) {
+        if (!atribuicoes[chave]) atribuicoes[chave] = []
+        atribuicoes[chave].push(a)
+      }
+    }
+    if (!Object.keys(atribuicoes).length) await migrarDoNavegador()
   } catch {
     estado.tecnicos = []
     estado.erro =

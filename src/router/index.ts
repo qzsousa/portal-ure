@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useLoadingStore } from '@/stores/loading'
 import type { Nivel, RotaUsuario } from '@/types'
 
 const routes: RouteRecordRaw[] = [
@@ -223,7 +224,16 @@ export const router = createRouter({
   routes,
 })
 
+router.afterEach(() => {
+  useLoadingStore().setNavegando(false)
+})
+
+router.onError(() => {
+  useLoadingStore().setNavegando(false)
+})
+
 router.beforeEach(async (to) => {
+  useLoadingStore().setNavegando(true)
   const auth = useAuthStore()
   if (!auth.isInitialized) {
     await auth.initialize()

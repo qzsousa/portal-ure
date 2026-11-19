@@ -185,6 +185,9 @@ export interface TecnicoDestino {
   abertos?: number
 }
 
+/** Cache em memória dos técnicos por chave de categoria (TTL 5 min). */
+const cacheTecnicos = new Map<string, { valor: TecnicoDestino[]; expira: number }>()
+
 /** `UNIDADE` = técnico da própria unidade (escolhido pelo backend); `TECNICO` = o escolhido. */
 export type ModoEncaminhamento = 'UNIDADE' | 'TECNICO'
 
@@ -198,9 +201,14 @@ export type ModoEncaminhamento = 'UNIDADE' | 'TECNICO'
  * Encaminhamento usa para escolher o técnico fixo de qualquer categoria.
  */
 export async function listarTecnicos(categoriaChave?: string | null): Promise<TecnicoDestino[]> {
+  const chave = categoriaChave || ''
+  const cache = cacheTecnicos.get(chave)
+  if (cache && cache.expira > Date.now()) return cache.valor
+
   const { data } = await chamadosApi.get<{ data: TecnicoDestino[] }>('/chamados/encaminhar/tecnicos', {
     params: categoriaChave ? { categoriaChave } : undefined,
   })
+  cacheTecnicos.set(chave, { valor: data.data, expira: Date.now() + 5 * 60 * 1000 })
   return data.data
 }
 

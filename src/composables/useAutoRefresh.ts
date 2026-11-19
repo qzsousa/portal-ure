@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted } from 'vue'
+import { useLoadingStore } from '@/stores/loading'
 
 /** Intervalos de atualização automática usados no portal. */
 export const AUTO_REFRESH_MS = {
@@ -37,9 +38,12 @@ export function useAutoRefresh(atualizar: () => void | Promise<void>, intervaloM
   async function tick() {
     if (document.hidden || executando) return
     executando = true
+    const loading = useLoadingStore()
+    loading.entrarSilencioso()
     try {
       await atualizar()
     } finally {
+      loading.sairSilencioso()
       executando = false
     }
   }

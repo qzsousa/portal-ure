@@ -42,6 +42,9 @@ Use sempre `dev-restart -Port <PORTA> -Dir <DIR_DO_PROJETO>` para subir/reinicia
 
 ## Regras
 
+- Toda task/feature pedida pelo usuário deve gerar, antes da implementação, uma
+  issue no repositório (`gh issue create`) com título e corpo derivados da
+  solicitação; referenciar a issue no commit/PR final.
 - `.env` e `monitor/config.json`, `monitor/dvr-raw.txt` não são versionados — não commitar.
 - Variáveis `VITE_*` são embutidas no bundle em build e ficam públicas no navegador: nunca segredo.
 - Antes de editar, leia a view/componente existente e siga o padrão; não crie arquivos novos sem necessidade.

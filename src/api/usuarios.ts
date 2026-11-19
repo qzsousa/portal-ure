@@ -120,6 +120,9 @@ export async function gerarSenhaProvisoria(email: string): Promise<SenhaProvisor
   return data
 }
 
+/** Cache em memória das escolas (TTL 5 min). */
+let cacheEscolas: { valor: string[]; expira: number } | null = null
+
 /** Aceita tanto `["E.E. X"]` quanto `[{ nome: "E.E. X" }]`. */
 function extrairNomes(data: unknown): string[] {
   if (!Array.isArray(data)) return []
@@ -135,6 +138,9 @@ function extrairNomes(data: unknown): string[] {
  * cadastro completo — assim o select nunca fica vazio sem o usuário perceber.
  */
 export async function listarEscolas(): Promise<string[]> {
+  const agora = Date.now()
+  if (cacheEscolas && cacheEscolas.expira > agora) return cacheEscolas.valor
+
   const tentativas: Array<() => Promise<unknown>> = [
     () => chamadosApi.get('/escolas/nomes').then((r) => r.data),
     () => chamadosApi.get('/escolas/nomes-padronizados').then((r) => r.data),
@@ -144,7 +150,11 @@ export async function listarEscolas(): Promise<string[]> {
   for (const tentar of tentativas) {
     try {
       const nomes = extrairNomes(await tentar())
-      if (nomes.length) return nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'))
+      if (nomes.length) {
+        const ordenado = nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'))
+        cacheEscolas = { valor: ordenado, expira: agora + 5 * 60 * 1000 }
+        return ordenado
+      }
     } catch {
       // tenta o próximo endpoint
     }

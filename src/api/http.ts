@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { useErrorLogStore } from '@/stores/errorLog'
+import { useLoadingStore } from '@/stores/loading'
 
 /**
  * Clientes HTTP do portal.
@@ -167,3 +168,33 @@ sceApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('SCE'))
 monitorApi.interceptors.request.use(attachAuthHeader)
 monitorApi.interceptors.response.use((r) => r, createRefreshInterceptor(monitorApi))
 monitorApi.interceptors.response.use((r) => r, createBackendErrorInterceptor('Monitor DVR'))
+
+/**
+ * Contabiliza requisições em voo para o overlay global de loading.
+ * Respeita `config.silent` e o modo silencioso da store (auto-refresh).
+ */
+function registrarLoading(client: AxiosInstance) {
+  client.interceptors.request.use((config) => {
+    const loading = useLoadingStore()
+    const silent = (config as any).silent === true || loading.silencioso
+    if (!silent) {
+      loading.iniciar()
+      ;(config as any).__loadingContado = true
+    }
+    return config
+  })
+  client.interceptors.response.use(
+    (response) => {
+      if ((response.config as any)?.__loadingContado) useLoadingStore().finalizar()
+      return response
+    },
+    (error: AxiosError) => {
+      if ((error.config as any)?.__loadingContado) useLoadingStore().finalizar()
+      return Promise.reject(error)
+    },
+  )
+}
+
+registrarLoading(chamadosApi)
+registrarLoading(sceApi)
+registrarLoading(monitorApi)
